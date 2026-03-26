@@ -1,0 +1,126 @@
+package re.melchior.saviomobile.ui.screen.intervention
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.entity.EquipmentEntity
+import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.repository.SyncRepository
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+
+data class InterventionActiveUiState(
+    val intervention: InterventionEntity? = null,
+    val equipments: List<EquipmentEntity> = emptyList(),
+    val elapsedSeconds: Long = 0L,
+    val startTimeLabel: String = "",
+    val showQuitDialog: Boolean = false,
+    val isLoading: Boolean = false
+)
+
+@HiltViewModel
+class InterventionActiveViewModel @Inject constructor(
+    private val syncRepository: SyncRepository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    private val interventionId: String = checkNotNull(savedStateHandle["interventionId"])
+
+    private val _uiState = MutableStateFlow(InterventionActiveUiState())
+    val uiState: StateFlow<InterventionActiveUiState> = _uiState.asStateFlow()
+
+    private var chronoJob: Job? = null
+
+    init {
+        loadIntervention()
+        loadEquipments()
+    }
+
+    private fun loadIntervention() {
+        viewModelScope.launch {
+            syncRepository.getInterventionById(interventionId)
+                .collect { intervention ->
+                    intervention?.let {
+                        _uiState.update { state ->
+                            state.copy(intervention = it)
+                        }
+                        // Démarrer le chrono si startedAt est renseigné
+                        it.startedAt?.let { startedAt ->
+                            startChrono(startedAt)
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun loadEquipments() {
+        viewModelScope.launch {
+            syncRepository.getEquipmentsByIntervention(interventionId)
+                .collect { equipments ->
+                    _uiState.update { it.copy(equipments = equipments) }
+                }
+        }
+    }
+
+    private fun startChrono(startedAt: String) {
+        // Calculer le label heure de début
+        val startInstant = Instant.parse(startedAt)
+        val startLocal = startInstant.atZone(ZoneId.systemDefault()).toLocalTime()
+        val startLabel = startLocal.format(DateTimeFormatter.ofPattern("HH'h'mm"))
+        _uiState.update { it.copy(startTimeLabel = startLabel) }
+
+        // Calculer le temps écoulé depuis startedAt
+        val startEpoch = startInstant.epochSecond
+
+        // Annuler le job précédent si existe
+        chronoJob?.cancel()
+        chronoJob = viewModelScope.launch {
+            while (true) {
+                val now = Instant.now().epochSecond
+                val elapsed = now - startEpoch
+                _uiState.update { it.copy(elapsedSeconds = elapsed) }
+                delay(1000L)
+            }
+        }
+    }
+
+    fun showQuitDialog() {
+        _uiState.update { it.copy(showQuitDialog = true) }
+    }
+
+    fun dismissQuitDialog() {
+        _uiState.update { it.copy(showQuitDialog = false) }
+    }
+
+    fun confirmQuit(): Boolean {
+        chronoJob?.cancel()
+        return true
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        chronoJob?.cancel()
+    }
+}
+
+// Extension utilitaire pour formater le temps écoulé
+fun Long.toElapsedLabel(): String {
+    val hours = this / 3600
+    val minutes = (this % 3600) / 60
+    val seconds = this % 60
+    return if (hours > 0) {
+        "%02d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
+}

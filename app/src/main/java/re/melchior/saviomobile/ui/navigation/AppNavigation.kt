@@ -2,7 +2,6 @@ package re.melchior.saviomobile.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,11 +16,39 @@ import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.ui.screen.auth.AuthViewModel
 import re.melchior.saviomobile.ui.screen.auth.LoginScreen
 import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
+import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
+import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
+import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
+import re.melchior.saviomobile.ui.screen.tournee.TourneeScreen
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object SelectSociete : Screen("select_societe")
     object Tournee : Screen("tournee")
+    object InterventionDetail : Screen("intervention/{interventionId}") {
+        fun createRoute(interventionId: String) = "intervention/$interventionId"
+    }
+
+    object ClotureRapport : Screen("intervention/{interventionId}/cloture/rapport") {
+        fun createRoute(interventionId: String) = "intervention/$interventionId/cloture/rapport"
+    }
+
+    object ClotureSignature : Screen("intervention/{interventionId}/cloture/signature") {
+        fun createRoute(interventionId: String) =
+            "intervention/$interventionId/cloture/signature"
+    }
+    object InterventionActive : Screen("intervention/{interventionId}/active") {
+        fun createRoute(interventionId: String) = "intervention/$interventionId/active"
+    }
+    object ClientDetail : Screen("client/{customerId}") {
+        fun createRoute(customerId: String) = "client/$customerId"
+    }
+
+    object EquipementDetail : Screen("equipement/{equipmentId}") {
+        fun createRoute(equipmentId: String) = "equipement/$equipmentId"
+    }
 }
 
 @Composable
@@ -37,6 +64,29 @@ fun AppNavigation(tokenDataStore: TokenDataStore) {
         navController = navController,
         startDestination = startDestination
     ) {
+
+        composable(Screen.ClotureSignature.route) {
+            ClotureSignatureScreen(
+                onBack = { navController.popBackStack() },
+                onCompleted = {
+                    navController.navigate(Screen.Tournee.route) {
+                        popUpTo(Screen.Tournee.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable(Screen.ClotureRapport.route) {
+            ClotureRapportScreen(
+                onBack = { navController.popBackStack() },
+                onNext = { interventionId ->
+                    navController.navigate(
+                        Screen.ClotureSignature.createRoute(interventionId)
+                    )
+                }
+            )
+        }
+
+
         composable(Screen.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
@@ -64,14 +114,61 @@ fun AppNavigation(tokenDataStore: TokenDataStore) {
         }
 
         composable(Screen.Tournee.route) {
+            TourneeScreen(
+                onInterventionClick = { interventionId ->
+                    navController.navigate(
+                        Screen.InterventionDetail.createRoute(interventionId)
+                    )
+                }
+            )
+        }
+
+        composable(Screen.InterventionDetail.route) {
+            InterventionDetailScreen(
+                onBack = { navController.popBackStack() },
+                onStartIntervention = { interventionId ->
+                    navController.navigate(
+                        Screen.InterventionActive.createRoute(interventionId)
+                    )
+                }
+            )
+        }
+
+        composable(Screen.InterventionActive.route) {
+            InterventionActiveScreen(
+                onQuit = { navController.popBackStack(Screen.Tournee.route, false) },
+                onCloture = { interventionId ->
+                    navController.navigate(
+                        Screen.ClotureRapport.createRoute(interventionId)
+                    )
+                },
+                onEquipementClick = { equipmentId ->
+                    navController.navigate(
+                        Screen.EquipementDetail.createRoute(equipmentId)
+                    )
+                },
+                onClientClick = { customerId ->
+                    navController.navigate(Screen.ClientDetail.createRoute(customerId))
+                },
+                onPhotosClick = { interventionId ->
+                    // PhotosScreen — à venir
+                }
+            )
+        }
+
+        composable(Screen.EquipementDetail.route) {
+            EquipementDetailScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+
+        composable(Screen.ClientDetail.route) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Tournée — à venir",
-                    style = MaterialTheme.typography.headlineMedium
-                )
+                Text("Fiche client — à venir")
             }
         }
     }
