@@ -26,6 +26,9 @@ abstract class InterventionDao {
 //        }
 //    }
 
+    @Query("SELECT * FROM interventions WHERE customerId = :customerId LIMIT 1")
+    abstract fun getInterventionByCustomerId(customerId: String): Flow<InterventionEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insertOrReplace(intervention: InterventionEntity)
 

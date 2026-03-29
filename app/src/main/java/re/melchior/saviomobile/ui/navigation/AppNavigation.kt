@@ -16,6 +16,7 @@ import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.ui.screen.auth.AuthViewModel
 import re.melchior.saviomobile.ui.screen.auth.LoginScreen
 import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
+import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
@@ -164,12 +165,9 @@ fun AppNavigation(tokenDataStore: TokenDataStore) {
 
 
         composable(Screen.ClientDetail.route) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Fiche client — à venir")
-            }
+            ClientDetailScreen(
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

@@ -78,6 +78,9 @@ class SyncRepository @Inject constructor(
         }
     }
 
+    fun getInterventionByCustomerId(customerId: String) =
+        interventionDao.getInterventionByCustomerId(customerId)
+
     suspend fun pull(date: LocalDate): SyncResult {
         return try {
             val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)

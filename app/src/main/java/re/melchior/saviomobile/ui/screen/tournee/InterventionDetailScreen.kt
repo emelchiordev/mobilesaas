@@ -207,13 +207,13 @@ fun InterventionDetailScreen(
                         }
                     }
                     // Statut completed / synced / conflict — lecture seule
-                    if (intervention.syncStatus in listOf("COMPLETED", "SYNCED", "CONFLICT")) {
+                    // Uniquement si en attente de sync ou conflit
+                    if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
                                 containerColor = when (intervention.syncStatus) {
                                     "CONFLICT" -> MaterialTheme.colorScheme.errorContainer
-                                    "SYNCED" -> MaterialTheme.colorScheme.primaryContainer
                                     else -> MaterialTheme.colorScheme.surfaceVariant
                                 }
                             )
@@ -223,16 +223,17 @@ fun InterventionDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = when (intervention.syncStatus) {
-                                        "COMPLETED" -> "Intervention terminée — en attente de synchronisation"
-                                        "SYNCED" -> "Intervention synchronisée ✓"
-                                        "CONFLICT" -> "Conflit détecté — contacter le responsable"
+                                    text = when {
+                                        intervention.syncStatus == "CONFLICT" -> "Conflit ⚠"
+                                        intervention.syncStatus == "COMPLETED" -> "En attente sync"
+                                        intervention.syncStatus == "IN_PROGRESS" -> "En cours"
+                                        intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée ✓"
+                                        intervention.status == "scheduled" -> "Planifiée"
                                         else -> intervention.status
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = when (intervention.syncStatus) {
                                         "CONFLICT" -> MaterialTheme.colorScheme.onErrorContainer
-                                        "SYNCED" -> MaterialTheme.colorScheme.onPrimaryContainer
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     }
                                 )
@@ -249,18 +250,24 @@ fun InterventionDetailScreen(
 
 @Composable
 private fun StatusBadge(intervention: InterventionEntity) {
-    val (color, label) = when (intervention.status) {
-        "scheduled" -> Pair(MaterialTheme.colorScheme.primary, "Planifiée")
-        "in_progress" -> Pair(MaterialTheme.colorScheme.tertiary, "En cours")
-        "completed" -> Pair(MaterialTheme.colorScheme.secondary, "Terminée")
-        "synced" -> Pair(MaterialTheme.colorScheme.secondary, "Synchronisée")
-        "conflict" -> Pair(MaterialTheme.colorScheme.error, "Conflit")
-        else -> Pair(MaterialTheme.colorScheme.surfaceVariant, intervention.status)
+    val (color, label) = when {
+        intervention.syncStatus == "CONFLICT" ->
+            Pair(MaterialTheme.colorScheme.error, "Conflit ⚠")
+        intervention.syncStatus == "COMPLETED" ->
+            Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
+            Pair(MaterialTheme.colorScheme.secondary, "Terminée ✓")
+        intervention.syncStatus == "IN_PROGRESS" ->
+            Pair(MaterialTheme.colorScheme.tertiary, "En cours")
+        intervention.status == "in_progress" ->
+            Pair(MaterialTheme.colorScheme.tertiary, "En cours")
+        intervention.status == "scheduled" ->
+            Pair(MaterialTheme.colorScheme.primary, "Planifiée")
+        else ->
+            Pair(MaterialTheme.colorScheme.surfaceVariant, intervention.status)
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
@@ -277,7 +284,6 @@ private fun StatusBadge(intervention: InterventionEntity) {
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Heure planifiée
         Text(
             text = intervention.scheduledAt
                 .substringAfter("T")

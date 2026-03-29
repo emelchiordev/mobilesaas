@@ -12,5 +12,6 @@ data class SettingsEntity(
     val lastPulledAt: String? = null,
     val technicianId: String? = null,
     val technicianFirstName: String? = null,
-    val technicianLastName: String? = null
+    val technicianLastName: String? = null,
+    val updatesRequireValidation: Boolean = false
 )

@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
+import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
@@ -45,4 +46,8 @@ object DatabaseModule {
     @Provides
     fun provideSettingsDao(db: SavioDatabase): SettingsDao =
         db.settingsDao()
+
+    @Provides
+    fun providePendingUpdateDao(db: SavioDatabase): PendingUpdateDao =
+        db.pendingUpdateDao()
 }

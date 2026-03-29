@@ -274,11 +274,12 @@ private fun InterventionCard(
     intervention: InterventionEntity,
     onClick: () -> Unit
 ) {
-    val statusColor = when (intervention.syncStatus) {
-        "CONFLICT" -> MaterialTheme.colorScheme.error
-        "COMPLETED" -> MaterialTheme.colorScheme.tertiary
-        "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-        "PENDING" -> MaterialTheme.colorScheme.secondary
+    val statusColor = when {
+        intervention.syncStatus == "CONFLICT" -> MaterialTheme.colorScheme.error
+        intervention.syncStatus == "COMPLETED" -> MaterialTheme.colorScheme.secondary
+        intervention.syncStatus == "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
+        intervention.syncStatus == "SYNCED" &&
+                intervention.status == "completed" -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
@@ -392,6 +393,7 @@ private fun InterventionCard(
             Spacer(modifier = Modifier.width(8.dp))
 
             // Indicateur statut sync
+            // Indicateur statut sync
             Column(horizontalAlignment = Alignment.End) {
                 Box(
                     modifier = Modifier
@@ -400,12 +402,13 @@ private fun InterventionCard(
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = when (intervention.status) {
-                            "scheduled" -> "Planifiée"
-                            "in_progress" -> "En cours"
-                            "completed" -> "Terminée"
-                            "synced" -> "Synchronisée"
-                            "conflict" -> "Conflit"
+                        text = when {
+                            intervention.syncStatus == "CONFLICT" -> "Conflit ⚠"
+                            intervention.syncStatus == "COMPLETED" -> "En attente sync"
+                            intervention.syncStatus == "IN_PROGRESS" -> "En cours"
+                            intervention.syncStatus == "SYNCED" &&
+                                    intervention.status == "completed" -> "Terminée ✓"
+                            intervention.status == "scheduled" -> "Planifiée"
                             else -> intervention.status
                         },
                         style = MaterialTheme.typography.labelSmall,
