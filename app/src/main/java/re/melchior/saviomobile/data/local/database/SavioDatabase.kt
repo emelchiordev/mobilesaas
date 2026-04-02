@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
+import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
@@ -13,6 +14,7 @@ import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
 import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
+import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.data.local.entity.SettingsEntity
 
 @Database(
@@ -23,9 +25,10 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         EquipmentTypeEntity::class,
         EnergyTypeEntity::class,
         SettingsEntity::class,
-        PendingUpdateEntity::class
+        PendingUpdateEntity::class,
+        PhotoEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {
@@ -33,6 +36,8 @@ abstract class SavioDatabase : RoomDatabase() {
     abstract fun equipmentDao(): EquipmentDao
     abstract fun referentielDao(): ReferentielDao
     abstract fun settingsDao(): SettingsDao
+
+    abstract fun photoDao(): PhotoDao
 
     abstract fun pendingUpdateDao(): PendingUpdateDao
 

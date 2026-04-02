@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
+import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
@@ -50,4 +51,9 @@ object DatabaseModule {
     @Provides
     fun providePendingUpdateDao(db: SavioDatabase): PendingUpdateDao =
         db.pendingUpdateDao()
+
+    @Provides
+    fun providePhotoDao(db: SavioDatabase): PhotoDao =
+        db.photoDao()
+
 }

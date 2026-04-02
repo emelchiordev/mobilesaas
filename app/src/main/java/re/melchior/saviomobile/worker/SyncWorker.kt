@@ -9,6 +9,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import re.melchior.saviomobile.data.local.database.TokenDataStore
+import re.melchior.saviomobile.data.repository.PhotoSyncRepository
 import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.PushResult
 import re.melchior.saviomobile.data.repository.SyncRepository
@@ -18,6 +19,7 @@ class SyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
     private val pushRepository: PushRepository,
+    private val photoSyncRepository: PhotoSyncRepository, // ← ajouté
     private val tokenDataStore: TokenDataStore
 ) : CoroutineWorker(context, workerParams) {
 
@@ -35,9 +37,17 @@ class SyncWorker @AssistedInject constructor(
                 return Result.success()
             }
 
-            // Push uniquement
+            // 1. Push interventions (existant)
             val pushResult = pushRepository.push()
             android.util.Log.d("SyncWorker", "Push result: $pushResult")
+
+            // 2. Upload photos PENDING ← ajouté
+            photoSyncRepository.uploadPendingPhotos()
+            android.util.Log.d("SyncWorker", "Photos uploadées")
+
+            // 3. Suppression photos PENDING_DELETE ← ajouté
+            photoSyncRepository.deletePendingPhotos()
+            android.util.Log.d("SyncWorker", "Photos supprimées")
 
             when (pushResult) {
                 is PushResult.Error -> Result.retry()

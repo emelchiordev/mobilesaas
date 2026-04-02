@@ -39,6 +39,7 @@ data class ClotureSignatureUiState(
 @HiltViewModel
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -127,16 +128,15 @@ class ClotureSignatureViewModel @Inject constructor(
                     techSignaturePath = techSigFile.absolutePath
                 )
 
-// Déclencher sync immédiat si réseau disponible
-//                val constraints = Constraints.Builder()
-//                    .setRequiredNetworkType(NetworkType.CONNECTED)
-//                    .build()
-//
-//                val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-//                    .setConstraints(constraints)
-//                    .build()
-//
-//                workManager.enqueue(syncRequest)
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+
+                val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+                    .setConstraints(constraints)
+                    .build()
+
+                workManager.enqueue(syncRequest)
 
                 _uiState.update { it.copy(isLoading = false, isCompleted = true) }
 

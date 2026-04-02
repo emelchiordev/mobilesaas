@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.repository.PhotoSyncRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.data.repository.SyncResult
 import re.melchior.saviomobile.worker.SyncWorker
@@ -35,6 +36,7 @@ data class TourneeUiState(
 @HiltViewModel
 class TourneeViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val photoSyncRepository: PhotoSyncRepository,
     private val workManager: WorkManager
 ) : ViewModel() {
 
@@ -68,34 +70,36 @@ class TourneeViewModel @Inject constructor(
 
     fun pull() {
         viewModelScope.launch {
-
-
             _uiState.update { it.copy(isSyncing = true, errorMessage = null) }
 
-            android.util.Log.d("TourneeVM", "pull() démarrage syncRepo.pull")
+            // Upload photos en attente immédiatement — fire and forget
+            launch {
+                try {
+                    photoSyncRepository.uploadPendingPhotos()
+                    photoSyncRepository.deletePendingPhotos()
+                    android.util.Log.d("TourneeVM", "Photos sync terminée")
+                } catch (e: Exception) {
+                    android.util.Log.w("TourneeVM", "Photos sync error: ${e.message}")
+                }
+            }
 
+            // WorkManager pour le push interventions (existant)
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-
             val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(constraints)
                 .build()
-
             workManager.enqueue(syncRequest)
 
+            // Pull interventions
             when (val result = syncRepository.pull(_uiState.value.selectedDate)) {
                 is SyncResult.Success -> {
-                    android.util.Log.d("TourneeVM", "pull() success")
                     _uiState.update { it.copy(isSyncing = false) }
                 }
                 is SyncResult.Error -> {
-                    android.util.Log.d("TourneeVM", "pull() error: ${result.message}")
                     _uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            errorMessage = result.message
-                        )
+                        it.copy(isSyncing = false, errorMessage = result.message)
                     }
                 }
             }

@@ -65,14 +65,37 @@ class SyncRepository @Inject constructor(
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
             val existing = interventionDao.getInterventionByIdOnce(entity.id)
-            android.util.Log.d("InsertAllSafe", "id=${entity.id} existingSyncStatus=${existing?.syncStatus} serverStatus=${entity.status}")
             when {
-                existing == null || existing.syncStatus == "SYNCED" -> {
+                // Pas encore en local → insert direct
+                existing == null -> {
                     interventionDao.insertOrReplace(entity)
                 }
-                existing.syncStatus == "COMPLETED" && entity.status == "completed" -> {
-                    android.util.Log.d("InsertAllSafe", "→ markAsSynced ${entity.id}")
-                    interventionDao.markAsSynced(entity.id)
+
+                // Intervention terminée localement → données terrain font foi TOUJOURS
+                existing.status == "completed" -> {
+                    interventionDao.insertOrReplace(
+                        existing.copy(
+                            // Seul le syncStatus peut être mis à jour par le serveur
+                            syncStatus = if (entity.status == "completed") "SYNCED" else existing.syncStatus,
+                            // Tout le reste : données locales prioritaires
+                            report = existing.report ?: entity.report,
+                            completedAt = existing.completedAt ?: entity.completedAt,
+                            startedAt = existing.startedAt ?: entity.startedAt,
+                            signaturePath = existing.signaturePath ?: entity.signaturePath,
+                            techSignaturePath = existing.techSignaturePath ?: entity.techSignaturePath
+                        )
+                    )
+                    android.util.Log.d("InsertAllSafe", "→ completed local, données terrain préservées ${entity.id}")
+                }
+
+                // En cours ou en attente de push → ne pas écraser
+                existing.syncStatus in listOf("IN_PROGRESS", "PENDING") -> {
+                    android.util.Log.d("InsertAllSafe", "→ skip ${entity.id} (local=${existing.syncStatus})")
+                }
+
+                // SYNCED et pas completed → serveur fait foi
+                else -> {
+                    interventionDao.insertOrReplace(entity)
                 }
             }
         }
@@ -201,5 +224,8 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     contractRenewalDate = contract?.renewalDate,
     contractTariff = contract?.tariff,
     contractVatRate = contract?.vatRate,
+    report = report,
+    completedAt = completedAt,
+    startedAt = startedAt,
     pulledAt = pulledAt
 )

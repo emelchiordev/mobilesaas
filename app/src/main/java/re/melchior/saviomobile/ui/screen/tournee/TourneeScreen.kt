@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,9 +28,8 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -291,59 +292,94 @@ private fun InterventionCard(
         }
     } ?: Color(0xFF2196F3)
 
-    Card(
+    val statusText = when {
+        intervention.syncStatus == "CONFLICT" -> "Conflit"
+        intervention.syncStatus == "COMPLETED" -> "En attente"
+        intervention.syncStatus == "IN_PROGRESS" -> "En cours"
+        intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée"
+        intervention.status == "scheduled" -> "Planifiée"
+        else -> intervention.status
+    }
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 2.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.Top
+                .height(IntrinsicSize.Min)
         ) {
-            // Indicateur couleur type intervention
+            // Barre colorée à gauche selon le type d'intervention
             Box(
                 modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
+                    .width(5.dp)
+                    .fillMaxHeight()
                     .background(typeColor)
-                    .align(Alignment.CenterVertically)
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                // Heure + type
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp)
+            ) {
+                // Ligne 1 : heure + badge type + badge statut
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = intervention.scheduledAt
-                            .substringAfter("T")
-                            .substring(0, 5),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = intervention.typeLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = intervention.scheduledAt
+                                .substringAfter("T")
+                                .substring(0, 5),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(typeColor.copy(alpha = 0.12f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = intervention.typeLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = typeColor
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(statusColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Client
+                // Nom du client
                 if (intervention.customerFirstName != null) {
                     Text(
                         text = "${intervention.customerFirstName} ${intervention.customerLastName}",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -387,43 +423,6 @@ private fun InterventionCard(
                             )
                         }
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Indicateur statut sync
-            // Indicateur statut sync
-            Column(horizontalAlignment = Alignment.End) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(statusColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = when {
-                            intervention.syncStatus == "CONFLICT" -> "Conflit ⚠"
-                            intervention.syncStatus == "COMPLETED" -> "En attente sync"
-                            intervention.syncStatus == "IN_PROGRESS" -> "En cours"
-                            intervention.syncStatus == "SYNCED" &&
-                                    intervention.status == "completed" -> "Terminée ✓"
-                            intervention.status == "scheduled" -> "Planifiée"
-                            else -> intervention.status
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = statusColor
-                    )
-                }
-
-                if (intervention.syncStatus == "CONFLICT") {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Icon(
-                        imageVector = Icons.Filled.Warning,
-                        contentDescription = "Conflit",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(16.dp)
-                    )
                 }
             }
         }

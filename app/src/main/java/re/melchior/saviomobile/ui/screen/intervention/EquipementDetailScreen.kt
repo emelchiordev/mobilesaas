@@ -1,10 +1,13 @@
 package re.melchior.saviomobile.ui.screen.intervention
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,9 +15,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,12 +35,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -47,16 +61,25 @@ fun EquipementDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
                 title = {
                     Text(
                         text = uiState.equipment?.let {
                             listOfNotNull(it.brand, it.model).joinToString(" ")
-                        } ?: "Équipement"
+                        } ?: "Équipement",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 }
             )
@@ -65,9 +88,7 @@ fun EquipementDetailScreen(
         when {
             uiState.equipment == null -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                    modifier = Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
@@ -84,12 +105,165 @@ fun EquipementDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Infos générales
-                    InfoCard(equipment = equipment)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shadowElevation = 2.dp
+                    ) {
+                        Column {
+                            equipment.brand?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.Build,
+                                    label = "Marque",
+                                    value = it
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                            equipment.model?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.Build,
+                                    label = "Modèle",
+                                    value = it
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                            equipment.typeCode?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.Category,
+                                    label = "Type",
+                                    value = it
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                            equipment.energyCode?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.LocalFireDepartment,
+                                    label = "Énergie",
+                                    value = it
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                            equipment.serialNumber?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.Tag,
+                                    label = "N° série",
+                                    value = it
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+                            equipment.installDate?.let {
+                                InfoRow(
+                                    icon = Icons.Filled.CalendarToday,
+                                    label = "Installation",
+                                    value = it.substring(0, 10)
+                                )
+                            }
+                        }
+                    }
 
-                    // Document requis selon le type
-                    DocumentRequis(equipment = equipment)
+                    // Document requis
+                    val documentType = when {
+                        equipment.typeCode in listOf("boiler") &&
+                                equipment.energyCode in listOf("gas", "oil") -> "attestation"
+                        equipment.typeCode in listOf("heat_pump", "ac") -> "cerfa"
+                        else -> null
+                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    documentType?.let { docType ->
+                        val color = if (docType == "attestation")
+                            MaterialTheme.colorScheme.tertiary
+                        else
+                            MaterialTheme.colorScheme.secondary
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shadowElevation = 2.dp
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(5.dp)
+                                        .fillMaxHeight()
+                                        .background(color)
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(12.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(color.copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Description,
+                                                contentDescription = null,
+                                                tint = color,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = if (docType == "attestation")
+                                                "Attestation d'entretien requise"
+                                            else
+                                                "CERFA fluides frigorigènes requis",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = color
+                                        )
+                                    }
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 10.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                    Text(
+                                        text = if (docType == "attestation")
+                                            "Pression circuit, température, indice de fumée, CO fumées, points de contrôle."
+                                        else
+                                            "Type de fluide, quantités récupérées/rechargées, attestation d'intervention.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "→ Remplir le document (à venir)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = color
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -97,120 +271,37 @@ fun EquipementDetailScreen(
 }
 
 @Composable
-private fun InfoCard(equipment: EquipmentEntity) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Informations",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            InfoRow(label = "Marque", value = equipment.brand)
-            InfoRow(label = "Modèle", value = equipment.model)
-            InfoRow(label = "Type", value = equipment.typeCode)
-            InfoRow(label = "Énergie", value = equipment.energyCode)
-            InfoRow(label = "N° série", value = equipment.serialNumber)
-            InfoRow(
-                label = "Installation",
-                value = equipment.installDate?.substring(0, 10)
-            )
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String?) {
-    if (value.isNullOrBlank()) return
+private fun InfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
-        )
-    }
-    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-}
-
-@Composable
-private fun DocumentRequis(equipment: EquipmentEntity) {
-    val documentType = when {
-        equipment.typeCode in listOf("boiler") &&
-                equipment.energyCode in listOf("gas", "oil") ->
-            "attestation"
-        equipment.typeCode in listOf("heat_pump", "ac") ->
-            "cerfa"
-        else -> null
-    }
-
-    documentType ?: return
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = when (documentType) {
-                "attestation" -> MaterialTheme.colorScheme.tertiaryContainer
-                else -> MaterialTheme.colorScheme.secondaryContainer
-            }
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
             Text(
-                text = when (documentType) {
-                    "attestation" -> "Attestation d'entretien requise"
-                    else -> "CERFA fluides frigorigènes requis"
-                },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = when (documentType) {
-                    "attestation" -> MaterialTheme.colorScheme.onTertiaryContainer
-                    else -> MaterialTheme.colorScheme.onSecondaryContainer
-                }
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Text(
-                text = when (documentType) {
-                    "attestation" ->
-                        "Pression circuit, température, indice de fumée, CO fumées, points de contrôle."
-                    else ->
-                        "Type de fluide, quantités récupérées/rechargées, attestation d'intervention."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = when (documentType) {
-                    "attestation" -> MaterialTheme.colorScheme.onTertiaryContainer
-                    else -> MaterialTheme.colorScheme.onSecondaryContainer
-                }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "→ Remplir le document (à venir)",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = when (documentType) {
-                    "attestation" -> MaterialTheme.colorScheme.onTertiaryContainer
-                    else -> MaterialTheme.colorScheme.onSecondaryContainer
-                }
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
 }
+
+

@@ -63,6 +63,8 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.androidx.compose.ui.text.google.fonts)
+    implementation(libs.coil.kt.coil.compose)
+
 
     // Hilt
     implementation(libs.hilt.android)
@@ -87,6 +89,18 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+
+    // CameraX
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+
+    implementation("androidx.concurrent:concurrent-futures:1.3.0")
+    implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")
+
+// Accompanist permissions
+    implementation(libs.accompanist.permissions)
 
     // Coil 3
     implementation(libs.coil.compose)

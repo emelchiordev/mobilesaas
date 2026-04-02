@@ -3,32 +3,42 @@ package re.melchior.saviomobile.ui.screen.intervention
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -36,26 +46,42 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.PhotoEntity
+import re.melchior.saviomobile.ui.component.PhotoGrid
+import re.melchior.saviomobile.ui.component.PhotoViewerDialog
+import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
+import java.io.File
+
+private data class DetailTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +93,7 @@ fun InterventionDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -77,171 +104,211 @@ fun InterventionDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
+
                 title = {
-                    Text(
-                        text = uiState.intervention?.typeLabel ?: "Intervention"
-                    )
+                    Column {
+                        Text(
+                            text = uiState.intervention?.typeLabel ?: "Intervention",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        uiState.intervention?.let {
+                            Text(
+                                text = it.scheduledAt.substringAfter("T").substring(0, 5),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                },
+                actions = {
+                    // Badge statut à droite
+                    uiState.intervention?.let { intervention ->
+                        val (statusColor, statusLabel) = when {
+                            intervention.syncStatus == "CONFLICT" ->
+                                Pair(MaterialTheme.colorScheme.error, "Conflit")
+                            intervention.syncStatus == "COMPLETED" ->
+                                Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+                            intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
+                                Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+                            intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
+                                Pair(MaterialTheme.colorScheme.tertiary, "En cours")
+                            intervention.status == "scheduled" ->
+                                Pair(MaterialTheme.colorScheme.primary, "Planifiée")
+                            else ->
+                                Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(statusColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(statusColor)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = statusLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = statusColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             )
+        },
+        bottomBar = {
+            uiState.intervention?.let { intervention ->
+                val isActionable = intervention.status in listOf("scheduled", "in_progress")
+                if (isActionable) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).navigationBarsPadding()) {
+                        Button(
+                            onClick = {
+                                if (intervention.status == "scheduled") viewModel.startIntervention()
+                                onStartIntervention(intervention.id)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (intervention.status == "scheduled")
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.tertiary
+                            )
+                        ) {
+                            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         when {
             uiState.intervention == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
             else -> {
                 val intervention = uiState.intervention!!
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Statut
-                    StatusBadge(intervention = intervention)
 
-                    // Carte client
-                    CustomerCard(
-                        intervention = intervention,
-                        onCallClick = { phone ->
-                            val intent = Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:$phone")
-                            }
-                            context.startActivity(intent)
-                        }
-                    )
+                // ← ICI intervention est disponible
+                val isCompleted = intervention.status == "completed"
 
-                    // Carte adresse
-                    AddressCard(
-                        intervention = intervention,
-                        onNavigateClick = {
-                            val lat = intervention.unitLatitude
-                            val lng = intervention.unitLongitude
-                            val address = "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
-                            val uri = if (lat != null && lng != null) {
-                                Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
-                            } else {
-                                Uri.parse("geo:0,0?q=${Uri.encode(address)}")
-                            }
-                            val intent = Intent(Intent.ACTION_VIEW, uri)
-                            context.startActivity(intent)
-                        }
-                    )
-
-                    // Carte contrat
-                    intervention.contractType?.let {
-                        ContractCard(intervention = intervention)
+                val tabs = remember(isCompleted) {
+                    buildList {
+                        if (isCompleted) add(DetailTab("Rapport", Icons.Filled.Assessment))
+                        add(DetailTab("Détail", Icons.Filled.Person))
+                        add(DetailTab("Équipements", Icons.Filled.Build))
+                        add(DetailTab("Contrat", Icons.Filled.Assignment))
                     }
+                }
 
-                    // Carte équipements
-                    if (uiState.equipments.isNotEmpty()) {
-                        EquipmentsCard(equipments = uiState.equipments)
-                    }
+                val pagerState = rememberPagerState(
+                    initialPage = 0,
+                    pageCount = { tabs.size }
+                )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
-                    // Bouton démarrer
-                    if (intervention.status == "scheduled") {
-                        Button(
-                            onClick = {
-                                viewModel.startIntervention()
-                                onStartIntervention(intervention.id)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Démarrer l'intervention",
-                                style = MaterialTheme.typography.titleMedium
+                    TabRow(selectedTabIndex = pagerState.currentPage) {
+                        tabs.forEachIndexed { index, tab ->
+                            Tab(
+                                selected = pagerState.currentPage == index,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                                text = { Text(text = tab.label, style = MaterialTheme.typography.labelMedium) },
+                                icon = { Icon(imageVector = tab.icon, contentDescription = tab.label, modifier = Modifier.size(18.dp)) }
                             )
                         }
                     }
 
-                    // Bouton reprendre si in_progress
-                    if (intervention.status == "in_progress") {
-                        Button(
-                            onClick = { onStartIntervention(intervention.id) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiary
+                    HorizontalPager(state = pagerState,key = { it }, modifier = Modifier.fillMaxSize()) { page ->
+                        // Si isCompleted, page 0 = Rapport, sinon page 0 = Détail
+                        val adjustedPage = if (isCompleted) page else page + 1
+
+                        when (adjustedPage) {
+                            0 -> RapportPage(
+                                intervention = intervention,
+                                interventionId = intervention.id
                             )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Reprendre l'intervention",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-                    }
-                    // Statut completed / synced / conflict — lecture seule
-                    // Uniquement si en attente de sync ou conflit
-                    if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = when (intervention.syncStatus) {
-                                    "CONFLICT" -> MaterialTheme.colorScheme.errorContainer
-                                    else -> MaterialTheme.colorScheme.surfaceVariant
-                                }
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            1 -> Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = when {
-                                        intervention.syncStatus == "CONFLICT" -> "Conflit ⚠"
-                                        intervention.syncStatus == "COMPLETED" -> "En attente sync"
-                                        intervention.syncStatus == "IN_PROGRESS" -> "En cours"
-                                        intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée ✓"
-                                        intervention.status == "scheduled" -> "Planifiée"
-                                        else -> intervention.status
+                                DetailPage(
+                                    intervention = intervention,
+                                    onCallClick = { phone ->
+                                        context.startActivity(Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$phone") })
                                     },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = when (intervention.syncStatus) {
-                                        "CONFLICT" -> MaterialTheme.colorScheme.onErrorContainer
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    onNavigateClick = {
+                                        val lat = intervention.unitLatitude
+                                        val lng = intervention.unitLongitude
+                                        val address = "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                                        val uri = if (lat != null && lng != null) Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                                        else Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                                     }
                                 )
+                                if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
+                                    SyncStatusCard(intervention = intervention)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
+                            2 -> Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (uiState.equipments.isNotEmpty()) {
+                                    EquipmentsCard(equipments = uiState.equipments)
+                                } else {
+                                    Box(modifier = Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = "Aucun équipement associé", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            3 -> Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (intervention.contractType != null) {
+                                    ContractCard(intervention = intervention)
+                                } else {
+                                    Box(modifier = Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = "Aucun contrat associé", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -249,375 +316,704 @@ fun InterventionDetailScreen(
 }
 
 @Composable
-private fun StatusBadge(intervention: InterventionEntity) {
-    val (color, label) = when {
+private fun SyncStatusCard(intervention: InterventionEntity) {
+    val syncColor = if (intervention.syncStatus == "CONFLICT")
+        MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.secondary
+    val syncLabel = if (intervention.syncStatus == "CONFLICT")
+        "Conflit de synchronisation"
+    else "En attente de synchronisation"
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = syncColor.copy(alpha = 0.08f)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(syncColor)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = syncLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = syncColor,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusBadge(intervention: InterventionEntity, modifier: Modifier = Modifier) {
+    val (statusColor, statusLabel) = when {
         intervention.syncStatus == "CONFLICT" ->
-            Pair(MaterialTheme.colorScheme.error, "Conflit ⚠")
+            Pair(MaterialTheme.colorScheme.error, "Conflit")
         intervention.syncStatus == "COMPLETED" ->
             Pair(MaterialTheme.colorScheme.secondary, "Terminée")
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-            Pair(MaterialTheme.colorScheme.secondary, "Terminée ✓")
-        intervention.syncStatus == "IN_PROGRESS" ->
-            Pair(MaterialTheme.colorScheme.tertiary, "En cours")
-        intervention.status == "in_progress" ->
+            Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
             Pair(MaterialTheme.colorScheme.tertiary, "En cours")
         intervention.status == "scheduled" ->
             Pair(MaterialTheme.colorScheme.primary, "Planifiée")
         else ->
-            Pair(MaterialTheme.colorScheme.surfaceVariant, intervention.status)
+            Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = statusColor.copy(alpha = 0.08f)
+    ) {
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(color.copy(alpha = 0.15f))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = label,
+                text = statusLabel,
                 style = MaterialTheme.typography.labelLarge,
-                color = color,
+                color = statusColor,
                 fontWeight = FontWeight.Bold
             )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Text(
-            text = intervention.scheduledAt
-                .substringAfter("T")
-                .substring(0, 5),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Text(
-            text = intervention.typeLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun CustomerCard(
-    intervention: InterventionEntity,
-    onCallClick: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Client",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (intervention.customerFirstName != null) {
-                Text(
-                    text = "${intervention.customerFirstName} ${intervention.customerLastName}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            } else {
-                Text(
-                    text = "Client non renseigné",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            intervention.customerPhone?.let { phone ->
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
-                FilledTonalButton(
-                    onClick = { onCallClick(phone) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Call,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(phone)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AddressCard(
-    intervention: InterventionEntity,
-    onNavigateClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Home,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Adresse",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = intervention.unitStreet,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-
-            intervention.unitAddressLine2?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Text(
-                text = "${intervention.unitPostalCode} ${intervention.unitCity}",
+                text = intervention.typeLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
-            // Infos accès
-            if (!intervention.unitFloor.isNullOrBlank() ||
-                !intervention.unitDoorCode.isNullOrBlank()
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    intervention.unitFloor?.let {
-                        Column {
-                            Text(
-                                text = "Étage",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    intervention.unitDoorCode?.let {
-                        Column {
-                            Text(
-                                text = "Code accès",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = onNavigateClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Naviguer")
-            }
         }
     }
 }
 
 @Composable
-private fun ContractCard(intervention: InterventionEntity) {
-    Card(
+private fun DetailPage(
+    intervention: InterventionEntity,
+    onCallClick: (String) -> Unit,
+    onNavigateClick: () -> Unit
+) {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Contrat",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            intervention.contractType?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
+        Column {
+            // Type d'intervention
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                intervention.contractTariff?.let { tariff ->
-                    Column {
-                        Text(
-                            text = "Tarif",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        val vatRate = intervention.contractVatRate
-                        Text(
-                            text = if (vatRate != null) "%.2f€ TVA ${vatRate.toInt()}%%".format(tariff)
-                            else "%.2f€".format(tariff),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                intervention.contractRenewalDate?.let { date ->
-                    Column {
-                        Text(
-                            text = "Renouvellement",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = date.substring(0, 10),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Filled.Build,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Équipements",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Type d'intervention",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = intervention.typeLabel,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
 
-            equipments.forEachIndexed { index, equipment ->
-                if (index > 0) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            // Client
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Client",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (intervention.customerFirstName != null)
+                            "${intervention.customerFirstName} ${intervention.customerLastName}"
+                        else "Non renseigné",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            // Adresse + bouton map
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Adresse",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = intervention.unitStreet,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    intervention.unitAddressLine2?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "${intervention.unitPostalCode} ${intervention.unitCity}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!intervention.unitFloor.isNullOrBlank() ||
+                        !intervention.unitDoorCode.isNullOrBlank()
+                    ) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            intervention.unitFloor?.let {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Étage $it",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            intervention.unitDoorCode?.let {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Code $it",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                IconButton(onClick = onNavigateClick) {
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = "Naviguer",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Téléphone
+            intervention.customerPhone?.let { phone ->
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = { onCallClick(phone) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Call,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(phone)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ContractCard(intervention: InterventionEntity) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.tertiary)
+            )
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Assignment,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Contrat",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                intervention.contractType?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                val hasTariff = intervention.contractTariff != null
+                val hasRenewal = intervention.contractRenewalDate != null
+                if (hasTariff || hasRenewal) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        intervention.contractTariff?.let { tariff ->
+                            val vatRate = intervention.contractVatRate
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Tarif",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    Text(
+                                        text = if (vatRate != null) "%.2f€ TVA ${vatRate.toInt()}%%".format(tariff)
+                                        else "%.2f€".format(tariff),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                }
+                            }
+                        }
+                        intervention.contractRenewalDate?.let { date ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Renouvellement",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Text(
+                                        text = date.substring(0, 10),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RapportPage(
+    intervention: InterventionEntity,
+    interventionId: String,
+    photoViewModel: PhotoViewModel = hiltViewModel()
+) {
+    val photos by photoViewModel.photos.collectAsStateWithLifecycle()
+    var selectedPhoto by remember { mutableStateOf<PhotoEntity?>(null) }
+
+    selectedPhoto?.let { photo ->
+        PhotoViewerDialog(
+            photo = photo,
+            onDismiss = { selectedPhoto = null }
+        )
+    }
+
+    LaunchedEffect(interventionId) {
+        photoViewModel.loadPhotos(interventionId)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column {
+                // Compte rendu
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Filled.Assignment,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
                         Text(
-                            text = listOfNotNull(equipment.brand, equipment.model)
-                                .joinToString(" "),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
+                            text = "Compte rendu",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text(
+                            text = intervention.report?.takeIf { it.isNotBlank() }
+                                ?: "Aucun compte rendu saisi",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (!intervention.report.isNullOrBlank())
+                                FontWeight.Normal else FontWeight.Normal,
+                            color = if (!intervention.report.isNullOrBlank())
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-                        equipment.typeCode?.let {
+                // Date de clôture
+                intervention.completedAt?.let { completedAt ->
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
                             Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Clôturée le",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-
-                        equipment.serialNumber?.let {
                             Text(
-                                text = "N° série : $it",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        equipment.installDate?.let {
-                            Text(
-                                text = "Installé le : ${it.substring(0, 10)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "${completedAt.substring(0, 10)} à ${completedAt.substringAfter("T").substring(0, 5)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
+                }
 
-                    if (equipment.isPrimary) {
+                // Photos
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CameraAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Photos",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (photos.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    MaterialTheme.colorScheme.primaryContainer
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Principal",
+                                text = photos.size.toString(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+
+                if (photos.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        photos.chunked(3).forEach { row ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                row.forEach { photo ->
+                                    AsyncImage(
+                                        model = if (photo.syncStatus == "SYNCED" && photo.remoteUrl != null)
+                                            photo.remoteUrl
+                                        else
+                                            File(photo.localPath),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { selectedPhoto = photo } // ← ajouté
+                                    )
+                                }
+                                repeat(3 - row.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Aucune photo",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 48.dp, bottom = 14.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.secondary)
+            )
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Build,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Équipements",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondary)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = equipments.size.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                equipments.forEachIndexed { index, equipment ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = listOfNotNull(equipment.brand, equipment.model)
+                                        .joinToString(" ")
+                                        .ifEmpty { "Équipement sans nom" },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (equipment.isPrimary) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Principal",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            equipment.typeCode?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            equipment.serialNumber?.let {
+                                Text(
+                                    text = "N° série : $it",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            equipment.installDate?.let {
+                                Text(
+                                    text = "Installé le : ${it.substring(0, 10)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

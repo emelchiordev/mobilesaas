@@ -42,7 +42,13 @@ data class InterventionDto(
     @SerializedName("equipment")
     val equipment: List<EquipmentDto>,
     @SerializedName("contract")
-    val contract: ContractDto?
+    val contract: ContractDto?,
+    @SerializedName("report")
+    val report: String? = null,
+    @SerializedName("completedAt")
+    val completedAt: String? = null,
+    @SerializedName("startedAt")
+    val startedAt: String? = null
 )
 
 data class InterventionTypeDto(

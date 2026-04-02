@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -16,13 +17,17 @@ import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.ui.screen.auth.AuthViewModel
 import re.melchior.saviomobile.ui.screen.auth.LoginScreen
 import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
+import re.melchior.saviomobile.ui.screen.intervention.CameraScreen
 import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
+import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveViewModel
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
+import re.melchior.saviomobile.ui.screen.intervention.PhotosScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
 import re.melchior.saviomobile.ui.screen.tournee.TourneeScreen
+import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
@@ -50,13 +55,46 @@ sealed class Screen(val route: String) {
     object EquipementDetail : Screen("equipement/{equipmentId}") {
         fun createRoute(equipmentId: String) = "equipement/$equipmentId"
     }
+
+    object Photos : Screen(
+        "intervention/{interventionId}/photos/{unitId}/{customerId}"
+    ) {
+        fun createRoute(
+            interventionId: String,
+            unitId: String,
+            customerId: String
+        ) = "intervention/$interventionId/photos/$unitId/$customerId"
+    }
+
+    object Camera : Screen(
+        "intervention/{interventionId}/camera/{unitId}/{customerId}"
+    ) {
+        fun createRoute(
+            interventionId: String,
+            unitId: String,
+            customerId: String
+        ) = "intervention/$interventionId/camera/$unitId/$customerId"
+    }
 }
 
 @Composable
 fun AppNavigation(tokenDataStore: TokenDataStore) {
     val navController = rememberNavController()
-    val isLoggedIn by tokenDataStore.isLoggedIn.collectAsStateWithLifecycle(false)
-    val startDestination = if (isLoggedIn) Screen.Tournee.route else Screen.Login.route
+    val isLoggedIn by tokenDataStore.isLoggedIn.collectAsStateWithLifecycle(null)
+
+    // 2. Tant qu'on ne sait pas si l'utilisateur est connecté, on n'affiche pas le NavHost
+    if (isLoggedIn == null) {
+        // Optionnel : un simple Box vide ou un indicateur de chargement
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // CircularProgressIndicator()
+        }
+        return
+    }
+
+    // 3. Maintenant isLoggedIn est soit true soit false, et restera stable durant la rotation
+    val startDestination = remember {
+        if (isLoggedIn == true) Screen.Tournee.route else Screen.Login.route
+    }
 
     val authViewModel: AuthViewModel = hiltViewModel()
     val authUiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -151,8 +189,10 @@ fun AppNavigation(tokenDataStore: TokenDataStore) {
                 onClientClick = { customerId ->
                     navController.navigate(Screen.ClientDetail.createRoute(customerId))
                 },
-                onPhotosClick = { interventionId ->
-                    // PhotosScreen — à venir
+                onPhotosClick = { interventionId, unitId, customerId ->
+                    navController.navigate(
+                        Screen.Photos.createRoute(interventionId, unitId, customerId)
+                    )
                 }
             )
         }
@@ -166,6 +206,46 @@ fun AppNavigation(tokenDataStore: TokenDataStore) {
 
         composable(Screen.ClientDetail.route) {
             ClientDetailScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Photos.route) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val unitId = backStackEntry.arguments?.getString("unitId") ?: return@composable
+            val customerId = backStackEntry.arguments?.getString("customerId") ?: return@composable
+
+            PhotosScreen(
+                interventionId = interventionId,
+                unitId = unitId,
+                customerId = customerId,
+                onBack = { navController.popBackStack() },
+                onOpenCamera = { uid, cid ->
+                    navController.navigate(
+                        Screen.Camera.createRoute(interventionId, uid, cid)
+                    )
+                }
+            )
+        }
+
+        composable(Screen.Camera.route) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val unitId = backStackEntry.arguments?.getString("unitId") ?: return@composable
+            val customerId = backStackEntry.arguments?.getString("customerId") ?: return@composable
+
+            // ViewModel propre à CameraScreen — pas de partage
+            val photoViewModel: PhotoViewModel = hiltViewModel()
+
+            CameraScreen(
+                onPhotoCaptured = { file ->
+                    photoViewModel.savePhoto(
+                        interventionId = interventionId,
+                        unitId = unitId,
+                        customerId = customerId,
+                        sourceFile = file
+                    )
+                    navController.popBackStack()
+                },
                 onBack = { navController.popBackStack() }
             )
         }
