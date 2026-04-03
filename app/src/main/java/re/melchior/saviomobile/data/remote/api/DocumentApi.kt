@@ -17,7 +17,8 @@ interface DocumentApi {
         @Query("unitId") unitId: String,
         @Query("customerId") customerId: String,
         @Query("fileName") fileName: String,
-        @Query("contentType") contentType: String
+        @Query("contentType") contentType: String,
+        @Query("context") context: String? = null
     ): UploadUrlResponseDto
 
     @POST("api/documents")

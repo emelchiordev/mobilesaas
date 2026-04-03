@@ -7,15 +7,16 @@ import okhttp3.Response
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import javax.inject.Inject
 import javax.inject.Singleton
+
 @Singleton
 class AuthInterceptor @Inject constructor(
-    private val tokenDataStore: TokenDataStore
+    private val tokenDataStore: TokenDataStore,
+    private val authEventBus: AuthEventBus
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        // Ne pas ajouter les headers auth sur les URLs externes (Scaleway S3)
         if (isExternalUrl(request.url.host)) {
             return chain.proceed(request)
         }
@@ -30,10 +31,20 @@ class AuthInterceptor @Inject constructor(
             }
         }.build()
 
-        return chain.proceed(authenticatedRequest)
+        val response = chain.proceed(authenticatedRequest)
+
+        // ← ajouté
+        if (response.code == 401) {
+            runBlocking {
+                tokenDataStore.clearSession()
+                authEventBus.emit(AuthEvent.Unauthorized)
+            }
+        }
+
+        return response
     }
 
     private fun isExternalUrl(host: String): Boolean {
-        return host.endsWith(".scw.cloud") // Scaleway
+        return host.endsWith(".scw.cloud")
     }
 }

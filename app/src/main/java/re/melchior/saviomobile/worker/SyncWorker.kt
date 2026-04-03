@@ -45,6 +45,9 @@ class SyncWorker @AssistedInject constructor(
             photoSyncRepository.uploadPendingPhotos()
             android.util.Log.d("SyncWorker", "Photos uploadées")
 
+            photoSyncRepository.uploadPendingSignatures()
+            android.util.Log.d("SyncWorker", "Signatures uploadées")
+
             // 3. Suppression photos PENDING_DELETE ← ajouté
             photoSyncRepository.deletePendingPhotos()
             android.util.Log.d("SyncWorker", "Photos supprimées")

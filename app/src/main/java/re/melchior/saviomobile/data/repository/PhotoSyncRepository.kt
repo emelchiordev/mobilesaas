@@ -2,11 +2,14 @@ package re.melchior.saviomobile.data.repository
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.api.DocumentApi
@@ -19,6 +22,7 @@ import javax.inject.Singleton
 class PhotoSyncRepository @Inject constructor(
     private val photoDao: PhotoDao,
     private val documentApi: DocumentApi,
+    private val interventionDao: InterventionDao,
     @ApplicationContext private val context: Context
 ) {
     private val httpClient = OkHttpClient()
@@ -85,6 +89,114 @@ class PhotoSyncRepository @Inject constructor(
                 photoDao.markAsError(photo.id, e.message ?: "Erreur inconnue")
                 allSuccess = false
                 android.util.Log.e("PhotoSync", "Erreur upload ${photo.id}: ${e.message}")
+            }
+        }
+        return allSuccess
+    }
+
+    /**
+     * Upload signatures PENDING vers Scaleway
+     */
+    suspend fun uploadPendingSignatures(): Boolean {
+        val interventions = interventionDao.getInterventionsWithLocalSignatures()
+        android.util.Log.d("PhotoSync", "Signatures à uploader: ${interventions.size}")
+        interventions.forEach {
+            android.util.Log.d("PhotoSync", "  → ${it.id} signaturePath=${it.signaturePath} techSignaturePath=${it.techSignaturePath}")
+        }
+        if (interventions.isEmpty()) return true
+        var allSuccess = true
+
+        for (intervention in interventions) {
+            // Signature client
+            intervention.signaturePath?.let { path ->
+                if (path.startsWith("/data")) {
+                    val file = File(path)
+                    if (file.exists()) {
+                        try {
+                            val uploadUrl = documentApi.getUploadUrl(
+                                interventionId = intervention.id,
+                                unitId = intervention.unitId,
+                                customerId = intervention.customerId ?: return@let,
+                                fileName = "sig_client_${intervention.id}.png",
+                                contentType = "image/png"
+                            )
+                            val uploadRequest = Request.Builder()
+                                .url(uploadUrl.url)
+                                .put(file.asRequestBody("image/png".toMediaType()))
+                                .build()
+                            val response = withContext(Dispatchers.IO) {
+                                httpClient.newCall(uploadRequest).execute()
+                            }
+                            if (response.isSuccessful) {
+                                documentApi.createDocument(
+                                    body = CreateDocumentRequestDto(
+                                        key = uploadUrl.key,
+                                        fileName = "sig_client_${intervention.id}.png",
+                                        type = "signature_client",
+                                        interventionId = intervention.id,
+                                        unitId = intervention.unitId,
+                                        customerId = intervention.customerId ?: ""
+                                    )
+                                )
+                                // Met à jour le chemin avec la clé remote
+                                interventionDao.updateSignaturePath(
+                                    id = intervention.id,
+                                    signaturePath = uploadUrl.key
+                                )
+                                android.util.Log.d("PhotoSync", "Signature client uploadée ✓ ${intervention.id}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("PhotoSync", "Erreur signature client ${intervention.id}: ${e.message}")
+                            allSuccess = false
+                        }
+                    }
+                }
+            }
+
+            // Signature technicien — même logique
+            intervention.techSignaturePath?.let { path ->
+                if (path.startsWith("/data")) {
+                    val file = File(path)
+                    if (file.exists()) {
+                        try {
+                            val uploadUrl = documentApi.getUploadUrl(
+                                interventionId = intervention.id,
+                                unitId = intervention.unitId,
+                                customerId = intervention.customerId ?: return@let,
+                                fileName = "sig_tech_${intervention.id}.png",
+                                contentType = "image/png",
+                                context = "signatures"
+                            )
+                            val uploadRequest = Request.Builder()
+                                .url(uploadUrl.url)
+                                .put(file.asRequestBody("image/png".toMediaType()))
+                                .build()
+                            val response = withContext(Dispatchers.IO) {
+                                httpClient.newCall(uploadRequest).execute()
+                            }
+                            if (response.isSuccessful) {
+                                documentApi.createDocument(
+                                    body = CreateDocumentRequestDto(
+                                        key = uploadUrl.key,
+                                        fileName = "sig_tech_${intervention.id}.png",
+                                        type = "signature_tech",
+                                        interventionId = intervention.id,
+                                        unitId = intervention.unitId,
+                                        customerId = intervention.customerId ?: ""
+                                    )
+                                )
+                                interventionDao.updateTechSignaturePath(
+                                    id = intervention.id,
+                                    techSignaturePath = uploadUrl.key
+                                )
+                                android.util.Log.d("PhotoSync", "Signature tech uploadée ✓ ${intervention.id}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("PhotoSync", "Erreur signature client ${intervention.id}", e)
+                            allSuccess = false
+                        }
+                    }
+                }
             }
         }
         return allSuccess

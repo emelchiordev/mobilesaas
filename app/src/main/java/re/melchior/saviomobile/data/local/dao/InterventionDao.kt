@@ -26,6 +26,22 @@ abstract class InterventionDao {
 //        }
 //    }
 
+    @Query("""
+    SELECT * FROM interventions 
+    WHERE status = 'completed'
+    AND (
+        signaturePath LIKE '/data%' 
+        OR techSignaturePath LIKE '/data%'
+    )
+""")
+    abstract suspend fun getInterventionsWithLocalSignatures(): List<InterventionEntity>
+
+    @Query("UPDATE interventions SET signaturePath = :signaturePath WHERE id = :id")
+    abstract suspend fun updateSignaturePath(id: String, signaturePath: String)
+
+    @Query("UPDATE interventions SET techSignaturePath = :techSignaturePath WHERE id = :id")
+    abstract suspend fun updateTechSignaturePath(id: String, techSignaturePath: String)
+
     @Query("SELECT * FROM interventions WHERE customerId = :customerId LIMIT 1")
     abstract fun getInterventionByCustomerId(customerId: String): Flow<InterventionEntity?>
 

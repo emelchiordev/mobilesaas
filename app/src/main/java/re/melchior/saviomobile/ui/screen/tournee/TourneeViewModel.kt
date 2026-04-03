@@ -77,6 +77,7 @@ class TourneeViewModel @Inject constructor(
                 try {
                     photoSyncRepository.uploadPendingPhotos()
                     photoSyncRepository.deletePendingPhotos()
+                    photoSyncRepository.uploadPendingSignatures()
                     android.util.Log.d("TourneeVM", "Photos sync terminée")
                 } catch (e: Exception) {
                     android.util.Log.w("TourneeVM", "Photos sync error: ${e.message}")
@@ -87,10 +88,10 @@ class TourneeViewModel @Inject constructor(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-                .setConstraints(constraints)
-                .build()
-            workManager.enqueue(syncRequest)
+//            val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
+//                .setConstraints(constraints)
+//                .build()
+//            workManager.enqueue(syncRequest)
 
             // Pull interventions
             when (val result = syncRepository.pull(_uiState.value.selectedDate)) {

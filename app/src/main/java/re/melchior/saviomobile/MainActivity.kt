@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import re.melchior.saviomobile.data.local.database.TokenDataStore
+import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
 import re.melchior.saviomobile.ui.navigation.AppNavigation
 import re.melchior.saviomobile.ui.theme.SavioTheme
 import re.melchior.saviomobile.worker.SyncWorker
@@ -23,6 +24,8 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var tokenDataStore: TokenDataStore
 
+    @Inject lateinit var authEventBus: AuthEventBus
+
     private val workManager by lazy { WorkManager.getInstance(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,7 +37,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SavioTheme {
-                AppNavigation(tokenDataStore = tokenDataStore)
+                AppNavigation(
+                    tokenDataStore = tokenDataStore,
+                    authEventBus = authEventBus
+                )
             }
         }
     }

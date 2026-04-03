@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -14,6 +15,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import re.melchior.saviomobile.data.local.database.TokenDataStore
+import re.melchior.saviomobile.data.remote.interceptor.AuthEvent
+import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
 import re.melchior.saviomobile.ui.screen.auth.AuthViewModel
 import re.melchior.saviomobile.ui.screen.auth.LoginScreen
 import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
@@ -78,10 +81,26 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun AppNavigation(tokenDataStore: TokenDataStore) {
+fun AppNavigation(
+    tokenDataStore: TokenDataStore,
+    authEventBus: AuthEventBus
+) {
     val navController = rememberNavController()
     val isLoggedIn by tokenDataStore.isLoggedIn.collectAsStateWithLifecycle(null)
 
+
+    // Écoute les événements 401 → redirige vers Login
+    LaunchedEffect(Unit) {
+        authEventBus.events.collect { event ->
+            when (event) {
+                is AuthEvent.Unauthorized -> {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+    }
     // 2. Tant qu'on ne sait pas si l'utilisateur est connecté, on n'affiche pas le NavHost
     if (isLoggedIn == null) {
         // Optionnel : un simple Box vide ou un indicateur de chargement
