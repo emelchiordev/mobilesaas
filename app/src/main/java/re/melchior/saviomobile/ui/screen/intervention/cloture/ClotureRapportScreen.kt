@@ -2,6 +2,8 @@ package re.melchior.saviomobile.ui.screen.intervention.cloture
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,16 +15,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -34,17 +40,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
+import re.melchior.saviomobile.data.remote.dto.stableKey
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureRapportScreen(
     onBack: () -> Unit,
-    onNext: (String) -> Unit,
+    onNext: (interventionId: String, preselectedActualTypeKeys: String) -> Unit,
     viewModel: ClotureRapportViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,30 +140,90 @@ fun ClotureRapportScreen(
                     }
                 }
 
-                // Champ compte-rendu — sans limite de caractères
-                OutlinedTextField(
-                    value = uiState.report,
-                    onValueChange = viewModel::onReportChange,
-                    label = { Text("Compte-rendu d'intervention") },
-                    placeholder = {
+                if (uiState.closeTypesLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                } else if (uiState.closeTypesError != null) {
+                    Text(
+                        text = uiState.closeTypesError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    ActualTypeChips(
+                        types = uiState.closeTypes,
+                        selectedTypes = uiState.selectedCloseTypes,
+                        onToggle = viewModel::toggleCloseType
+                    )
+                }
+
+                if (uiState.isVeChanged) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFFFEBEE)
+                    ) {
                         Text(
-                            text = "Décrivez les opérations effectuées, " +
-                                    "les observations, les pièces remplacées...",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
-                    maxLines = Int.MAX_VALUE,
-                    supportingText = {
-                        Text(
-                            text = "${uiState.report.length} caractères",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Attention : cette intervention était planifiée comme une " +
+                                    "Visite d'entretien. Changer le type annulera la couverture VE du contrat.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFB71C1C)
                         )
                     }
-                )
+                }
+
+                if (!uiState.showReport) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFE3F2FD)
+                    ) {
+                        Text(
+                            text = "Aucun compte-rendu requis pour les types sélectionnés.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                if (uiState.isAbsent) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFE3F2FD)
+                    ) {
+                        Text(
+                            text = "Absence : le compte-rendu et la signature client peuvent être non requis selon les types.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                if (uiState.showReport) {
+                    OutlinedTextField(
+                        value = uiState.report,
+                        onValueChange = viewModel::onReportChange,
+                        label = { Text("Compte-rendu d'intervention") },
+                        placeholder = {
+                            Text(
+                                text = "Décrivez les opérations effectuées, " +
+                                        "les observations, les pièces remplacées...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        maxLines = Int.MAX_VALUE,
+                        supportingText = {
+                            Text(
+                                text = "${uiState.report.length} caractères",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -163,7 +233,9 @@ fun ClotureRapportScreen(
                         scope.launch {
                             val saved = viewModel.saveReport()
                             if (saved) {
-                                uiState.intervention?.id?.let { onNext(it) }
+                                uiState.intervention?.id?.let { id ->
+                                    onNext(id, viewModel.preselectedKeysForNavigation())
+                                }
                             }
                         }
                     },
@@ -191,6 +263,73 @@ fun ClotureRapportScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun ActualTypeChips(
+    types: List<InterventionTypeDto>,
+    selectedTypes: List<InterventionTypeDto>,
+    onToggle: (InterventionTypeDto) -> Unit
+) {
+    Column {
+        Text(
+            text = "Type(s) réel(s) de l'intervention",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            types.forEach { type ->
+                val isSelected = selectedTypes.any {
+                    it.stableKey() == type.stableKey()
+                }
+                val typeColor = remember(type.color) {
+                    try {
+                        type.color?.let {
+                            Color(android.graphics.Color.parseColor(it))
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: MaterialTheme.colorScheme.primary
+
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onToggle(type) },
+                    label = { Text(type.label, fontSize = 13.sp) },
+                    leadingIcon = if (isSelected) {
+                        {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = typeColor.copy(alpha = 0.15f),
+                        selectedLabelColor = typeColor,
+                        selectedLeadingIconColor = typeColor
+                    )
+                )
+            }
+        }
+
+        if (selectedTypes.isEmpty()) {
+            Text(
+                text = "Sélectionnez au moins un type",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }

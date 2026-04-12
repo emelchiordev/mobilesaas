@@ -11,12 +11,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
+import re.melchior.saviomobile.data.remote.api.DocumentApi
 import re.melchior.saviomobile.data.repository.SyncRepository
 import javax.inject.Inject
 
 data class InterventionDetailUiState(
     val intervention: InterventionEntity? = null,
     val equipments: List<EquipmentEntity> = emptyList(),
+    val history: List<InterventionHistoryEntity> = emptyList(),
+    val historyPhotoUrls: Map<String, List<String>> = emptyMap(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -24,6 +28,7 @@ data class InterventionDetailUiState(
 @HiltViewModel
 class InterventionDetailViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val documentApi: DocumentApi,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -42,6 +47,7 @@ class InterventionDetailViewModel @Inject constructor(
             syncRepository.getInterventionById(interventionId)
                 .collect { intervention ->
                     _uiState.update { it.copy(intervention = intervention) }
+                    intervention?.let { loadHistory(it.unitId) }
                 }
         }
     }
@@ -52,6 +58,39 @@ class InterventionDetailViewModel @Inject constructor(
                 .collect { equipments ->
                     _uiState.update { it.copy(equipments = equipments) }
                 }
+        }
+    }
+
+    private fun loadHistory(unitId: String) {
+        viewModelScope.launch {
+            val history = syncRepository.getHistoryForUnit(unitId)
+            _uiState.update { it.copy(history = history) }
+            loadHistoryPhotoUrls(history)
+        }
+    }
+
+    private fun loadHistoryPhotoUrls(history: List<InterventionHistoryEntity>) {
+        viewModelScope.launch {
+            val urlMap = mutableMapOf<String, List<String>>()
+            history.forEach { item ->
+                if (!item.photoKeys.isNullOrBlank()) {
+                    try {
+                        val keys = com.google.gson.Gson()
+                            .fromJson(item.photoKeys, Array<String>::class.java)
+                            ?: return@forEach
+                        val urls = keys.mapNotNull { key ->
+                            try {
+                                documentApi.getSignedUrl(key).url
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                        if (urls.isNotEmpty()) urlMap[item.id] = urls
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            _uiState.update { it.copy(historyPhotoUrls = urlMap) }
         }
     }
 

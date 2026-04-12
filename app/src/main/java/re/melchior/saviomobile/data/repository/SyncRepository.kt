@@ -1,17 +1,24 @@
 package re.melchior.saviomobile.data.repository
 
+import com.google.gson.Gson
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
+import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
+import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
+import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
 import re.melchior.saviomobile.data.local.entity.SettingsEntity
 import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.dto.InterventionDto
+import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
+import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.remote.dto.SettingsDto
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -29,7 +36,9 @@ class SyncRepository @Inject constructor(
     private val interventionDao: InterventionDao,
     private val equipmentDao: EquipmentDao,
     private val referentielDao: ReferentielDao,
-    private val settingsDao: SettingsDao
+    private val settingsDao: SettingsDao,
+    private val interventionHistoryDao: InterventionHistoryDao,
+    private val interventionActualTypeDao: InterventionActualTypeDao
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
@@ -43,14 +52,40 @@ class SyncRepository @Inject constructor(
     suspend fun completeIntervention(
         interventionId: String,
         completedAt: String,
-        signaturePath: String,
-        techSignaturePath: String
+        signaturePath: String?,
+        techSignaturePath: String,
+        selectedTypes: List<InterventionTypeDto>
     ) {
+        val first = selectedTypes.firstOrNull()
+        interventionActualTypeDao.deleteForIntervention(interventionId)
+        if (selectedTypes.isNotEmpty()) {
+            interventionActualTypeDao.insertAll(
+                selectedTypes.mapIndexed { index, t ->
+                    InterventionActualTypeEntity(
+                        id = "${interventionId}_${t.stableKey()}",
+                        interventionId = interventionId,
+                        interventionTypeId = t.id ?: t.code,
+                        code = t.code,
+                        label = t.label,
+                        color = t.color,
+                        isVeType = t.isVeType,
+                        order = index + 1
+                    )
+                }
+            )
+        }
         interventionDao.completeIntervention(
             id = interventionId,
             completedAt = completedAt,
             signaturePath = signaturePath,
-            techSignaturePath = techSignaturePath
+            techSignaturePath = techSignaturePath,
+            actualTypeId = first?.id ?: first?.code ?: "",
+            actualTypeCode = first?.code,
+            actualTypeLabel = when {
+                selectedTypes.isEmpty() -> null
+                selectedTypes.size == 1 -> first?.label
+                else -> selectedTypes.joinToString(", ") { it.label }
+            }
         )
     }
 
@@ -65,6 +100,7 @@ class SyncRepository @Inject constructor(
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
             val existing = interventionDao.getInterventionByIdOnce(entity.id)
+
             when {
                 // Pas encore en local → insert direct
                 existing == null -> {
@@ -72,7 +108,7 @@ class SyncRepository @Inject constructor(
                 }
 
                 // Intervention terminée localement → données terrain font foi TOUJOURS
-                existing.status == "completed" -> {
+                existing.status == "completed" || existing.status == "pending_validation" -> {
                     interventionDao.insertOrReplace(
                         existing.copy(
                             // Seul le syncStatus peut être mis à jour par le serveur
@@ -82,7 +118,11 @@ class SyncRepository @Inject constructor(
                             completedAt = existing.completedAt ?: entity.completedAt,
                             startedAt = existing.startedAt ?: entity.startedAt,
                             signaturePath = existing.signaturePath ?: entity.signaturePath,
-                            techSignaturePath = existing.techSignaturePath ?: entity.techSignaturePath
+                            techSignaturePath = existing.techSignaturePath ?: entity.techSignaturePath,
+                            interventionTypeId = existing.interventionTypeId ?: entity.interventionTypeId,
+                            actualTypeId = existing.actualTypeId ?: entity.actualTypeId,
+                            actualTypeCode = existing.actualTypeCode ?: entity.actualTypeCode,
+                            actualTypeLabel = existing.actualTypeLabel ?: entity.actualTypeLabel
                         )
                     )
                     android.util.Log.d("InsertAllSafe", "→ completed local, données terrain préservées ${entity.id}")
@@ -128,6 +168,56 @@ class SyncRepository @Inject constructor(
             // Appel correct ici
             insertAllSafe(interventionEntities)
 
+            response.interventions.forEach { dto ->
+                val existing = interventionDao.getInterventionByIdOnce(dto.id)
+                val preserveLocalCompleted =
+                    existing?.status == "completed" || existing?.status == "pending_validation"
+                if (!preserveLocalCompleted && dto.actualTypes.isNotEmpty()) {
+                    interventionActualTypeDao.deleteForIntervention(dto.id)
+                    interventionActualTypeDao.insertAll(
+                        dto.actualTypes.map { at ->
+                            InterventionActualTypeEntity(
+                                id = "${dto.id}_${at.code}",
+                                interventionId = dto.id,
+                                interventionTypeId = at.id ?: at.code,
+                                code = at.code,
+                                label = at.label,
+                                color = at.color,
+                                isVeType = at.isVeType,
+                                order = at.order
+                            )
+                        }
+                    )
+                }
+            }
+
+            // ← HISTORIQUE ICI — après insertAllSafe
+            val historyEntities = response.interventions.flatMap { dto ->
+                dto.history.map { h ->
+                    InterventionHistoryEntity(
+                        id = h.id,
+                        unitId = dto.unit.id,
+                        number = h.number,
+                        scheduledAt = h.scheduledAt,
+                        completedAt = h.completedAt,
+                        report = h.report,
+                        typeCode = h.typeCode,
+                        typeLabel = h.typeLabel,
+                        typeColor = h.typeColor,
+                        technicianFirstName = h.technicianFirstName,
+                        technicianLastName = h.technicianLastName,
+                        photoKeys = if (h.photoKeys.isEmpty()) null
+                        else Gson().toJson(h.photoKeys)
+                    )
+                }
+            }
+            if (historyEntities.isNotEmpty()) {
+                interventionHistoryDao.insertAll(historyEntities)
+            }
+
+
+
+
             response.interventions.forEach { intervention ->
                 val equipmentEntities = intervention.equipment.map { eq ->
                     EquipmentEntity(
@@ -171,7 +261,8 @@ class SyncRepository @Inject constructor(
                     lastPulledAt = response.pulledAt,
                     technicianId = response.technician.id,
                     technicianFirstName = response.technician.firstName,
-                    technicianLastName = response.technician.lastName
+                    technicianLastName = response.technician.lastName,
+                    requireInvoiceValidation = response.technician.requireInvoiceValidation ?: false
                 )
             )
 
@@ -194,8 +285,14 @@ class SyncRepository @Inject constructor(
     fun getInterventionById(id: String) =
         interventionDao.getInterventionById(id)
 
+    suspend fun getInterventionByIdOnce(id: String) =
+        interventionDao.getInterventionByIdOnce(id)
+
     fun getPendingSyncCount() =
         interventionDao.getPendingSyncCount()
+
+    suspend fun getHistoryForUnit(unitId: String): List<InterventionHistoryEntity> =
+        interventionHistoryDao.getHistoryForUnit(unitId)
 }
 
 private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
@@ -206,6 +303,15 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     typeCode = type.code,
     typeLabel = type.label,
     typeColor = type.color,
+    interventionTypeId = type.id,
+    actualTypeId = actualTypes.firstOrNull()?.let { it.id ?: it.code } ?: actualTypeId,
+    actualTypeCode = actualTypes.firstOrNull()?.code ?: actualTypeCode,
+    actualTypeLabel = when {
+        actualTypes.size > 1 -> actualTypes.joinToString(", ") { it.label }
+        actualTypes.size == 1 -> actualTypes.first().label
+        else -> actualTypeLabel
+    },
+    number = number,
     unitId = unit.id,
     unitStreet = unit.street,
     unitAddressLine2 = unit.addressLine2,
@@ -220,6 +326,7 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     customerLastName = customer?.lastName,
     customerPhone = customer?.phone,
     customerEmail = customer?.email,
+    notes = notes,
     contractType = contract?.type,
     contractRenewalDate = contract?.renewalDate,
     contractTariff = contract?.tariff,

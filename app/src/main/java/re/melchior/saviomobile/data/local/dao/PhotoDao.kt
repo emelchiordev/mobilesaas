@@ -26,12 +26,7 @@ interface PhotoDao {
     fun getPhotosForIntervention(interventionId: String): Flow<List<PhotoEntity>>
 
     // Photos en attente d'upload
-    @Query("""
-        SELECT * FROM photos 
-        WHERE syncStatus = 'PENDING'
-        AND deletedLocally = 0
-        AND localPath IS NOT NULL
-    """)
+    @Query("SELECT * FROM photos WHERE syncStatus IN ('PENDING', 'ERROR')")
     suspend fun getPendingUploadPhotos(): List<PhotoEntity>
 
     // Photos en attente de suppression distante

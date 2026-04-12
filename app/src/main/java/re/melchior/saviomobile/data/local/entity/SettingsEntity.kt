@@ -13,5 +13,6 @@ data class SettingsEntity(
     val technicianId: String? = null,
     val technicianFirstName: String? = null,
     val technicianLastName: String? = null,
+    val requireInvoiceValidation: Boolean = false,
     val updatesRequireValidation: Boolean = false
 )

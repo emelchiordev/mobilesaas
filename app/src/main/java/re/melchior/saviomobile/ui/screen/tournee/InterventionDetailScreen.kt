@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +36,8 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -65,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +80,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.ui.component.PhotoGrid
 import re.melchior.saviomobile.ui.component.PhotoViewerDialog
@@ -146,6 +152,8 @@ fun InterventionDetailScreen(
                                 Pair(MaterialTheme.colorScheme.secondary, "Terminée")
                             intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
                                 Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+                            intervention.status == "pending_validation" ->        // ← ajouté
+                                Pair(Color(0xFFD97706), "À valider")              // ← ajouté
                             intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
                                 Pair(MaterialTheme.colorScheme.tertiary, "En cours")
                             intervention.status == "scheduled" ->
@@ -227,6 +235,7 @@ fun InterventionDetailScreen(
                         add(DetailTab("Détail", Icons.Filled.Person))
                         add(DetailTab("Équipements", Icons.Filled.Build))
                         add(DetailTab("Contrat", Icons.Filled.Assignment))
+                        add(DetailTab("Historique", Icons.Filled.History)) // ← ajouté
                     }
                 }
 
@@ -236,6 +245,33 @@ fun InterventionDetailScreen(
                 )
 
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    if (intervention.status == "pending_validation") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFFEF3C7)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFD97706))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "En attente de validation par le dispatcher",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFF92400E),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
 
                     TabRow(selectedTabIndex = pagerState.currentPage) {
                         tabs.forEachIndexed { index, tab ->
@@ -306,6 +342,10 @@ fun InterventionDetailScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
+                            4 -> HistoriquePage(
+                                history = uiState.history,
+                                photoUrls = uiState.historyPhotoUrls // ← ajouté
+                            )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
@@ -359,6 +399,8 @@ private fun StatusBadge(intervention: InterventionEntity, modifier: Modifier = M
             Pair(MaterialTheme.colorScheme.secondary, "Terminée")
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
             Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+        intervention.status == "pending_validation" ->        // ← ajouté
+            Pair(Color(0xFFD97706), "À valider")              // ← ajouté
         intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
             Pair(MaterialTheme.colorScheme.tertiary, "En cours")
         intervention.status == "scheduled" ->
@@ -438,6 +480,47 @@ private fun DetailPage(
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold
                     )
+                }
+            }
+            if (!intervention.notes.isNullOrBlank()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = Color(0xFFD97706), // amber
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Notes dispatcher",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFEF3C7)
+                        ) {
+                            Text(
+                                text = intervention.notes,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF92400E),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -896,6 +979,8 @@ private fun RapportPage(
     }
 }
 
+
+
 @Composable
 private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
     Surface(
@@ -1017,6 +1102,220 @@ private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun HistoriquePage(
+    history: List<InterventionHistoryEntity>,
+    photoUrls: Map<String, List<String>>
+) {
+    if (history.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Aucun historique disponible",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item { Spacer(modifier = Modifier.height(4.dp)) }
+        items(history) { item ->
+            HistoriqueItemCard(
+                item = item,
+                signedUrls = photoUrls[item.id] ?: emptyList()
+            )
+        }
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun HistoriqueItemCard(
+    item: InterventionHistoryEntity,
+    signedUrls: List<String> = emptyList()
+) {
+    val typeColor = remember(item.typeColor) {
+        try {
+            item.typeColor?.let { Color(android.graphics.Color.parseColor(it)) }
+        } catch (e: Exception) { null }
+    } ?: Color(0xFF2196F3)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(typeColor)
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Badge type
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(typeColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = item.typeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = typeColor
+                        )
+                    }
+                    // Date
+                    Text(
+                        text = item.completedAt?.substring(0, 10) ?: item.scheduledAt.substring(0, 10),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Numéro
+                item.number?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Technicien
+                val techName = listOfNotNull(item.technicianFirstName, item.technicianLastName)
+                    .joinToString(" ").ifEmpty { null }
+                techName?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Rapport
+                item.report?.takeIf { it.isNotBlank() }?.let { report ->
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Text(
+                        text = report,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+
+                if (signedUrls.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        signedUrls.chunked(3).forEach { row ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                row.forEach { url ->
+                                    AsyncImage(
+                                        model = url,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                    )
+                                }
+                                repeat(3 - row.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Afficher juste le compteur si pas encore chargé
+                    val photoCount = try {
+                        item.photoKeys?.let {
+                            com.google.gson.Gson()
+                                .fromJson(it, Array<String>::class.java)?.size ?: 0
+                        } ?: 0
+                    } catch (e: Exception) { 0 }
+
+                    if (photoCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$photoCount photo${if (photoCount > 1) "s" else ""} — réseau requis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+
+                // Photos disponibles si réseau
+//                val photoCount = try {
+//                    item.photoKeys?.let {
+//                        com.google.gson.Gson().fromJson(it, Array<String>::class.java)?.size ?: 0
+//                    } ?: 0
+//                } catch (e: Exception) { 0 }
+//
+//                if (photoCount > 0) {
+//                    Row(verticalAlignment = Alignment.CenterVertically) {
+//                        Icon(
+//                            imageVector = Icons.Filled.CameraAlt,
+//                            contentDescription = null,
+//                            modifier = Modifier.size(14.dp),
+//                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+//                        )
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text(
+//                            text = "$photoCount photo${if (photoCount > 1) "s" else ""}",
+//                            style = MaterialTheme.typography.labelSmall,
+//                            color = MaterialTheme.colorScheme.onSurfaceVariant
+//                        )
+//                    }
+//                }
             }
         }
     }

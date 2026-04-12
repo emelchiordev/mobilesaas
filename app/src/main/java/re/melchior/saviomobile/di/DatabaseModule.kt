@@ -8,11 +8,17 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
+import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
+import re.melchior.saviomobile.data.local.dao.InvoiceDao
+import re.melchior.saviomobile.data.local.dao.InvoiceLineDao
+import re.melchior.saviomobile.data.local.dao.InvoicePaymentDao
+import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
+import re.melchior.saviomobile.data.local.database.MIGRATION_12_13
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import javax.inject.Singleton
 
@@ -29,6 +35,7 @@ object DatabaseModule {
         SavioDatabase::class.java,
         "savio.db"
     )
+        .addMigrations(MIGRATION_12_13)
         .fallbackToDestructiveMigration()
         .build()
 
@@ -55,5 +62,25 @@ object DatabaseModule {
     @Provides
     fun providePhotoDao(db: SavioDatabase): PhotoDao =
         db.photoDao()
+
+    @Provides
+    fun provideInterventionHistoryDao(db: SavioDatabase): InterventionHistoryDao =
+        db.interventionHistoryDao()
+
+    @Provides
+    fun provideInterventionActualTypeDao(db: SavioDatabase): InterventionActualTypeDao =
+        db.interventionActualTypeDao()
+
+    @Provides
+    fun provideInvoiceDao(db: SavioDatabase): InvoiceDao =
+        db.invoiceDao()
+
+    @Provides
+    fun provideInvoiceLineDao(db: SavioDatabase): InvoiceLineDao =
+        db.invoiceLineDao()
+
+    @Provides
+    fun provideInvoicePaymentDao(db: SavioDatabase): InvoicePaymentDao =
+        db.invoicePaymentDao()
 
 }

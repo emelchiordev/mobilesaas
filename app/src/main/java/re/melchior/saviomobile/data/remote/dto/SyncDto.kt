@@ -23,7 +23,9 @@ data class TechnicianDto(
     @SerializedName("lastName")
     val lastName: String,
     @SerializedName("phone")
-    val phone: String?
+    val phone: String?,
+    @SerializedName("requireInvoiceValidation")
+    val requireInvoiceValidation: Boolean? = null
 )
 
 data class InterventionDto(
@@ -33,6 +35,8 @@ data class InterventionDto(
     val scheduledAt: String,
     @SerializedName("status")
     val status: String,
+    @SerializedName("number")
+    val number: String? = null,
     @SerializedName("type")
     val type: InterventionTypeDto,
     @SerializedName("unit")
@@ -48,16 +52,55 @@ data class InterventionDto(
     @SerializedName("completedAt")
     val completedAt: String? = null,
     @SerializedName("startedAt")
-    val startedAt: String? = null
+    val startedAt: String? = null,
+    @SerializedName("history")
+    val history: List<HistoryItemDto> = emptyList(),
+    @SerializedName("notes")
+    val notes: String? = null,
+    @SerializedName("actualTypeId")
+    val actualTypeId: String? = null,
+    @SerializedName("actualTypeCode")
+    val actualTypeCode: String? = null,
+    @SerializedName("actualTypeLabel")
+    val actualTypeLabel: String? = null,
+    @SerializedName("actualTypes")
+    val actualTypes: List<InterventionActualTypeItemDto> = emptyList(),
 )
 
-data class InterventionTypeDto(
-    @SerializedName("code")
-    val code: String,
-    @SerializedName("label")
-    val label: String,
-    @SerializedName("color")
-    val color: String?
+data class InterventionActualTypeItemDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("code") val code: String,
+    @SerializedName("label") val label: String,
+    @SerializedName("color") val color: String? = null,
+    @SerializedName("isVeType") val isVeType: Boolean = false,
+    @SerializedName("order") val order: Int = 1
+)
+
+data class HistoryItemDto(
+    @SerializedName("id")
+    val id: String,
+    @SerializedName("number")
+    val number: String? = null,
+    @SerializedName("scheduledAt")
+    val scheduledAt: String,
+    @SerializedName("completedAt")
+    val completedAt: String? = null,
+    @SerializedName("report")
+    val report: String? = null,
+    @SerializedName("typeCode")
+    val typeCode: String,
+    @SerializedName("typeLabel")
+    val typeLabel: String,
+    @SerializedName("typeColor")
+    val typeColor: String? = null,
+    @SerializedName("technicianFirstName")
+    val technicianFirstName: String? = null,
+    @SerializedName("technicianLastName")
+    val technicianLastName: String? = null,
+    @SerializedName("photoKeys")
+    val photoKeys: List<String> = emptyList(),
+    @SerializedName("history")
+val history: List<HistoryItemDto> = emptyList()
 )
 
 data class UnitDto(

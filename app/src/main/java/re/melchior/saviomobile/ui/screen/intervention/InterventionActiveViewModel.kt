@@ -6,13 +6,19 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InvoiceEntity
+import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import java.time.Instant
 import java.time.ZoneId
@@ -25,12 +31,15 @@ data class InterventionActiveUiState(
     val elapsedSeconds: Long = 0L,
     val startTimeLabel: String = "",
     val showQuitDialog: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val invoice: InvoiceEntity? = null
 )
 
 @HiltViewModel
 class InterventionActiveViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val invoiceRepository: InvoiceRepository,
+    private val settingsDao: SettingsDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -38,6 +47,9 @@ class InterventionActiveViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(InterventionActiveUiState())
     val uiState: StateFlow<InterventionActiveUiState> = _uiState.asStateFlow()
+
+    private val _navigateToInvoice = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navigateToInvoice: SharedFlow<String> = _navigateToInvoice.asSharedFlow()
 
     private var chronoJob: Job? = null
 
@@ -54,11 +66,14 @@ class InterventionActiveViewModel @Inject constructor(
                         _uiState.update { state ->
                             state.copy(intervention = it)
                         }
-                        // Démarrer le chrono si startedAt est renseigné
                         it.startedAt?.let { startedAt ->
                             startChrono(startedAt)
                         }
-                    }
+                        viewModelScope.launch {
+                            val invoice = invoiceRepository.getInvoiceForIntervention(it.id)
+                            _uiState.update { state -> state.copy(invoice = invoice) }
+                        }
+                    } ?: _uiState.update { it.copy(intervention = null, invoice = null) }
                 }
         }
     }
@@ -105,6 +120,25 @@ class InterventionActiveViewModel @Inject constructor(
     fun confirmQuit(): Boolean {
         chronoJob?.cancel()
         return true
+    }
+
+    fun createAndNavigateToInvoice(
+        interventionId: String,
+        unitId: String,
+        technicianId: String,
+    ) {
+        viewModelScope.launch {
+            val tech = technicianId.ifBlank {
+                settingsDao.getSettingsOnce()?.technicianId.orEmpty()
+            }
+            val invoice = invoiceRepository.createInvoice(
+                interventionId = interventionId,
+                unitId = unitId,
+                technicianId = tech,
+            )
+            _uiState.update { it.copy(invoice = invoice) }
+            _navigateToInvoice.emit(interventionId)
+        }
     }
 
     override fun onCleared() {

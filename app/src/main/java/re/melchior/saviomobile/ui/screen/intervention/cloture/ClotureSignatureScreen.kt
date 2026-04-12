@@ -30,10 +30,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,8 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureSignatureScreen(
     onBack: () -> Unit,
@@ -75,7 +76,15 @@ fun ClotureSignatureScreen(
     var clientCanvasHeight by remember { mutableStateOf(0) }
 
     LaunchedEffect(uiState.isCompleted) {
-        if (uiState.isCompleted) onCompleted()
+        if (uiState.isCompleted) {
+            if (uiState.isPendingValidation) {
+                snackbarHostState.showSnackbar(
+                    "Intervention soumise — en attente de validation du dispatcher"
+                )
+                kotlinx.coroutines.delay(2000)
+            }
+            onCompleted()
+        }
     }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -138,7 +147,37 @@ fun ClotureSignatureScreen(
                     )
                 }
 
-                // Signature technicien
+                if (uiState.closeTypesLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                } else if (uiState.closeTypesError != null) {
+                    Text(
+                        text = uiState.closeTypesError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    ActualTypeChips(
+                        types = uiState.closeTypes,
+                        selectedTypes = uiState.selectedCloseTypes,
+                        onToggle = viewModel::toggleCloseType
+                    )
+                }
+
+                if (uiState.isVeChanged) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFFFEBEE)
+                    ) {
+                        Text(
+                            text = "Attention : cette intervention était planifiée comme une " +
+                                    "Visite d'entretien. La changer annulera la couverture VE du contrat.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFB71C1C)
+                        )
+                    }
+                }
+
                 Text(
                     text = "Signature du technicien",
                     style = MaterialTheme.typography.labelMedium,
@@ -173,46 +212,47 @@ fun ClotureSignatureScreen(
                     }
                 }
 
-                HorizontalDivider()
+                if (uiState.showClientSignature) {
+                    HorizontalDivider()
 
-                // Signature client
-                Text(
-                    text = "Signature du client",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        text = "Signature du client",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                Text(
-                    text = "Le client atteste avoir reçu le compte-rendu de l'intervention.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        text = "Le client atteste avoir reçu le compte-rendu de l'intervention.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                SignatureZone(
-                    points = clientPoints,
-                    hasSignature = uiState.hasClientSignature,
-                    placeholder = "Client — signez ici",
-                    onDragStart = { x, y ->
-                        viewModel.addClientPoint(DrawPoint(x, y, isStart = true))
-                    },
-                    onDrag = { x, y ->
-                        viewModel.addClientPoint(DrawPoint(x, y, isStart = false))
-                    },
-                    onSizeChanged = { w, h ->
-                        clientCanvasWidth = w
-                        clientCanvasHeight = h
-                    }
-                )
+                    SignatureZone(
+                        points = clientPoints,
+                        hasSignature = uiState.hasClientSignature,
+                        placeholder = "Client — signez ici",
+                        onDragStart = { x, y ->
+                            viewModel.addClientPoint(DrawPoint(x, y, isStart = true))
+                        },
+                        onDrag = { x, y ->
+                            viewModel.addClientPoint(DrawPoint(x, y, isStart = false))
+                        },
+                        onSizeChanged = { w, h ->
+                            clientCanvasWidth = w
+                            clientCanvasHeight = h
+                        }
+                    )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(
-                        onClick = viewModel::clearClientSignature,
-                        enabled = uiState.hasClientSignature && !uiState.isLoading
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text("Effacer")
+                        OutlinedButton(
+                            onClick = viewModel::clearClientSignature,
+                            enabled = uiState.hasClientSignature && !uiState.isLoading
+                        ) {
+                            Text("Effacer")
+                        }
                     }
                 }
 

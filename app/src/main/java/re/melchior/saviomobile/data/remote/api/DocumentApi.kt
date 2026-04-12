@@ -1,5 +1,6 @@
 package re.melchior.saviomobile.data.remote.api
 
+import com.google.gson.annotations.SerializedName
 import re.melchior.saviomobile.data.remote.dto.CreateDocumentRequestDto
 import re.melchior.saviomobile.data.remote.dto.CreateDocumentResponseDto
 import re.melchior.saviomobile.data.remote.dto.UploadUrlResponseDto
@@ -29,5 +30,15 @@ interface DocumentApi {
     @DELETE("api/documents/{id}")
     suspend fun deleteDocument(
         @Path("id") documentId: String
+    )
+
+    @GET("api/documents/signed-url")
+    suspend fun getSignedUrl(
+        @Query("key") key: String
+    ): SignedUrlResponseDto
+
+    data class SignedUrlResponseDto(
+        @SerializedName("url")
+        val url: String
     )
 }

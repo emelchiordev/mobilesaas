@@ -81,14 +81,20 @@ abstract class InterventionDao {
             syncStatus = 'COMPLETED',
             completedAt = :completedAt,
             signaturePath = :signaturePath,
-            techSignaturePath = :techSignaturePath
+            techSignaturePath = :techSignaturePath,
+            actualTypeId = :actualTypeId,
+            actualTypeCode = :actualTypeCode,
+            actualTypeLabel = :actualTypeLabel
         WHERE id = :id
     """)
     abstract suspend fun completeIntervention(
         id: String,
         completedAt: String,
-        signaturePath: String,
-        techSignaturePath: String
+        signaturePath: String?,
+        techSignaturePath: String,
+        actualTypeId: String,
+        actualTypeCode: String?,
+        actualTypeLabel: String?
     )
 
     @Query("UPDATE interventions SET report = :report WHERE id = :id")

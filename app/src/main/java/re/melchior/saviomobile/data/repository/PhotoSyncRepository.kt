@@ -146,8 +146,10 @@ class PhotoSyncRepository @Inject constructor(
                                 android.util.Log.d("PhotoSync", "Signature client uploadée ✓ ${intervention.id}")
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("PhotoSync", "Erreur signature client ${intervention.id}: ${e.message}")
+                            // Juste logger — on réessaiera au prochain cycle WorkManager
+                            android.util.Log.w("PhotoSync", "Erreur upload  — sera retenté: ${e.message}")
                             allSuccess = false
+                            // Ne pas appeler photoDao.markAsError()
                         }
                     }
                 }

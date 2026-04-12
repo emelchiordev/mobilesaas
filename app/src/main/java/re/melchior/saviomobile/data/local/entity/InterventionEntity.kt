@@ -13,9 +13,13 @@ data class InterventionEntity(
     val typeCode: String,
     val typeLabel: String,
     val typeColor: String?,
+    val interventionTypeId: String? = null,
+    val actualTypeId: String? = null,
+    val actualTypeCode: String? = null,
+    val actualTypeLabel: String? = null,
     val signaturePath: String? = null,
     val techSignaturePath: String? = null,
-
+    val number: String? = null,
     // Unit
     val unitId: String,
     val unitStreet: String,
@@ -37,6 +41,7 @@ data class InterventionEntity(
     val contractRenewalDate: String?,
     val contractTariff: Double?,
     val contractVatRate: Double?,
+    val notes: String? = null,
     // Compte-rendu
     val report: String? = null,
     val completedAt: String? = null,

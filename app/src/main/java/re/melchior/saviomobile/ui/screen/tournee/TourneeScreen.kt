@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,7 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -63,7 +61,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -281,6 +278,7 @@ private fun InterventionCard(
         intervention.syncStatus == "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
         intervention.syncStatus == "SYNCED" &&
                 intervention.status == "completed" -> MaterialTheme.colorScheme.tertiary
+        intervention.status == "pending_validation" -> Color(0xFFD97706) // ← amber
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
@@ -297,6 +295,7 @@ private fun InterventionCard(
         intervention.syncStatus == "COMPLETED" -> "En attente"
         intervention.syncStatus == "IN_PROGRESS" -> "En cours"
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée"
+        intervention.status == "pending_validation" -> "À valider" // ← ajouté
         intervention.status == "scheduled" -> "Planifiée"
         else -> intervention.status
     }
@@ -400,6 +399,15 @@ private fun InterventionCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                intervention.number?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
 
                 // Infos complémentaires
                 if (!intervention.unitFloor.isNullOrBlank() ||

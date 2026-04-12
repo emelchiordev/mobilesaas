@@ -18,12 +18,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.remote.api.TourneeApi
+import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
+import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.repository.SyncRepository
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
 import javax.inject.Inject
+
+private const val ROUTE_NO_PRESELECT = "_"
 
 data class ClotureSignatureUiState(
     val intervention: InterventionEntity? = null,
@@ -31,33 +37,60 @@ data class ClotureSignatureUiState(
     val hasClientSignature: Boolean = false,
     val isLoading: Boolean = false,
     val isCompleted: Boolean = false,
-    val errorMessage: String? = null
+    val isPendingValidation: Boolean = false,
+    val errorMessage: String? = null,
+    val closeTypes: List<InterventionTypeDto> = emptyList(),
+    val closeTypesLoading: Boolean = true,
+    val closeTypesError: String? = null,
+    val selectedCloseTypes: List<InterventionTypeDto> = emptyList()
 ) {
-    val canComplete: Boolean get() = hasTechSignature && hasClientSignature
+    val isAbsent: Boolean get() = selectedCloseTypes.any { it.code == "ABS" }
+
+    val showClientSignature: Boolean
+        get() = selectedCloseTypes.any { it.requireClientSignature }
+
+    val showReport: Boolean get() = selectedCloseTypes.any { it.requireReport }
+
+    val isVeChanged: Boolean
+        get() = intervention?.typeCode == "VE"
+            && selectedCloseTypes.isNotEmpty()
+            && selectedCloseTypes.none { it.isVeType }
+
+    val canComplete: Boolean
+        get() {
+            if (closeTypesLoading || closeTypesError != null) return false
+            if (selectedCloseTypes.isEmpty() || closeTypes.isEmpty()) return false
+            if (!hasTechSignature) return false
+            if (!showClientSignature) return true
+            return hasClientSignature
+        }
 }
 
 @HiltViewModel
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val tourneeApi: TourneeApi,
     private val workManager: WorkManager,
+    private val settingsDao: SettingsDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val interventionId: String = checkNotNull(savedStateHandle["interventionId"])
+    private val routePreselectedKeys: String =
+        savedStateHandle.get<String>("preselectedActualTypeKeys") ?: ROUTE_NO_PRESELECT
 
     private val _uiState = MutableStateFlow(ClotureSignatureUiState())
     val uiState: StateFlow<ClotureSignatureUiState> = _uiState.asStateFlow()
 
-    // Points signature technicien
     private val _techPoints = MutableStateFlow<List<DrawPoint>>(emptyList())
     val techPoints: StateFlow<List<DrawPoint>> = _techPoints.asStateFlow()
 
-    // Points signature client
     private val _clientPoints = MutableStateFlow<List<DrawPoint>>(emptyList())
     val clientPoints: StateFlow<List<DrawPoint>> = _clientPoints.asStateFlow()
 
     init {
         loadIntervention()
+        loadCloseTypes()
     }
 
     private fun loadIntervention() {
@@ -65,7 +98,70 @@ class ClotureSignatureViewModel @Inject constructor(
             syncRepository.getInterventionById(interventionId)
                 .collect { intervention ->
                     _uiState.update { it.copy(intervention = intervention) }
+                    tryInitCloseTypeSelection()
                 }
+        }
+    }
+
+    private fun loadCloseTypes() {
+        viewModelScope.launch {
+            try {
+                val types = tourneeApi.getInterventionTypesForClose(showOnClose = true)
+                _uiState.update {
+                    it.copy(
+                        closeTypes = types,
+                        closeTypesLoading = false,
+                        closeTypesError = null
+                    )
+                }
+                tryInitCloseTypeSelection()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        closeTypesLoading = false,
+                        closeTypesError = e.message ?: "Impossible de charger les types d'intervention"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun tryInitCloseTypeSelection() {
+        if (_uiState.value.selectedCloseTypes.isNotEmpty()) return
+        val inv = _uiState.value.intervention ?: return
+        val types = _uiState.value.closeTypes
+        if (types.isEmpty()) return
+
+        val raw = routePreselectedKeys
+        if (raw.isNotBlank() && raw != ROUTE_NO_PRESELECT) {
+            val keys = raw.split('\u001F').filter { it.isNotEmpty() }
+            val resolved = keys.mapNotNull { k ->
+                types.find { it.stableKey() == k || it.id == k }
+            }
+            if (resolved.isNotEmpty()) {
+                _uiState.update { it.copy(selectedCloseTypes = resolved) }
+                return
+            }
+        }
+        _uiState.update { it.copy(selectedCloseTypes = listOf(resolveDefaultSingle(inv, types))) }
+    }
+
+    fun toggleCloseType(type: InterventionTypeDto) {
+        _uiState.update { state ->
+            val next =
+                if (state.selectedCloseTypes.any { it.stableKey() == type.stableKey() }) {
+                    state.selectedCloseTypes.filter { it.stableKey() != type.stableKey() }
+                } else {
+                    state.selectedCloseTypes + type
+                }
+            val stillNeedsClient = next.any { it.requireClientSignature }
+            if (!stillNeedsClient) {
+                _clientPoints.value = emptyList()
+            }
+            state.copy(
+                selectedCloseTypes = next,
+                hasClientSignature = if (stillNeedsClient) state.hasClientSignature else false
+            )
         }
     }
 
@@ -75,6 +171,7 @@ class ClotureSignatureViewModel @Inject constructor(
     }
 
     fun addClientPoint(point: DrawPoint) {
+        if (!_uiState.value.showClientSignature) return
         _clientPoints.update { it + point }
         _uiState.update { it.copy(hasClientSignature = true) }
     }
@@ -99,9 +196,21 @@ class ClotureSignatureViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
+                val state = _uiState.value
+                val selectedTypes = state.selectedCloseTypes
+                if (selectedTypes.isEmpty()) {
+                    _uiState.update {
+                        it.copy(isLoading = false, errorMessage = "Sélectionnez au moins un type réel")
+                    }
+                    return@launch
+                }
+
+                if (!state.showReport) {
+                    syncRepository.saveReport(interventionId, "")
+                }
+
                 val sigDir = File(filesDir, "signatures").apply { mkdirs() }
 
-                // Sauvegarder signature technicien
                 val techSigFile = File(sigDir, "sig_tech_${interventionId}.png")
                 saveBitmap(
                     points = _techPoints.value,
@@ -110,22 +219,26 @@ class ClotureSignatureViewModel @Inject constructor(
                     file = techSigFile
                 )
 
-                // Sauvegarder signature client
-                val clientSigFile = File(sigDir, "sig_client_${interventionId}.png")
-                saveBitmap(
-                    points = _clientPoints.value,
-                    width = clientCanvasWidth,
-                    height = clientCanvasHeight,
-                    file = clientSigFile
-                )
+                val clientSigPath: String? = if (!state.showClientSignature) {
+                    null
+                } else {
+                    val clientSigFile = File(sigDir, "sig_client_${interventionId}.png")
+                    saveBitmap(
+                        points = _clientPoints.value,
+                        width = clientCanvasWidth,
+                        height = clientCanvasHeight,
+                        file = clientSigFile
+                    )
+                    clientSigFile.absolutePath
+                }
 
-// Clôturer l'intervention
                 val now = Instant.now().toString()
                 syncRepository.completeIntervention(
                     interventionId = interventionId,
                     completedAt = now,
-                    signaturePath = clientSigFile.absolutePath,
-                    techSignaturePath = techSigFile.absolutePath
+                    signaturePath = clientSigPath,
+                    techSignaturePath = techSigFile.absolutePath,
+                    selectedTypes = selectedTypes
                 )
 
                 val constraints = Constraints.Builder()
@@ -138,8 +251,14 @@ class ClotureSignatureViewModel @Inject constructor(
 
                 workManager.enqueue(syncRequest)
 
-                _uiState.update { it.copy(isLoading = false, isCompleted = true) }
-
+                val requiresValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isCompleted = true,
+                        isPendingValidation = requiresValidation
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -157,6 +276,7 @@ class ClotureSignatureViewModel @Inject constructor(
         height: Int,
         file: File
     ) {
+        require(width > 0 && height > 0) { "Dimensions de signature invalides" }
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(android.graphics.Color.WHITE)
@@ -185,6 +305,17 @@ class ClotureSignatureViewModel @Inject constructor(
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
+}
+
+private fun resolveDefaultSingle(
+    intervention: InterventionEntity,
+    types: List<InterventionTypeDto>
+): InterventionTypeDto {
+    intervention.interventionTypeId?.let { id ->
+        types.find { it.id == id }?.let { return it }
+    }
+    types.find { it.code == intervention.typeCode }?.let { return it }
+    return types.first()
 }
 
 data class DrawPoint(

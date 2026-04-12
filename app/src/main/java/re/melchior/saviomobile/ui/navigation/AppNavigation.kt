@@ -9,11 +9,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.net.Uri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.interceptor.AuthEvent
 import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
@@ -26,6 +29,7 @@ import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveViewModel
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
+import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
 import re.melchior.saviomobile.ui.screen.intervention.PhotosScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
@@ -40,13 +44,20 @@ sealed class Screen(val route: String) {
         fun createRoute(interventionId: String) = "intervention/$interventionId"
     }
 
+    object Invoice : Screen("invoice/{interventionId}") {
+        fun createRoute(interventionId: String) = "invoice/$interventionId"
+    }
+
     object ClotureRapport : Screen("intervention/{interventionId}/cloture/rapport") {
         fun createRoute(interventionId: String) = "intervention/$interventionId/cloture/rapport"
     }
 
-    object ClotureSignature : Screen("intervention/{interventionId}/cloture/signature") {
-        fun createRoute(interventionId: String) =
-            "intervention/$interventionId/cloture/signature"
+    object ClotureSignature :
+        Screen("intervention/{interventionId}/cloture/signature/{preselectedActualTypeKeys}") {
+        fun createRoute(interventionId: String, preselectedActualTypeKeys: String = "_") =
+            "intervention/$interventionId/cloture/signature/${
+                Uri.encode(preselectedActualTypeKeys, "UTF-8")
+            }"
     }
     object InterventionActive : Screen("intervention/{interventionId}/active") {
         fun createRoute(interventionId: String) = "intervention/$interventionId/active"
@@ -123,7 +134,16 @@ fun AppNavigation(
         startDestination = startDestination
     ) {
 
-        composable(Screen.ClotureSignature.route) {
+        composable(
+            route = Screen.ClotureSignature.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("preselectedActualTypeKeys") {
+                    type = NavType.StringType
+                    defaultValue = "_"
+                }
+            )
+        ) {
             ClotureSignatureScreen(
                 onBack = { navController.popBackStack() },
                 onCompleted = {
@@ -136,9 +156,9 @@ fun AppNavigation(
         composable(Screen.ClotureRapport.route) {
             ClotureRapportScreen(
                 onBack = { navController.popBackStack() },
-                onNext = { interventionId ->
+                onNext = { interventionId, preselectedActualTypeKeys ->
                     navController.navigate(
-                        Screen.ClotureSignature.createRoute(interventionId)
+                        Screen.ClotureSignature.createRoute(interventionId, preselectedActualTypeKeys)
                     )
                 }
             )
@@ -192,6 +212,20 @@ fun AppNavigation(
             )
         }
 
+        composable(
+            route = Screen.Invoice.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId")
+                ?: return@composable
+            InvoiceScreen(
+                interventionId = interventionId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Screen.InterventionActive.route) {
             InterventionActiveScreen(
                 onQuit = { navController.popBackStack(Screen.Tournee.route, false) },
@@ -212,6 +246,9 @@ fun AppNavigation(
                     navController.navigate(
                         Screen.Photos.createRoute(interventionId, unitId, customerId)
                     )
+                },
+                onFactureClick = { interventionId ->
+                    navController.navigate(Screen.Invoice.createRoute(interventionId))
                 }
             )
         }
