@@ -3,6 +3,7 @@ package re.melchior.saviomobile.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,14 +27,20 @@ import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
 import re.melchior.saviomobile.ui.screen.intervention.CameraScreen
 import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
+import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailViewModel
+import re.melchior.saviomobile.ui.screen.intervention.cerfa.CerfaFroidScreen
+import re.melchior.saviomobile.ui.screen.intervention.CatalogSearchScreen
+import re.melchior.saviomobile.ui.screen.intervention.EquipmentFormScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
-import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveViewModel
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
 import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
 import re.melchior.saviomobile.ui.screen.intervention.PhotosScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
+import re.melchior.saviomobile.ui.screen.tournee.TourneeTabletScreen
 import re.melchior.saviomobile.ui.screen.tournee.TourneeScreen
+import re.melchior.saviomobile.ui.utils.SavioWindowSize
+import re.melchior.saviomobile.ui.utils.rememberSavioWindowSize
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 
 sealed class Screen(val route: String) {
@@ -70,6 +77,11 @@ sealed class Screen(val route: String) {
         fun createRoute(equipmentId: String) = "equipement/$equipmentId"
     }
 
+    object CerfaFroid : Screen("cerfa_froid/{interventionId}/{equipmentId}") {
+        fun createRoute(interventionId: String, equipmentId: String) =
+            "cerfa_froid/$interventionId/$equipmentId"
+    }
+
     object Photos : Screen(
         "intervention/{interventionId}/photos/{unitId}/{customerId}"
     ) {
@@ -89,12 +101,46 @@ sealed class Screen(val route: String) {
             customerId: String
         ) = "intervention/$interventionId/camera/$unitId/$customerId"
     }
+
+    object CatalogSearch : Screen(
+        "catalog_search/{interventionId}/{unitId}?parentEquipmentId={parentEquipmentId}&existingEquipmentId={existingEquipmentId}"
+    ) {
+        fun createRoute(
+            interventionId: String,
+            unitId: String,
+            parentEquipmentId: String? = null,
+            existingEquipmentId: String? = null,
+        ): String {
+            val base = "catalog_search/$interventionId/$unitId"
+            val parts = mutableListOf<String>()
+            if (!parentEquipmentId.isNullOrBlank()) {
+                parts += "parentEquipmentId=$parentEquipmentId"
+            }
+            if (!existingEquipmentId.isNullOrBlank()) {
+                parts += "existingEquipmentId=$existingEquipmentId"
+            }
+            return if (parts.isEmpty()) base else "$base?${parts.joinToString("&")}"
+        }
+    }
+
+    object EquipmentForm : Screen(
+        "equipment_form/{interventionId}/{unitId}?catalogEquipmentId={catalogEquipmentId}&existingEquipmentId={existingEquipmentId}&parentEquipmentId={parentEquipmentId}"
+    ) {
+        fun createRoute(
+            interventionId: String,
+            unitId: String,
+            catalogEquipmentId: String? = null,
+            existingEquipmentId: String? = null,
+            parentEquipmentId: String? = null,
+        ) = "equipment_form/$interventionId/$unitId?catalogEquipmentId=${catalogEquipmentId ?: ""}&existingEquipmentId=${existingEquipmentId ?: ""}&parentEquipmentId=${parentEquipmentId ?: ""}"
+    }
 }
 
 @Composable
 fun AppNavigation(
     tokenDataStore: TokenDataStore,
-    authEventBus: AuthEventBus
+    authEventBus: AuthEventBus,
+    windowSizeClass: WindowSizeClass,
 ) {
     val navController = rememberNavController()
     val isLoggedIn by tokenDataStore.isLoggedIn.collectAsStateWithLifecycle(null)
@@ -192,13 +238,30 @@ fun AppNavigation(
         }
 
         composable(Screen.Tournee.route) {
-            TourneeScreen(
-                onInterventionClick = { interventionId ->
-                    navController.navigate(
-                        Screen.InterventionDetail.createRoute(interventionId)
-                    )
-                }
-            )
+            val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
+            if (savioWindowSize == SavioWindowSize.EXPANDED) {
+                TourneeTabletScreen(
+                    parentNavController = navController,
+                    onResumeIntervention = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionActive.createRoute(interventionId)
+                        )
+                    }
+                )
+            } else {
+                TourneeScreen(
+                    onInterventionClick = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionDetail.createRoute(interventionId)
+                        )
+                    },
+                    onResumeIntervention = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionActive.createRoute(interventionId)
+                        )
+                    }
+                )
+            }
         }
 
         composable(Screen.InterventionDetail.route) {
@@ -229,9 +292,9 @@ fun AppNavigation(
         composable(Screen.InterventionActive.route) {
             InterventionActiveScreen(
                 onQuit = { navController.popBackStack(Screen.Tournee.route, false) },
-                onCloture = { interventionId ->
+                onCloture = { id ->
                     navController.navigate(
-                        Screen.ClotureRapport.createRoute(interventionId)
+                        Screen.ClotureRapport.createRoute(id)
                     )
                 },
                 onEquipementClick = { equipmentId ->
@@ -242,20 +305,158 @@ fun AppNavigation(
                 onClientClick = { customerId ->
                     navController.navigate(Screen.ClientDetail.createRoute(customerId))
                 },
-                onPhotosClick = { interventionId, unitId, customerId ->
+                onPhotosClick = { iid, unitId, customerId ->
                     navController.navigate(
-                        Screen.Photos.createRoute(interventionId, unitId, customerId)
+                        Screen.Photos.createRoute(iid, unitId, customerId)
                     )
                 },
-                onFactureClick = { interventionId ->
-                    navController.navigate(Screen.Invoice.createRoute(interventionId))
-                }
+                onFactureClick = { iid ->
+                    navController.navigate(Screen.Invoice.createRoute(iid))
+                },
+                onAddEquipment = { iid, unitId, parentEquipmentId ->
+                    navController.navigate(
+                        Screen.CatalogSearch.createRoute(
+                            interventionId = iid,
+                            unitId = unitId,
+                            parentEquipmentId = parentEquipmentId,
+                            existingEquipmentId = null,
+                        )
+                    )
+                },
+                onReplaceEquipment = { iid, unitId, existingEquipmentId ->
+                    navController.navigate(
+                        Screen.CatalogSearch.createRoute(
+                            interventionId = iid,
+                            unitId = unitId,
+                            parentEquipmentId = null,
+                            existingEquipmentId = existingEquipmentId,
+                        )
+                    )
+                },
             )
         }
 
-        composable(Screen.EquipementDetail.route) {
+        composable(
+            route = Screen.CatalogSearch.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("unitId") { type = NavType.StringType },
+                navArgument("existingEquipmentId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("parentEquipmentId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val unitId = backStackEntry.arguments?.getString("unitId") ?: return@composable
+            val parentEquipmentId = backStackEntry.arguments?.getString("parentEquipmentId")
+                ?.takeIf { it.isNotBlank() }
+            val existingEquipmentId = backStackEntry.arguments?.getString("existingEquipmentId")
+                ?.takeIf { it.isNotBlank() }
+            CatalogSearchScreen(
+                interventionId = interventionId,
+                unitId = unitId,
+                existingEquipmentId = existingEquipmentId,
+                parentEquipmentId = parentEquipmentId,
+                onManualEntry = {
+                    navController.navigate(
+                        Screen.EquipmentForm.createRoute(
+                            interventionId,
+                            unitId,
+                            null,
+                            existingEquipmentId,
+                            parentEquipmentId,
+                        )
+                    )
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Screen.EquipmentForm.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("unitId") { type = NavType.StringType },
+                navArgument("catalogEquipmentId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("existingEquipmentId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("parentEquipmentId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val unitId = backStackEntry.arguments?.getString("unitId") ?: return@composable
+            val catalogEquipmentId = backStackEntry.arguments?.getString("catalogEquipmentId")
+                ?.takeIf { it.isNotBlank() }
+            val existingEquipmentId = backStackEntry.arguments?.getString("existingEquipmentId")
+                ?.takeIf { it.isNotBlank() }
+            val parentEquipmentId = backStackEntry.arguments?.getString("parentEquipmentId")
+                ?.takeIf { it.isNotBlank() }
+            EquipmentFormScreen(
+                interventionId = interventionId,
+                unitId = unitId,
+                catalogEquipmentId = catalogEquipmentId,
+                existingEquipmentId = existingEquipmentId,
+                parentEquipmentId = parentEquipmentId,
+                onSaved = {
+                    navController.popBackStack(
+                        route = Screen.InterventionActive.createRoute(interventionId),
+                        inclusive = false,
+                    )
+                },
+                onBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(backStackEntry),
+            )
+        }
+
+        composable(Screen.EquipementDetail.route) { backStackEntry ->
+            val equipVm = hiltViewModel<EquipementDetailViewModel>(backStackEntry)
+            val unitId by equipVm.interventionUnitId.collectAsStateWithLifecycle()
             EquipementDetailScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onCerfaClick = { interventionId, equipmentId ->
+                    navController.navigate(
+                        Screen.CerfaFroid.createRoute(interventionId, equipmentId),
+                    )
+                },
+                onReplaceClick = { interventionId, equipmentId ->
+                    unitId?.let { uid ->
+                        navController.navigate(
+                            Screen.CatalogSearch.createRoute(
+                                interventionId = interventionId,
+                                unitId = uid,
+                                existingEquipmentId = equipmentId,
+                                parentEquipmentId = null,
+                            ),
+                        )
+                    }
+                },
+                viewModel = equipVm,
+            )
+        }
+
+        composable(
+            route = Screen.CerfaFroid.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentId") { type = NavType.StringType },
+            ),
+        ) {
+            CerfaFroidScreen(
+                onBack = { navController.popBackStack() },
+                windowSizeClass = windowSizeClass,
             )
         }
 

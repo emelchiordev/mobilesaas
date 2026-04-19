@@ -20,6 +20,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
         buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.69:3000/\"")
+        buildConfigField("String", "BAN_API_BASE_URL", "\"http://192.168.1.69:3001/\"")
+        // 10.0.2.2 = localhost depuis l'émulateur Android
+        buildConfigField(
+            "String",
+            "BAN_API_KEY",
+            "\"change-me-with-a-strong-random-key\""
+        )
     }
 
     buildTypes {
@@ -61,6 +68,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material3:material3-window-size-class:1.2.0")
     implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.androidx.compose.ui.text.google.fonts)

@@ -153,7 +153,11 @@ data class EquipmentDto(
     @SerializedName("installDate")
     val installDate: String?,
     @SerializedName("is_primary")
-    val isPrimary: Boolean
+    val isPrimary: Boolean,
+    @SerializedName("equipmentCatalogId")
+    val equipmentCatalogId: String? = null,
+    @SerializedName("parentEquipmentId")
+    val parentEquipmentId: String? = null,
 )
 
 data class ContractDto(

@@ -1,10 +1,12 @@
 package re.melchior.saviomobile.data.repository
 
 import com.google.gson.Gson
+import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
+import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
@@ -38,7 +40,9 @@ class SyncRepository @Inject constructor(
     private val referentielDao: ReferentielDao,
     private val settingsDao: SettingsDao,
     private val interventionHistoryDao: InterventionHistoryDao,
-    private val interventionActualTypeDao: InterventionActualTypeDao
+    private val interventionActualTypeDao: InterventionActualTypeDao,
+    private val pendingOperationDao: PendingOperationDao,
+    private val coldMeasureDao: ColdMeasureDao,
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
@@ -160,9 +164,20 @@ class SyncRepository @Inject constructor(
 
             val interventionEntities = response.interventions.map { it.toEntity(response.pulledAt) }
 
+            // Supprimer les équipements des interventions qui ne sont plus dans la liste retournée
+            // par le serveur pour cette date (interventions SYNCED du jour uniquement).
+            // Ne pas supprimer les équipements des interventions d'autres dates — le nettoyage
+            // global repose sur interventionDao.deleteOlderThan et deleteOlderThan sur les équipements.
+            val returnedInterventionIds = response.interventions.map { it.id }
+            if (returnedInterventionIds.isEmpty()) {
+                equipmentDao.deleteEquipmentsForAllSyncedInterventionsOnDate(dateStr)
+            } else {
+                equipmentDao.deleteEquipmentsForSyncedInterventionsNotInKeepList(dateStr, returnedInterventionIds)
+            }
+
             interventionDao.deleteSyncedForDate(
                 date = dateStr,
-                keepIds = response.interventions.map { it.id }
+                keepIds = returnedInterventionIds,
             )
 
             // Appel correct ici
@@ -218,22 +233,28 @@ class SyncRepository @Inject constructor(
 
 
 
-            response.interventions.forEach { intervention ->
-                val equipmentEntities = intervention.equipment.map { eq ->
-                    EquipmentEntity(
-                        id = eq.id,
-                        interventionId = intervention.id,
-                        brand = eq.brand,
-                        model = eq.model,
-                        typeCode = eq.typeCode,
-                        energyCode = eq.energyCode,
-                        serialNumber = eq.serialNumber,
-                        installDate = eq.installDate,
-                        isPrimary = eq.isPrimary
-                    )
+            // Dédupliquer les équipements — prioriser l'intervention active
+            val equipmentMap = mutableMapOf<String, EquipmentEntity>()
+            response.interventions
+                .sortedByDescending { it.status == "completed" } // terminées d'abord, actives en dernier
+                .forEach { intervention ->
+                    intervention.equipment.forEach { eq ->
+                        equipmentMap[eq.id] = EquipmentEntity(
+                            id = eq.id,
+                            interventionId = intervention.id,
+                            brand = eq.brand,
+                            model = eq.model,
+                            typeCode = eq.typeCode,
+                            energyCode = eq.energyCode,
+                            serialNumber = eq.serialNumber,
+                            installDate = eq.installDate,
+                            isPrimary = eq.isPrimary,
+                            equipmentCatalogId = eq.equipmentCatalogId,
+                            parentEquipmentId = eq.parentEquipmentId,
+                        )
+                    }
                 }
-                equipmentDao.insertAll(equipmentEntities)
-            }
+            equipmentDao.insertAll(equipmentMap.values.toList())
 
             response.referentiels?.let { refs ->
                 refs.interventionTypes?.let { types ->
@@ -267,8 +288,8 @@ class SyncRepository @Inject constructor(
             )
 
             val cutoffDate = date.minusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE)
-            interventionDao.deleteOlderThan(cutoffDate)
             equipmentDao.deleteOlderThan(cutoffDate)
+            interventionDao.deleteOlderThan(cutoffDate)
 
             SyncResult.Success
 
@@ -293,6 +314,17 @@ class SyncRepository @Inject constructor(
 
     suspend fun getHistoryForUnit(unitId: String): List<InterventionHistoryEntity> =
         interventionHistoryDao.getHistoryForUnit(unitId)
+
+    suspend fun getInProgressIntervention(): InterventionEntity? =
+        interventionDao.findFirstInProgress()
+
+    suspend fun abandonInterventionLocally(interventionId: String) {
+        pendingOperationDao.deleteByInterventionId(interventionId)
+        equipmentDao.deleteByInterventionId(interventionId)
+        coldMeasureDao.deleteByInterventionId(interventionId)
+        interventionActualTypeDao.deleteForIntervention(interventionId)
+        interventionDao.resetToScheduledAfterAbandon(interventionId)
+    }
 }
 
 private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(

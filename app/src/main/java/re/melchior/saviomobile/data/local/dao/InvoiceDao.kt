@@ -44,4 +44,7 @@ interface InvoiceDao {
         number: String?,
         status: String
     )
+
+    @Query("DELETE FROM invoices WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

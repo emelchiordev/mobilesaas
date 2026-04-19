@@ -7,6 +7,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import re.melchior.saviomobile.data.local.dao.CatalogEquipmentDao
+import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
+import re.melchior.saviomobile.data.local.dao.CatalogNomenclatureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
@@ -14,11 +17,19 @@ import re.melchior.saviomobile.data.local.dao.InvoiceDao
 import re.melchior.saviomobile.data.local.dao.InvoiceLineDao
 import re.melchior.saviomobile.data.local.dao.InvoicePaymentDao
 import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
+import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.database.MIGRATION_12_13
+import re.melchior.saviomobile.data.local.database.MIGRATION_13_14
+import re.melchior.saviomobile.data.local.database.MIGRATION_14_15
+import re.melchior.saviomobile.data.local.database.MIGRATION_15_16
+import re.melchior.saviomobile.data.local.database.MIGRATION_16_17
+import re.melchior.saviomobile.data.local.database.MIGRATION_17_18
+import re.melchior.saviomobile.data.local.database.MIGRATION_18_19
+import re.melchior.saviomobile.data.local.database.MIGRATION_19_20
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import javax.inject.Singleton
 
@@ -35,7 +46,6 @@ object DatabaseModule {
         SavioDatabase::class.java,
         "savio.db"
     )
-        .addMigrations(MIGRATION_12_13)
         .fallbackToDestructiveMigration()
         .build()
 
@@ -82,5 +92,21 @@ object DatabaseModule {
     @Provides
     fun provideInvoicePaymentDao(db: SavioDatabase): InvoicePaymentDao =
         db.invoicePaymentDao()
+
+    @Provides
+    fun provideCatalogNomenclatureDao(db: SavioDatabase): CatalogNomenclatureDao =
+        db.catalogNomenclatureDao()
+
+    @Provides
+    fun provideCatalogEquipmentDao(db: SavioDatabase): CatalogEquipmentDao =
+        db.catalogEquipmentDao()
+
+    @Provides
+    fun providePendingOperationDao(db: SavioDatabase): PendingOperationDao =
+        db.pendingOperationDao()
+
+    @Provides
+    fun provideColdMeasureDao(db: SavioDatabase): ColdMeasureDao =
+        db.coldMeasureDao()
 
 }

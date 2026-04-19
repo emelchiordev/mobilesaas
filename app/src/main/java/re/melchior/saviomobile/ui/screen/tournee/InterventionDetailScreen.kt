@@ -2,6 +2,7 @@ package re.melchior.saviomobile.ui.screen.intervention
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -72,6 +74,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -82,6 +85,7 @@ import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
+import re.melchior.saviomobile.R
 import re.melchior.saviomobile.ui.component.PhotoGrid
 import re.melchior.saviomobile.ui.component.PhotoViewerDialog
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
@@ -94,6 +98,7 @@ private data class DetailTab(val label: String, val icon: androidx.compose.ui.gr
 fun InterventionDetailScreen(
     onBack: () -> Unit,
     onStartIntervention: (String) -> Unit,
+    embeddedInMasterDetail: Boolean = false,
     viewModel: InterventionDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -112,105 +117,108 @@ fun InterventionDetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
+            if (!embeddedInMasterDetail) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
 
-                title = {
-                    Column {
-                        Text(
-                            text = uiState.intervention?.typeLabel ?: "Intervention",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        uiState.intervention?.let {
+                    title = {
+                        Column {
                             Text(
-                                text = it.scheduledAt.substringAfter("T").substring(0, 5),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                text = uiState.intervention?.typeLabel ?: "Intervention",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Filled.ArrowBack,
-                            contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                },
-                actions = {
-                    // Badge statut à droite
-                    uiState.intervention?.let { intervention ->
-                        val (statusColor, statusLabel) = when {
-                            intervention.syncStatus == "CONFLICT" ->
-                                Pair(MaterialTheme.colorScheme.error, "Conflit")
-                            intervention.syncStatus == "COMPLETED" ->
-                                Pair(MaterialTheme.colorScheme.secondary, "Terminée")
-                            intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-                                Pair(MaterialTheme.colorScheme.secondary, "Terminée")
-                            intervention.status == "pending_validation" ->        // ← ajouté
-                                Pair(Color(0xFFD97706), "À valider")              // ← ajouté
-                            intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-                                Pair(MaterialTheme.colorScheme.tertiary, "En cours")
-                            intervention.status == "scheduled" ->
-                                Pair(MaterialTheme.colorScheme.primary, "Planifiée")
-                            else ->
-                                Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 16.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(statusColor.copy(alpha = 0.15f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(statusColor)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
+                            uiState.intervention?.let {
                                 Text(
-                                    text = statusLabel,
+                                    text = it.scheduledAt.substringAfter("T").substring(0, 5),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = statusColor,
-                                    fontWeight = FontWeight.Bold
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    },
+                    actions = {
+                        uiState.intervention?.let { intervention ->
+                            val (statusColor, statusLabel) = when {
+                                intervention.syncStatus == "CONFLICT" ->
+                                    Pair(MaterialTheme.colorScheme.error, "Conflit")
+                                intervention.syncStatus == "COMPLETED" ->
+                                    Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+                                intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
+                                    Pair(MaterialTheme.colorScheme.secondary, "Terminée")
+                                intervention.status == "pending_validation" ->
+                                    Pair(Color(0xFFD97706), "À valider")
+                                intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
+                                    Pair(MaterialTheme.colorScheme.tertiary, "En cours")
+                                intervention.status == "scheduled" ->
+                                    Pair(MaterialTheme.colorScheme.primary, "Planifiée")
+                                else ->
+                                    Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 16.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(statusColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(statusColor)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = statusLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = statusColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = {
-            uiState.intervention?.let { intervention ->
-                val isActionable = intervention.status in listOf("scheduled", "in_progress")
-                if (isActionable) {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).navigationBarsPadding()) {
-                        Button(
-                            onClick = {
-                                if (intervention.status == "scheduled") viewModel.startIntervention()
-                                onStartIntervention(intervention.id)
-                            },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (intervention.status == "scheduled")
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.tertiary
-                            )
-                        ) {
-                            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention",
-                                style = MaterialTheme.typography.titleMedium
-                            )
+            if (!embeddedInMasterDetail) {
+                uiState.intervention?.let { intervention ->
+                    val isActionable = intervention.status in listOf("scheduled", "in_progress")
+                    if (isActionable) {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).navigationBarsPadding()) {
+                            Button(
+                                onClick = {
+                                    if (intervention.status == "scheduled") viewModel.startIntervention()
+                                    onStartIntervention(intervention.id)
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (intervention.status == "scheduled")
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.tertiary
+                                )
+                            ) {
+                                Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
                         }
                     }
                 }
@@ -234,7 +242,6 @@ fun InterventionDetailScreen(
                         if (isCompleted) add(DetailTab("Rapport", Icons.Filled.Assessment))
                         add(DetailTab("Détail", Icons.Filled.Person))
                         add(DetailTab("Équipements", Icons.Filled.Build))
-                        add(DetailTab("Contrat", Icons.Filled.Assignment))
                         add(DetailTab("Historique", Icons.Filled.History)) // ← ajouté
                     }
                 }
@@ -245,6 +252,11 @@ fun InterventionDetailScreen(
                 )
 
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    val actionable = intervention.status in listOf("scheduled", "in_progress")
+                    val pagerModifier =
+                        if (embeddedInMasterDetail && actionable) Modifier.weight(1f).fillMaxWidth()
+                        else Modifier.fillMaxSize()
+
                     if (intervention.status == "pending_validation") {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -284,7 +296,7 @@ fun InterventionDetailScreen(
                         }
                     }
 
-                    HorizontalPager(state = pagerState,key = { it }, modifier = Modifier.fillMaxSize()) { page ->
+                    HorizontalPager(state = pagerState, key = { it }, modifier = pagerModifier) { page ->
                         // Si isCompleted, page 0 = Rapport, sinon page 0 = Détail
                         val adjustedPage = if (isCompleted) page else page + 1
 
@@ -329,27 +341,81 @@ fun InterventionDetailScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
-                            3 -> Column(
-                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (intervention.contractType != null) {
-                                    ContractCard(intervention = intervention)
-                                } else {
-                                    Box(modifier = Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = "Aucun contrat associé", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                            4 -> HistoriquePage(
+                            3 -> HistoriquePage(
                                 history = uiState.history,
                                 photoUrls = uiState.historyPhotoUrls // ← ajouté
                             )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
+                    if (embeddedInMasterDetail && actionable) {
+                        InterventionDetailEmbeddedFooter(
+                            intervention = intervention,
+                            onPause = onBack,
+                            onPrimaryClick = {
+                                if (intervention.status == "scheduled") viewModel.startIntervention()
+                                onStartIntervention(intervention.id)
+                            },
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterventionDetailEmbeddedFooter(
+    intervention: InterventionEntity,
+    onPause: () -> Unit,
+    onPrimaryClick: () -> Unit,
+) {
+    val primaryLabel =
+        if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention"
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+        tonalElevation = 1.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onPause,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                border = BorderStroke(1.dp, colorResource(R.color.savio_primary)),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(
+                    text = "Mettre en pause",
+                    color = colorResource(R.color.savio_primary),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Button(
+                onClick = onPrimaryClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colorResource(R.color.savio_primary),
+                ),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(
+                    text = primaryLabel,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
@@ -671,119 +737,6 @@ private fun DetailPage(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(phone)
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun ContractCard(intervention: InterventionEntity) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.tertiary)
-            )
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Assignment,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Contrat",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                intervention.contractType?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                val hasTariff = intervention.contractTariff != null
-                val hasRenewal = intervention.contractRenewalDate != null
-                if (hasTariff || hasRenewal) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        intervention.contractTariff?.let { tariff ->
-                            val vatRate = intervention.contractVatRate
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MaterialTheme.colorScheme.tertiaryContainer)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "Tarif",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                    Text(
-                                        text = if (vatRate != null) "%.2f€ TVA ${vatRate.toInt()}%%".format(tariff)
-                                        else "%.2f€".format(tariff),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                }
-                            }
-                        }
-                        intervention.contractRenewalDate?.let { date ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "Renouvellement",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Text(
-                                        text = date.substring(0, 10),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }

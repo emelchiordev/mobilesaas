@@ -1,19 +1,28 @@
 
 package re.melchior.saviomobile.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.first
+import re.melchior.saviomobile.R
 import re.melchior.saviomobile.data.local.database.TokenDataStore
+import re.melchior.saviomobile.data.repository.ConflictEvent
 import re.melchior.saviomobile.data.repository.PhotoSyncRepository
 import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.PushResult
-import re.melchior.saviomobile.data.repository.SyncRepository
-import java.time.LocalDate
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -37,8 +46,22 @@ class SyncWorker @AssistedInject constructor(
                 return Result.success()
             }
 
-            // 1. Push interventions (existant)
-            val pushResult = pushRepository.push()
+            // 1. Push interventions — collecter les conflits en parallèle (SharedFlow)
+            val pushResult = coroutineScope {
+                val conflictJob = launch {
+                    var notified = 0
+                    pushRepository.conflictEvents.collect { conflict ->
+                        if (notified < 10) {
+                            showConflictNotification(conflict)
+                            notified++
+                        }
+                    }
+                }
+                yield()
+                val result = pushRepository.push()
+                conflictJob.cancel()
+                result
+            }
             android.util.Log.d("SyncWorker", "Push result: $pushResult")
 
             // 2. Upload photos PENDING ← ajouté
@@ -63,7 +86,40 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
+    private fun showConflictNotification(conflict: ConflictEvent) {
+        ensureConflictChannel()
+        val notification = NotificationCompat.Builder(
+            applicationContext,
+            CHANNEL_ID_CONFLICTS
+        )
+            .setSmallIcon(R.drawable.ic_warning)
+            .setContentTitle("Conflit de synchronisation")
+            .setContentText(conflict.message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat
+            .from(applicationContext)
+            .notify(conflict.interventionId.hashCode(), notification)
+    }
+
+    private fun ensureConflictChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID_CONFLICTS,
+                "Conflits de synchronisation",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alertes lorsque la synchronisation détecte un conflit"
+            }
+            applicationContext.getSystemService(NotificationManager::class.java)
+                ?.createNotificationChannel(channel)
+        }
+    }
+
     companion object {
         const val WORK_NAME = "SavioSyncWorker"
+        private const val CHANNEL_ID_CONFLICTS = "sync_conflicts"
     }
 }

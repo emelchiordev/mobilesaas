@@ -17,11 +17,59 @@ interface EquipmentDao {
     suspend fun insertAll(equipments: List<EquipmentEntity>)
 
     @Query("DELETE FROM equipments WHERE interventionId = :interventionId")
-    suspend fun deleteByIntervention(interventionId: String)
+    suspend fun deleteByInterventionId(interventionId: String)
 
-    @Query("DELETE FROM equipments WHERE interventionId IN (SELECT id FROM interventions WHERE scheduledAt < :date)")
+    @Query(
+        """
+        DELETE FROM equipments 
+        WHERE interventionId IN (
+            SELECT id FROM interventions 
+            WHERE scheduledAt < :date 
+            AND status = 'completed'
+            AND syncStatus = 'SYNCED'
+        )
+        """,
+    )
     suspend fun deleteOlderThan(date: String)
 
-    @Query("SELECT * FROM equipments WHERE id = :id")
+    @Query(
+        """
+        DELETE FROM equipments 
+        WHERE interventionId IN (
+            SELECT id FROM interventions 
+            WHERE scheduledAt LIKE :date || '%' 
+            AND syncStatus = 'SYNCED' 
+            AND id NOT IN (:keepIds)
+        )
+        """,
+    )
+    suspend fun deleteEquipmentsForSyncedInterventionsNotInKeepList(date: String, keepIds: List<String>)
+
+    @Query(
+        """
+        DELETE FROM equipments 
+        WHERE interventionId IN (
+            SELECT id FROM interventions 
+            WHERE scheduledAt LIKE :date || '%' 
+            AND syncStatus = 'SYNCED'
+        )
+        """,
+    )
+    suspend fun deleteEquipmentsForAllSyncedInterventionsOnDate(date: String)
+
+    @Query("SELECT * FROM equipments WHERE id = :id LIMIT 1")
     fun getEquipmentById(id: String): Flow<EquipmentEntity?>
+
+    @Query("DELETE FROM equipments WHERE id = :id AND interventionId = :interventionId")
+    suspend fun deleteById(id: String, interventionId: String)
+
+    @Query(
+        """
+        UPDATE equipments
+        SET typeCode = 'replaced'
+        WHERE id = :equipmentId
+        AND interventionId = :interventionId
+        """,
+    )
+    suspend fun markAsReplaced(equipmentId: String, interventionId: String)
 }

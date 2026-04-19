@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -12,12 +14,13 @@ import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
-import re.melchior.saviomobile.ui.navigation.AppNavigation
-import re.melchior.saviomobile.ui.theme.SavioTheme
+import re.melchior.saviomobile.ui.SavioApp
+import re.melchior.saviomobile.worker.CatalogSyncWorker
 import re.melchior.saviomobile.worker.SyncWorker
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -32,16 +35,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Enregistrer le worker périodique
+        // Enregistrer les workers périodiques
         scheduleSyncWorker()
+        CatalogSyncWorker.enqueue(workManager)
 
         setContent {
-            SavioTheme {
-                AppNavigation(
-                    tokenDataStore = tokenDataStore,
-                    authEventBus = authEventBus
-                )
-            }
+            val windowSizeClass = calculateWindowSizeClass(this)
+            SavioApp(
+                windowSizeClass = windowSizeClass,
+                tokenDataStore = tokenDataStore,
+                authEventBus = authEventBus,
+            )
         }
     }
 

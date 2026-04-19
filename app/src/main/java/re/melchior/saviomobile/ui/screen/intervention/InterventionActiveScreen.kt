@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,9 +41,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collect
@@ -68,6 +66,8 @@ fun InterventionActiveScreen(
     onClientClick: (String) -> Unit,
     onPhotosClick: (interventionId: String, unitId: String, customerId: String) -> Unit,
     onFactureClick: (interventionId: String) -> Unit,
+    onAddEquipment: (interventionId: String, unitId: String, parentEquipmentId: String?) -> Unit,
+    onReplaceEquipment: (interventionId: String, unitId: String, existingEquipmentId: String) -> Unit,
     viewModel: InterventionActiveViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -78,105 +78,46 @@ fun InterventionActiveScreen(
         }
     }
 
-    // Intercepter le bouton retour Android
-    BackHandler {
-        viewModel.showQuitDialog()
+    LaunchedEffect(Unit) {
+        viewModel.navigateBackToPlanning.collect {
+            onQuit()
+        }
     }
 
-    // Dialog confirmation quitter
+    val inProgress = uiState.intervention?.status == "in_progress"
+    BackHandler(enabled = inProgress) {
+        // Bloqué intentionnellement tant que l'intervention est en cours
+    }
+
     if (uiState.showQuitDialog) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissQuitDialog,
-            title = { Text("Quitter l'intervention ?") },
-            text = {
-                Text(
-                    "L'intervention restera EN COURS. " +
-                            "Vos saisies sont sauvegardées localement."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.dismissQuitDialog()
-                        if (viewModel.confirmQuit()) onQuit()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Quitter")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissQuitDialog) {
-                    Text("Continuer l'intervention")
-                }
-            }
+        QuitInterventionDialog(
+            onConfirm = viewModel::onQuitConfirmed,
+            onDismiss = viewModel::onQuitDismissed
         )
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
-                title = {
-                    Column {
-                        uiState.intervention?.let { intervention ->
-                            Text(
-                                text = "${intervention.customerFirstName ?: ""} " +
-                                        "${intervention.customerLastName ?: ""}".trim()
-                                            .ifEmpty { "Client non renseigné" },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                // Heure de début
-                                Text(
-                                    text = "Début : ${uiState.startTimeLabel}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                // Durée écoulée
-                                Text(
-                                    text = uiState.elapsedSeconds.toElapsedLabel(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                },
-                actions = {
-                    // Bouton fiche client
-                    IconButton(
-                        onClick = {
-                            uiState.intervention?.customerId?.let {
-                                onClientClick(it)
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = "Fiche client",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    // Bouton quitter
-                    IconButton(onClick = viewModel::showQuitDialog) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Quitter",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            )
+            val intervention = uiState.intervention
+            if (intervention != null) {
+                InterventionActiveTopBar(
+                    typeLabel = intervention.typeLabel,
+                    startTimeLabel = uiState.startTimeLabel,
+                    elapsedLabel = uiState.elapsedSeconds.toElapsedLabel(),
+                    intervention = intervention,
+                    onClientClick = {
+                        intervention.customerId?.let { onClientClick(it) }
+                    },
+                    onCloseClick = viewModel::onCloseClick
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF185FA5))
+                        .padding(16.dp)
+                )
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -261,18 +202,19 @@ fun InterventionActiveScreen(
                                 }
                             }
 
-                            // Équipements
-                            if (uiState.equipments.isNotEmpty()) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant
-                                )
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                            // Équipements — header toujours visible
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Filled.Build,
                                         contentDescription = null,
@@ -285,73 +227,108 @@ fun InterventionActiveScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary)
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = uiState.equipments.size.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                    if (uiState.equipments.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = uiState.equipments.size.toString(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
+                                IconButton(
+                                    onClick = {
+                                        onAddEquipment(intervention.id, intervention.unitId, null)
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Add,
+                                        contentDescription = "Ajouter un appareil",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
 
-                                uiState.equipments.forEachIndexed { index, equipment ->
+                            if (uiState.equipments.isEmpty()) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onAddEquipment(
+                                                intervention.id,
+                                                intervention.unitId,
+                                                null
+                                            )
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Build,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = 0.4f
+                                        ),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Text(
+                                        text = "Aucun appareil enregistré",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "Appuyez pour ajouter l'appareil du client",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = 0.6f
+                                        )
+                                    )
+                                }
+                            } else {
+                                val rootEquipments =
+                                    uiState.equipments
+                                        .filter { it.parentEquipmentId == null }
+                                        .filter { it.typeCode != "replaced" }
+                                val childrenByParent = uiState.equipments
+                                    .filter { it.parentEquipmentId != null }
+                                    .filter { it.typeCode != "replaced" }
+                                    .groupBy { it.parentEquipmentId }
+
+                                rootEquipments.forEach { equipment ->
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 16.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant
                                     )
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { onEquipementClick(equipment.id) }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = listOfNotNull(equipment.brand, equipment.model)
-                                                        .joinToString(" ")
-                                                        .ifEmpty { "Équipement sans nom" },
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                                if (equipment.isPrimary) {
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .clip(RoundedCornerShape(4.dp))
-                                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "Principal",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            equipment.typeCode?.let {
-                                                Text(
-                                                    text = it,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                        Icon(
-                                            imageVector = Icons.Filled.ChevronRight,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
+                                    InterventionActiveEquipmentRow(
+                                        equipment = equipment,
+                                        isChild = false,
+                                        onRowClick = { onEquipementClick(equipment.id) },
+                                    )
+                                    childrenByParent[equipment.id]?.forEach { child ->
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                        InterventionActiveEquipmentRow(
+                                            equipment = child,
+                                            isChild = true,
+                                            onRowClick = { onEquipementClick(child.id) },
                                         )
                                     }
                                 }
@@ -542,6 +519,189 @@ fun InterventionActiveScreen(
         }
     }
 
+}
+
+@Composable
+private fun InterventionActiveEquipmentRow(
+    equipment: EquipmentEntity,
+    isChild: Boolean,
+    onRowClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onRowClick)
+            .padding(
+                start = if (isChild) 24.dp else 8.dp,
+                end = 8.dp,
+                top = 4.dp,
+                bottom = 4.dp
+            )
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = listOfNotNull(equipment.brand, equipment.model)
+                    .joinToString(" ")
+                    .ifEmpty { "Équipement sans nom" },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isChild) FontWeight.Medium else FontWeight.SemiBold,
+                color = if (isChild) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            if (equipment.isPrimary) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Principal",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            equipment.typeCode?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun InterventionActiveTopBar(
+    typeLabel: String,
+    startTimeLabel: String,
+    elapsedLabel: String,
+    intervention: InterventionEntity,
+    onClientClick: () -> Unit,
+    onCloseClick: () -> Unit,
+) {
+    val statusText = when {
+        intervention.syncStatus == "CONFLICT" -> "Conflit"
+        intervention.syncStatus == "COMPLETED" -> "En attente"
+        intervention.syncStatus == "IN_PROGRESS" -> "En cours"
+        intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée"
+        intervention.status == "pending_validation" -> "À valider"
+        intervention.status == "scheduled" -> "Planifiée"
+        intervention.status == "in_progress" -> "En cours"
+        else -> intervention.status
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF185FA5))
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = typeLabel,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "Début : $startTimeLabel · $elapsedLabel",
+                    color = Color(0xFFB5D4F4),
+                    fontSize = 11.sp
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(
+                    onClick = onClientClick,
+                    enabled = intervention.customerId != null
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Person,
+                        contentDescription = "Fiche client",
+                        tint = Color.White.copy(alpha = if (intervention.customerId != null) 1f else 0.4f)
+                    )
+                }
+                InterventionActiveStatusBadge(statusText = statusText)
+                IconButton(onClick = onCloseClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Quitter l'intervention",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+        if (intervention.syncStatus == "CONFLICT") {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Text(
+                        "Conflit de synchronisation",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterventionActiveStatusBadge(statusText: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0x33FFFFFF))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = statusText,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 @Composable

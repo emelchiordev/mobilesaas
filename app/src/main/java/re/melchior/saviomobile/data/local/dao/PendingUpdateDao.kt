@@ -27,4 +27,7 @@ interface PendingUpdateDao {
 
     @Query("DELETE FROM pending_updates WHERE syncStatus = 'SYNCED'")
     suspend fun deleteSynced()
+
+    @Query("DELETE FROM pending_updates WHERE targetId = :targetId")
+    suspend fun deleteByTargetId(targetId: String)
 }

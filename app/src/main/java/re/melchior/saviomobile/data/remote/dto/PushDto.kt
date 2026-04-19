@@ -40,6 +40,10 @@ data class PushResultDto(
     val status: String,
     @SerializedName("reason")
     val reason: String?,
+    @SerializedName("message")
+    val message: String?,
+    @SerializedName("conflictType")
+    val conflictType: String?,
     @SerializedName("serverData")
     val serverData: Map<String, Any?>?
 )

@@ -51,6 +51,9 @@ class InterventionActiveViewModel @Inject constructor(
     private val _navigateToInvoice = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val navigateToInvoice: SharedFlow<String> = _navigateToInvoice.asSharedFlow()
 
+    private val _navigateBackToPlanning = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val navigateBackToPlanning: SharedFlow<Unit> = _navigateBackToPlanning.asSharedFlow()
+
     private var chronoJob: Job? = null
 
     init {
@@ -109,17 +112,22 @@ class InterventionActiveViewModel @Inject constructor(
         }
     }
 
-    fun showQuitDialog() {
+    fun onCloseClick() {
         _uiState.update { it.copy(showQuitDialog = true) }
     }
 
-    fun dismissQuitDialog() {
+    fun onQuitDismissed() {
         _uiState.update { it.copy(showQuitDialog = false) }
     }
 
-    fun confirmQuit(): Boolean {
-        chronoJob?.cancel()
-        return true
+    fun onQuitConfirmed() {
+        viewModelScope.launch {
+            chronoJob?.cancel()
+            syncRepository.abandonInterventionLocally(interventionId)
+            invoiceRepository.deleteDraftByIntervention(interventionId)
+            _uiState.update { it.copy(showQuitDialog = false) }
+            _navigateBackToPlanning.emit(Unit)
+        }
     }
 
     fun createAndNavigateToInvoice(

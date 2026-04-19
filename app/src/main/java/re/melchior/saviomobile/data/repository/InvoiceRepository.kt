@@ -209,6 +209,15 @@ class InvoiceRepository @Inject constructor(
     suspend fun searchRef(query: String): SearchRefResponseDto =
         invoiceApi.searchRef(query)
 
+    suspend fun deleteDraftByIntervention(interventionId: String) {
+        val inv = invoiceDao.getByInterventionId(interventionId) ?: return
+        if (inv.status != "draft") return
+        invoiceLineDao.deleteByInvoiceId(inv.id)
+        invoicePaymentDao.deleteByInvoiceId(inv.id)
+        pendingUpdateDao.deleteByTargetId(inv.id)
+        invoiceDao.deleteById(inv.id)
+    }
+
     private suspend fun recalcTotals(invoiceId: String) {
         val lines = invoiceLineDao.getByInvoiceIdOnce(invoiceId)
         val billable = lines.filter {

@@ -8,10 +8,12 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import re.melchior.saviomobile.BuildConfig
 import re.melchior.saviomobile.data.remote.api.AuthApi
+import re.melchior.saviomobile.data.remote.api.BanCatalogApi
 import re.melchior.saviomobile.data.remote.interceptor.AuthInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -54,4 +56,30 @@ object NetworkModule {
     @Singleton
     fun provideAuthApi(retrofit: Retrofit): AuthApi =
         retrofit.create(AuthApi::class.java)
+
+    @Provides
+    @Singleton
+    @Named("ban")
+    fun provideBanOkHttpClient(): OkHttpClient =
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val req = chain.request().newBuilder()
+                    .addHeader("x-api-key", BuildConfig.BAN_API_KEY)
+                    .build()
+                chain.proceed(req)
+            }
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideBanCatalogApi(@Named("ban") client: OkHttpClient): BanCatalogApi =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.BAN_API_BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(BanCatalogApi::class.java)
 }

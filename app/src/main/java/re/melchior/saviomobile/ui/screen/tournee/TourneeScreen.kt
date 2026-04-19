@@ -23,8 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +40,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,11 +49,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.R
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -67,11 +73,13 @@ import androidx.compose.runtime.setValue
 @Composable
 fun TourneeScreen(
     onInterventionClick: (String) -> Unit,
+    onResumeIntervention: (String) -> Unit = {},
     viewModel: TourneeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val interventions by viewModel.interventions.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
+    val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
@@ -83,25 +91,57 @@ fun TourneeScreen(
     }
 
     Scaffold(
+        containerColor = colorResource(R.color.screen_bg),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Ma tournée") },
+                title = {
+                    Text(
+                        "Ma tournée",
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colorResource(R.color.savio_primary),
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 actions = {
                     // Badge interventions en attente de sync
                     if (pendingSyncCount > 0) {
                         BadgedBox(
                             badge = {
-                                Badge { Text(pendingSyncCount.toString()) }
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                ) { Text(pendingSyncCount.toString()) }
                             }
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Sync,
                                 contentDescription = "Sync en attente",
-                                tint = MaterialTheme.colorScheme.error
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    IconButton(
+                        onClick = viewModel::syncCatalog,
+                        enabled = !uiState.isCatalogSyncing && !uiState.isSyncing
+                    ) {
+                        if (uiState.isCatalogSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.LibraryBooks,
+                                contentDescription = "Synchroniser le catalogue",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
                     }
                     // Bouton refresh manuel
                     IconButton(
@@ -111,12 +151,14 @@ fun TourneeScreen(
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
-                                contentDescription = "Rafraîchir"
+                                contentDescription = "Rafraîchir",
+                                tint = MaterialTheme.colorScheme.onPrimary,
                             )
                         }
                     }
@@ -178,6 +220,16 @@ fun TourneeScreen(
                         viewModel.selectDate(uiState.selectedDate.plusDays(1))
                     }
                 )
+
+                resumeCandidate?.let { entity ->
+                    ResumeBanner(
+                        intervention = entity.toInterventionItem(),
+                        onResume = {
+                            viewModel.resumeIntervention(onResumeIntervention)
+                        },
+                        onDismiss = { viewModel.ignoreResumeCandidate() }
+                    )
+                }
 
                 // Liste interventions
                 if (interventions.isEmpty() && !uiState.isSyncing) {
@@ -272,23 +324,28 @@ private fun InterventionCard(
     intervention: InterventionEntity,
     onClick: () -> Unit
 ) {
-    val statusColor = when {
-        intervention.syncStatus == "CONFLICT" -> MaterialTheme.colorScheme.error
-        intervention.syncStatus == "COMPLETED" -> MaterialTheme.colorScheme.secondary
-        intervention.syncStatus == "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-        intervention.syncStatus == "SYNCED" &&
-                intervention.status == "completed" -> MaterialTheme.colorScheme.tertiary
-        intervention.status == "pending_validation" -> Color(0xFFD97706) // ← amber
-        else -> MaterialTheme.colorScheme.surfaceVariant
+    val (statusBadgeBg, statusBadgeText) = when {
+        intervention.syncStatus == "CONFLICT" ->
+            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
+            colorResource(R.color.badge_done_bg) to colorResource(R.color.badge_done_text)
+        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
+            colorResource(R.color.badge_inprog_bg) to colorResource(R.color.badge_inprog_text)
+        intervention.syncStatus == "COMPLETED" ->
+            colorResource(R.color.badge_inprog_bg) to colorResource(R.color.badge_inprog_text)
+        else ->
+            colorResource(R.color.badge_neutral_bg) to colorResource(R.color.badge_neutral_text)
     }
 
-    val typeColor = remember(intervention.typeColor) {
-        try {
-            intervention.typeColor?.let { Color(android.graphics.Color.parseColor(it)) }
-        } catch (e: Exception) {
-            null
-        }
-    } ?: Color(0xFF2196F3)
+    val accentBarColor = when {
+        intervention.syncStatus == "CONFLICT" -> MaterialTheme.colorScheme.error
+        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
+            colorResource(R.color.accent_done)
+        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
+            colorResource(R.color.accent_inprog)
+        intervention.syncStatus == "COMPLETED" -> colorResource(R.color.accent_inprog)
+        else -> colorResource(R.color.accent_todo)
+    }
 
     val statusText = when {
         intervention.syncStatus == "CONFLICT" -> "Conflit"
@@ -305,7 +362,7 @@ private fun InterventionCard(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = colorResource(R.color.card_bg),
         shadowElevation = 2.dp
     ) {
         Row(
@@ -313,12 +370,11 @@ private fun InterventionCard(
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
         ) {
-            // Barre colorée à gauche selon le type d'intervention
             Box(
                 modifier = Modifier
                     .width(5.dp)
                     .fillMaxHeight()
-                    .background(typeColor)
+                    .background(accentBarColor)
             )
 
             Column(
@@ -345,13 +401,13 @@ private fun InterventionCard(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(typeColor.copy(alpha = 0.12f))
+                                .background(colorResource(R.color.badge_neutral_bg))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = intervention.typeLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = typeColor
+                                color = colorResource(R.color.badge_neutral_text)
                             )
                         }
                     }
@@ -359,15 +415,42 @@ private fun InterventionCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(statusColor.copy(alpha = 0.15f))
+                            .background(statusBadgeBg)
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = statusText,
                             style = MaterialTheme.typography.labelSmall,
-                            color = statusColor,
+                            color = statusBadgeText,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+                }
+
+                if (intervention.syncStatus == "CONFLICT") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Text(
+                                "Conflit",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
                     }
                 }
 

@@ -121,4 +121,19 @@ abstract class InterventionDao {
 
     @Query("SELECT COUNT(*) FROM interventions WHERE syncStatus IN ('PENDING', 'COMPLETED')")
     abstract fun getPendingSyncCount(): Flow<Int>
+
+    @Query("SELECT * FROM interventions WHERE status = 'in_progress' LIMIT 1")
+    abstract suspend fun findFirstInProgress(): InterventionEntity?
+
+    @Query(
+        """
+        UPDATE interventions SET
+            status = 'scheduled',
+            syncStatus = 'SYNCED',
+            startedAt = NULL,
+            report = NULL
+        WHERE id = :id
+        """
+    )
+    abstract suspend fun resetToScheduledAfterAbandon(id: String)
 }

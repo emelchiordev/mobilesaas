@@ -1,17 +1,20 @@
 # Savio Mobile (saviomobilite)
 
-Application Android pour **techniciens de terrain** : consultation des interventions du jour, suivi sur site, photos, compte-rendu, signatures et synchronisation avec un backend HTTP.
+Application Android **SAVIO** pour **techniciens de terrain** : consultation de la tournée, suivi d’intervention sur site, photos, compte-rendu, facturation locale, signatures et synchronisation avec un backend HTTP.
 
 ---
 
-## Objectif produit
+## Contexte produit
 
-Permettre au technicien de :
+L’app sert de **terminal terrain** relié à un serveur (planning, référentiels, envoi des opérations). Le technicien :
 
-- Voir sa **tournée** (interventions planifiées par date).
-- **Démarrer** une intervention, consulter client / équipements / contrat, prendre des **photos**.
-- **Clôturer** une intervention : compte-rendu, choix du ou des **types réels** d’intervention (chips), signatures technicien / client selon les règles métier, envoi des opérations au serveur.
-- Fonctionner **hors ligne partiellement** : données en cache locale (Room), file d’opérations à pousser, synchro périodique (WorkManager).
+- consulte ses **interventions par jour** ;
+- **démarre** une intervention, accède au **client**, aux **équipements**, au **contrat**, aux **photos** ;
+- peut **facturer** (brouillon local puis envoi selon les règles métier) ;
+- **clôture** l’intervention : compte-rendu, **types réels** d’intervention (sélection multiple), **signatures** (technicien / client selon les types) ;
+- travaille **hors ligne partiellement** : données en cache (**Room**), file d’opérations à pousser, synchro déclenchée au pull manuel et via **WorkManager** selon la configuration.
+
+Une intervention **en cours** (`in_progress`) est persistée en local : en cas de fermeture brutale de l’app, une **bannière de reprise** sur le planning propose de reprendre ou d’ignorer (réinitialisation locale).
 
 ---
 
@@ -19,9 +22,9 @@ Permettre au technicien de :
 
 | Élément | Version / remarque |
 |--------|---------------------|
-| Android Studio | Hedgehog ou plus récent recommandé |
-| JDK | **11** (configuré dans Gradle) |
-| SDK compile | **36** (voir `app/build.gradle.kts`) |
+| Android Studio | Récent (Gradle dans le projet) |
+| JDK | **11** (voir `app/build.gradle.kts`) |
+| compileSdk | **36** |
 | minSdk | **28** |
 | Appareil / émulateur | API 28+ |
 
@@ -29,14 +32,19 @@ Permettre au technicien de :
 
 ## Stack technique
 
-- **Langage** : Kotlin  
-- **UI** : Jetpack **Compose** + Material 3  
-- **Architecture** : MVVM, repositories, couche `data` (local + remote)  
-- **Injection** : **Hilt** (Dagger)  
-- **Réseau** : **Retrofit** + **OkHttp** (Gson), intercepteur d’auth  
-- **Persistance** : **Room** (SQLite), **DataStore** (tokens / session)  
-- **Tâches en arrière-plan** : **WorkManager** (synchro push / sync)  
-- **Images** : Coil, **CameraX** pour la capture photo  
+| Couche | Technologies |
+|--------|----------------|
+| Langage | **Kotlin** |
+| UI | **Jetpack Compose**, **Material 3**, `material3-window-size-class` (mise en page téléphone / tablette) |
+| Architecture | **MVVM**, `ViewModel`, repositories, couche `data` (local + remote) |
+| Injection | **Hilt** (KSP) |
+| Réseau | **Retrofit** + **OkHttp** (Gson), intercepteur d’authentification, bus d’événements (`AuthEventBus`) |
+| Persistance | **Room** (SQLite), **DataStore** (tokens / session) |
+| Arrière-plan | **WorkManager** (+ extension Hilt), workers de synchro |
+| Médias | **Coil**, **CameraX** (capture photo) |
+| Autres | **Accompanist Permissions**, etc. |
+
+Les versions sont centralisées dans **`gradle/libs.versions.toml`**.
 
 ---
 
@@ -45,88 +53,115 @@ Permettre au technicien de :
 L’URL de base de l’API est définie dans `app/build.gradle.kts` :
 
 ```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://…/\"")
+buildConfigField("String", "API_BASE_URL", "\"…\"")
 ```
 
-Elle est exposée en **`BuildConfig.API_BASE_URL`** et utilisée par `NetworkModule` (Retrofit). **À adapter** selon l’environnement (machine locale, staging, production). Pour du multi-environnement propre, on pourra plus tard externaliser (flavors, `local.properties`, etc.).
+Exposée en **`BuildConfig.API_BASE_URL`** (module `NetworkModule` / Retrofit). **À adapter** par environnement (machine locale, staging, production). Pour plusieurs environnements, prévoir des **product flavors** ou une valeur dans `local.properties`.
 
 ---
 
-## Architecture du code (`app/src/main/java/re/melchior/saviomobile`)
+## Architecture du code
+
+`app/src/main/java/re/melchior/saviomobile/`
 
 | Dossier | Rôle |
 |--------|------|
 | `data/local` | Entités Room, DAOs, `SavioDatabase`, migrations, `TokenDataStore` |
-| `data/remote` | APIs Retrofit (`AuthApi`, `SyncApi`, `PushApi`, `TourneeApi`, `DocumentApi`…), DTOs Gson, intercepteurs (`AuthInterceptor`, `AuthEventBus`) |
-| `data/repository` | `AuthRepository`, `SyncRepository`, `PushRepository`, `PhotoRepository`, etc. |
-| `di` | Modules Hilt (`NetworkModule`, `ApiModule`, `DatabaseModule`, `WorkerModule`…) |
-| `ui/navigation` | `AppNavigation` : graphe Compose, routes écran |
-| `ui/screen` | Écrans par domaine : `auth`, `tournee`, `intervention` (dont `cloture`) |
+| `data/remote` | APIs Retrofit (`AuthApi`, `SyncApi`, …), DTOs Gson, intercepteurs |
+| `data/repository` | `AuthRepository`, `SyncRepository`, `PushRepository`, `PhotoSyncRepository`, `InvoiceRepository`, … |
+| `di` | Modules Hilt (`NetworkModule`, `DatabaseModule`, …) |
+| `ui/navigation` | `AppNavigation`, routes `Screen` |
+| `ui/screen` | Écrans par domaine : `auth`, `tournee`, `intervention`, `invoice`, clôture |
 | `ui/theme` | Thème Material / couleurs Savio |
-| `worker` | `SyncWorker` : synchronisation en tâche de fond |
+| `worker` | Workers (ex. synchro) |
 
-**Point d’entrée** : `MainActivity` — thème, navigation, enregistrement du worker périodique de synchro.
+**Point d’entrée** : `MainActivity` — thème, navigation, `WindowSizeClass` pour l’UI adaptative.
 
 ---
 
-## Flux métier importants
+## Synchronisation
+
+### Pull (interventions & référentiels)
+
+- **`SyncRepository.pull(date)`** appelle l’API (ex. `SyncApi`) avec éventuellement `If-Modified-Since` selon les réglages locaux.
+- Les interventions reçues sont fusionnées en Room avec une logique de **non-régression** : une intervention **déjà terminée ou en validation côté terrain** n’est pas écrasée par le serveur de façon destructive (`insertAllSafe` / règles par statut `syncStatus`).
+- Référentiels (types d’intervention, équipements, etc.), **historique** unité, **équipements** liés aux interventions, **types réels** synchronisés (`intervention_actual_types`) selon les règles métier.
+
+### Push / opérations différées
+
+- Les actions terrain (démarrage, clôture, etc.) passent par **`PushRepository`** / API dédiée selon le modèle du projet.
+- Les **factures** et mises à jour peuvent produire des entrées **`pending_updates`** (Room) pour envoi ultérieur (ex. soumission de facture avec lignes et paiements).
+- **WorkManager** peut enchaîner les tâches de synchro lorsque le réseau est disponible (voir workers et enqueue dans le code).
+
+### Photos & signatures
+
+- **`PhotoSyncRepository`** (et flux associés) gère l’upload des photos / signatures en attente, souvent déclenché depuis le **planning** (`pull` / refresh) en complément du push interventions.
 
 ### Authentification
 
-Connexion via API ; jetons stockés (DataStore) ; les appels HTTP passent par un intercepteur qui attache l’auth ; en cas de **401**, événement global pour renvoyer vers l’écran de login.
+- Jetons dans **DataStore** ; les requêtes HTTP portent l’auth via intercepteur.
+- En **401**, **`AuthEventBus`** notifie → retour vers **`Login`** (stack nettoyée).
 
-### Synchronisation des interventions
+---
 
-- **Pull** : `SyncApi` — récupération des interventions du jour (et référentiels), écriture Room avec logique de **fusion** (ne pas écraser une intervention déjà terminée localement avec les données serveur complètes).
-- **Types réels** : le pull peut fournir une liste `actualTypes` par intervention ; stockage dans la table `intervention_actual_types` (Room v10+).
-- **Push** : `PushApi` — envoi des opérations `START_INTERVENTION`, `COMPLETE_INTERVENTION`, etc. Le **COMPLETE** inclut notamment `report`, `completedAt`, **`actualTypeIds`** (liste) et **`actualTypeId`** (premier id, compatibilité).
+## UI adaptative (téléphone / tablette)
 
-### Clôture d’intervention
+- **`rememberSavioWindowSize`**, dérivé de **`WindowSizeClass`** : en fenêtre **élargie** (`EXPANDED`), la **tournée** utilise **`TourneeTabletScreen`** : sidebar liste + **détail** dans un second `NavHost` (`TourneeAdaptiveLayout`, `TourneeDetailNavHost`).
+- En mode **compact**, **`TourneeScreen`** (liste plein écran + navigation vers le détail).
 
-1. **Étape rapport** : saisie du compte-rendu si requis par les types sélectionnés ; sélection **multiple** des types réels (chips Material 3).
-2. **Étape signatures** : même sélection (reprise via argument de navigation) ; signature technicien ; signature client si au moins un type exige `requireClientSignature` ; alerte si passage d’une VE planifiée à des types non-VE.
-3. Persistance locale puis **WorkManager** pour pousser la synchro quand le réseau est disponible.
+---
+
+## Écrans et navigation (aperçu)
+
+Les routes sont définies dans **`Screen`** (`AppNavigation.kt`). Flux principal :
+
+| Zone | Écran / composable | Rôle |
+|------|---------------------|------|
+| Auth | `LoginScreen`, `SelectSocieteScreen` | Connexion, choix de société si applicable |
+| Planning | `TourneeScreen` / `TourneeTabletScreen` | Liste du jour, changement de date, refresh, bannière **reprise d’intervention** si `in_progress` en base |
+| Détail | `InterventionDetailScreen` | Fiche intervention avant / pendant accès (démarrer, infos) |
+| Terrain | `InterventionActiveScreen` | Intervention **en cours** : adresse, équipements, photos, facture, **clôturer**. Retour système **bloqué** ; sortie volontaire via **croix** (dialogue de confirmation → reset local + retour planning) |
+| Clôture | `ClotureRapportScreen` → `ClotureSignatureScreen` | Rapport, types réels, signatures puis retour tournée |
+| Facturation | `InvoiceScreen` | Facture liée à l’intervention (brouillon local, validation selon règles) |
+| Annexes | `ClientDetailScreen`, `EquipementDetailScreen` | Fiches depuis l’intervention active |
+| Photos | `PhotosScreen`, `CameraScreen` | Galerie / prise de vue **CameraX** |
+
+Navigation globale : **`NavHost`** racine dans `AppNavigation` ; côté tablette, un **`NavHost`** imbriqué pour le volet détail (`TourneeDetailNavHost`).
 
 ---
 
 ## Base de données Room
 
-- Fichier : `savio.db` (voir `DatabaseModule`).
-- **Migrations** : ex. `MIGRATION_9_10` pour la table `intervention_actual_types`. Un `fallbackToDestructiveMigration()` reste en secours pour le développement ; en production, privilégier des migrations explicites.
+- Fichier SQLite géré par **`SavioDatabase`** (nom côté app selon `DatabaseModule`).
+- **Migrations** explicites dans `SavioMigrations.kt` ; en développement, un secours destructif peut exister — en production, privilégier des migrations testées à chaque évolution de schéma.
 
 ---
 
 ## Build & exécution
 
 ```bash
-# Windows (PowerShell / cmd)
+# Windows
 gradlew assembleDebug
 
 # Linux / macOS
 ./gradlew assembleDebug
 ```
 
-Ouvrir le dossier racine dans **Android Studio**, synchroniser Gradle, choisir un module `app`, lancer sur un appareil ou un émulateur.
+Ouvrir la racine du repo dans **Android Studio**, synchroniser Gradle, lancer le module **`app`**.
 
-**Tests** : `test/` (unitaires), `androidTest/` (instrumentés) — à enrichir selon la stratégie d’équipe.
+**Tests** : répertoires `test/` et `androidTest/` — à faire évoluer selon la stratégie d’équipe.
 
 ---
 
-## Conventions utiles pour les contributeurs
+## Conventions utiles (contributeurs)
 
 - **Package** : `re.melchior.saviomobile`.
-- **DTOs** : suffixe `Dto`, champs alignés sur le JSON serveur (`@SerializedName`).
-- **Entités Room** : suffixe `Entity` ; clôture multi-types : `InterventionActualTypeEntity` liée à `InterventionEntity`.
-- **Navigation** : routes centralisées dans `Screen` (`AppNavigation.kt`) ; arguments encodés quand nécessaire (ex. clés de types séparées pour la clôture).
-
----
-
-## Ressources & dépendances
-
-Les versions sont pilotées par **`gradle/libs.versions.toml`** (Compose BOM, Room, Hilt, Retrofit, etc.). En cas de montée de version, vérifier les notes de migration AndroidX / Compose.
+- **DTOs** : suffixe `Dto`, champs alignés JSON (`@SerializedName` si besoin).
+- **Entités Room** : suffixe `Entity` ; navigation : routes et `createRoute(...)` dans `Screen`.
+- **Clôture multi-types** : types réels stockés / transmis (voir `InterventionActualTypeEntity`, arguments de navigation clôture).
 
 ---
 
 ## Licence & contact
 
-À compléter selon la politique du projet (propriétaire, équipe, canal support interne).
+À compléter selon la politique interne (propriétaire, équipe, support).
