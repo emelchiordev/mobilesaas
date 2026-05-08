@@ -21,6 +21,7 @@ data class ClientDetailUiState(
     val isSaving: Boolean = false,
     val savedSuccess: Boolean = false,
     val errorMessage: String? = null,
+    val emailError: String? = null,
     // Champs éditables
     val phone: String = "",
     val email: String = "",
@@ -101,7 +102,7 @@ class ClientDetailViewModel @Inject constructor(
     }
 
     fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value) }
-    fun onEmailChange(value: String) = _uiState.update { it.copy(email = value) }
+    fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, emailError = null) }
     fun onNotesChange(value: String) = _uiState.update { it.copy(notes = value) }
     fun onFloorChange(value: String) = _uiState.update { it.copy(floor = value) }
     fun onDoorCodeChange(value: String) = _uiState.update { it.copy(doorCode = value) }
@@ -110,6 +111,15 @@ class ClientDetailViewModel @Inject constructor(
     fun saveChanges() {
         val state = _uiState.value
         val intervention = state.intervention ?: return
+
+        val emailTrim = state.email.trim()
+        if (emailTrim.isNotEmpty() &&
+            !android.util.Patterns.EMAIL_ADDRESS.matcher(emailTrim).matches()
+        ) {
+            _uiState.update { it.copy(emailError = "Adresse e-mail invalide") }
+            return
+        }
+        _uiState.update { it.copy(emailError = null) }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }

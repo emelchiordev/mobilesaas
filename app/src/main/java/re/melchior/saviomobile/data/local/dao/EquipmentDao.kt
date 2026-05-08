@@ -10,8 +10,36 @@ import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 @Dao
 interface EquipmentDao {
 
-    @Query("SELECT * FROM equipments WHERE interventionId = :interventionId ORDER BY isPrimary DESC")
+    @Query(
+        """
+        SELECT * FROM equipments 
+        WHERE interventionId = :interventionId
+        ORDER BY `order` ASC, id ASC
+        """,
+    )
     fun getEquipmentsByIntervention(interventionId: String): Flow<List<EquipmentEntity>>
+
+    @Query(
+        """
+        SELECT * FROM equipments 
+        WHERE interventionId = :interventionId
+        ORDER BY `order` ASC, id ASC
+        """,
+    )
+    suspend fun getEquipmentsByInterventionOnce(interventionId: String): List<EquipmentEntity>
+
+    @Query(
+        """
+        SELECT * FROM equipments 
+        WHERE unitId = :unitId
+        AND (typeCode != 'replaced' OR typeCode IS NULL)
+        ORDER BY `order` ASC, id ASC
+        """,
+    )
+    suspend fun getEquipmentsByUnitId(unitId: String): List<EquipmentEntity>
+
+    @Query("SELECT MAX(`order`) FROM equipments WHERE unitId = :unitId")
+    suspend fun getMaxOrderForUnit(unitId: String): Int?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(equipments: List<EquipmentEntity>)
@@ -25,8 +53,9 @@ interface EquipmentDao {
         WHERE interventionId IN (
             SELECT id FROM interventions 
             WHERE scheduledAt < :date 
-            AND status = 'completed'
             AND syncStatus = 'SYNCED'
+            AND status NOT IN ('in_progress', 'pending_validation', 'completed')
+            AND isChantier = 0
         )
         """,
     )
@@ -39,6 +68,7 @@ interface EquipmentDao {
             SELECT id FROM interventions 
             WHERE scheduledAt LIKE :date || '%' 
             AND syncStatus = 'SYNCED' 
+            AND status NOT IN ('completed', 'pending_validation')
             AND id NOT IN (:keepIds)
         )
         """,
@@ -52,24 +82,83 @@ interface EquipmentDao {
             SELECT id FROM interventions 
             WHERE scheduledAt LIKE :date || '%' 
             AND syncStatus = 'SYNCED'
+            AND status NOT IN ('completed', 'pending_validation')
         )
         """,
     )
     suspend fun deleteEquipmentsForAllSyncedInterventionsOnDate(date: String)
 
-    @Query("SELECT * FROM equipments WHERE id = :id LIMIT 1")
-    fun getEquipmentById(id: String): Flow<EquipmentEntity?>
+    @Query("SELECT * FROM equipments WHERE id = :serverId LIMIT 1")
+    fun getEquipmentByServerId(serverId: String): Flow<EquipmentEntity?>
 
-    @Query("DELETE FROM equipments WHERE id = :id AND interventionId = :interventionId")
-    suspend fun deleteById(id: String, interventionId: String)
+    @Query(
+        """
+        SELECT * FROM equipments
+        WHERE interventionId = :interventionId
+        AND id = :serverId
+        LIMIT 1
+        """,
+    )
+    fun getEquipmentByInterventionAndServerId(
+        interventionId: String,
+        serverId: String,
+    ): Flow<EquipmentEntity?>
+
+    @Query("SELECT * FROM equipments WHERE id = :serverId LIMIT 1")
+    suspend fun getEquipmentByServerIdOnce(serverId: String): EquipmentEntity?
+
+    @Query(
+        """
+        SELECT * FROM equipments 
+        WHERE interventionId = :interventionId 
+        AND `order` = :order 
+        LIMIT 1
+        """,
+    )
+    suspend fun getEquipmentByInterventionAndOrder(
+        interventionId: String,
+        order: Int,
+    ): EquipmentEntity?
+
+    @Query(
+        """
+        DELETE FROM equipments
+        WHERE interventionId = :interventionId
+        AND `order` NOT IN (:keepOrders)
+        """,
+    )
+    suspend fun deleteEquipmentsNotInList(
+        interventionId: String,
+        keepOrders: List<Int>,
+    )
+
+    @Query(
+        """
+        DELETE FROM equipments 
+        WHERE interventionId = :interventionId 
+        AND `order` = :order
+        """,
+    )
+    suspend fun deleteByInterventionAndOrder(interventionId: String, order: Int)
 
     @Query(
         """
         UPDATE equipments
         SET typeCode = 'replaced'
-        WHERE id = :equipmentId
-        AND interventionId = :interventionId
+        WHERE interventionId = :interventionId
+        AND `order` = :order
         """,
     )
-    suspend fun markAsReplaced(equipmentId: String, interventionId: String)
+    suspend fun markAsReplaced(interventionId: String, order: Int)
+
+    @Query(
+        """
+        UPDATE equipments
+        SET typeCode = NULL
+        WHERE interventionId = :interventionId
+        AND `order` = :order
+        AND typeCode = 'replaced'
+        """,
+    )
+    suspend fun restoreTypeCode(interventionId: String, order: Int)
 }

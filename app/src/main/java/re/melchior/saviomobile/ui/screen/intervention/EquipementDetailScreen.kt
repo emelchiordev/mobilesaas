@@ -23,12 +23,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -66,30 +67,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
+import re.melchior.saviomobile.ui.screen.intervention.attestation.attestationTypeLabel
+import re.melchior.saviomobile.ui.utils.equipmentIcon
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
-private val TopBarBlue = Color(0xFF185FA5)
-private val IdentityAvatarBg = Color(0xFFECF0FF)
-private val IdentityIconTint = Color(0xFF3949AB)
-
-private val BadgePacBg = Color(0xFFECF0FF)
-private val BadgePacFg = Color(0xFF3949AB)
-private val BadgeGazBg = Color(0xFFE3F2FD)
-private val BadgeGazFg = Color(0xFF1565C0)
-private val BadgeClimBg = Color(0xFFECF9FF)
-private val BadgeClimFg = Color(0xFF0288D1)
-private val BadgeKwBg = Color(0xFFEAF3DE)
-private val BadgeKwFg = Color(0xFF27500A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EquipementDetailScreen(
     onBack: () -> Unit,
     onCerfaClick: (interventionId: String, equipmentId: String) -> Unit = { _, _ -> },
-    onAttestationClick: (interventionId: String, equipmentId: String) -> Unit = { _, _ -> },
+    onAttestationVeClick: (
+        interventionId: String,
+        equipmentOrder: Int,
+        type: String,
+    ) -> Unit = { _, _, _ -> },
+    onMeasureClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
     onReplaceClick: (interventionId: String, equipmentId: String) -> Unit = { _, _ -> },
     viewModel: EquipementDetailViewModel = hiltViewModel(),
 ) {
@@ -139,10 +137,11 @@ fun EquipementDetailScreen(
     }
 
     Scaffold(
+        containerColor = SavioUi.PageBackground,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TopBarBlue,
+                    containerColor = SavioUi.Blue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White,
                     actionIconContentColor = Color.White,
@@ -153,7 +152,7 @@ fun EquipementDetailScreen(
                             listOfNotNull(it.brand, it.model).joinToString(" ")
                         } ?: "Équipement",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         color = Color.White,
                     )
                 },
@@ -167,12 +166,14 @@ fun EquipementDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = "Supprimer l'appareil",
-                            tint = Color.White,
-                        )
+                    if (uiState.equipment?.typeCode != "replaced") {
+                        IconButton(onClick = { showDeleteDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Supprimer l'appareil",
+                                tint = Color.White,
+                            )
+                        }
                     }
                 },
             )
@@ -189,9 +190,14 @@ fun EquipementDetailScreen(
             }
             else -> {
                 val equipment = uiState.equipment!!
+                val isReplaced = equipment.typeCode == "replaced"
+                val isBruleur = remember(equipment.typeCode) {
+                    equipment.typeCode?.uppercase() == "BRULEUR"
+                }
                 val changeMode by viewModel.changeMode.collectAsStateWithLifecycle()
                 val catalogQuery by viewModel.catalogQuery.collectAsStateWithLifecycle()
                 val catalogResults by viewModel.catalogResults.collectAsStateWithLifecycle()
+                val isNew by viewModel.isNewEquipment.collectAsStateWithLifecycle()
 
                 var showSerialDialog by remember(equipment.id) { mutableStateOf(false) }
                 var serialDraft by remember(equipment.id) { mutableStateOf(equipment.serialNumber.orEmpty()) }
@@ -199,13 +205,63 @@ fun EquipementDetailScreen(
                     serialDraft = equipment.serialNumber.orEmpty()
                 }
 
-                val documentType = remember(equipment.typeCode, equipment.energyCode) {
+                val isCerfaEligible = remember(equipment.typeCode, equipment.energyCode) {
+                    equipment.typeCode in listOf(
+                        "PAC",
+                        "PAC A/E",
+                        "PAC A/A",
+                        "CLIMATISEUR",
+                    )
+                }
+
+                val suggestedAttestationType = remember(
+                    equipment.typeCode,
+                    equipment.energyCode,
+                ) {
+                    val tc = (equipment.typeCode ?: "").uppercase()
+                    val ec = (equipment.energyCode ?: "").uppercase()
                     when {
-                        equipment.typeCode in listOf("CHAUDIERE") &&
-                            equipment.energyCode in listOf("GAZ NAT", "GAZ PROP", "FIOUL") -> "attestation"
-                        equipment.typeCode in listOf("PAC", "PAC A/E", "PAC A/A", "CLIMATISEUR") -> "cerfa"
+                        tc.contains("PAC") &&
+                            (tc.contains("HYBRIDE") || ec.contains("GAZ")) &&
+                            ec.contains("GAZ") -> "PAC_HYBRIDE_GAZ"
+
+                        tc.contains("PAC") &&
+                            (tc.contains("HYBRIDE") ||
+                                ec.contains("FIOUL") ||
+                                ec.contains("FUEL")) &&
+                            (ec.contains("FIOUL") || ec.contains("FUEL")) -> "PAC_HYBRIDE_FIOUL"
+
+                        tc.contains("PAC") ||
+                            tc.contains("THERMODYNAMIQUE") -> "PAC"
+
+                        ec.contains("GAZ") ||
+                            tc.contains("GAZ") -> "GAZ"
+
+                        ec.contains("FIOUL") ||
+                            ec.contains("FUEL") ||
+                            tc.contains("FIOUL") -> "FIOUL"
+
+                        ec.contains("BOIS") ||
+                            tc.contains("BOIS") -> "BOIS"
+
                         else -> null
                     }
+                }
+
+                var showAttestationPicker by remember(equipment.id) {
+                    mutableStateOf(false)
+                }
+
+                val showMeasures = remember(equipment.typeCode, isBruleur) {
+                    equipment.typeCode in listOf(
+                        "CHAUDIERE",
+                        "PAC",
+                        "PAC A/E",
+                        "PAC A/A",
+                        "CLIMATISEUR",
+                        "FIOUL",
+                        "INCONNU",
+                    ) && !isBruleur
                 }
 
                 if (showSerialDialog) {
@@ -244,17 +300,19 @@ fun EquipementDetailScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     // SECTION 1 — Identité
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -263,13 +321,13 @@ fun EquipementDetailScreen(
                                 Surface(
                                     modifier = Modifier.size(40.dp),
                                     shape = CircleShape,
-                                    color = IdentityAvatarBg,
+                                    color = SavioUi.ChipBackground,
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            Icons.Filled.Build,
+                                            equipmentIcon(equipment.typeCode),
                                             contentDescription = null,
-                                            tint = IdentityIconTint,
+                                            tint = SavioUi.Blue,
                                             modifier = Modifier.size(22.dp),
                                         )
                                     }
@@ -277,7 +335,7 @@ fun EquipementDetailScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "Marque · Modèle",
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                     Text(
@@ -285,11 +343,21 @@ fun EquipementDetailScreen(
                                             .joinToString(" · ")
                                             .ifBlank { "—" },
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Medium,
                                     )
+                                    equipment.serialNumber?.takeIf { it.isNotBlank() }?.let { sn ->
+                                        Text(
+                                            text = "S/N $sn",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            HorizontalDivider(
+                                thickness = 0.5.dp,
+                                color = SavioUi.CardBorder,
+                            )
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -300,12 +368,46 @@ fun EquipementDetailScreen(
                                 equipment.typeCode?.let { code ->
                                     TypeEnergyBadge(text = code, isType = true)
                                 }
-                                equipment.energyCode?.let { code ->
-                                    TypeEnergyBadge(text = code, isType = false)
+                                if (!isBruleur) {
+                                    equipment.energyCode
+                                        ?.takeIf { it.isNotBlank() && it.uppercase(Locale.getDefault()) != "INCONNU" }
+                                        ?.let { code ->
+                                            TypeEnergyBadge(text = code, isType = false)
+                                        }
                                 }
                                 catalogEquipment?.powerKw?.let { kw ->
                                     KwBadge(kw = kw)
-                                }
+                                } ?: equipment.powerKw
+                                    ?.replace(',', '.')
+                                    ?.toDoubleOrNull()
+                                    ?.let { kw -> KwBadge(kw = kw) }
+                            }
+                        }
+                    }
+
+                    if (isReplaced) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFFECEC),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.SwapHoriz,
+                                    contentDescription = null,
+                                    tint = Color(0xFFA32D2D),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    "Appareil remplacé — consultation uniquement",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFA32D2D),
+                                    fontWeight = FontWeight.Medium,
+                                )
                             }
                         }
                     }
@@ -313,8 +415,10 @@ fun EquipementDetailScreen(
                     // SECTION 2 — Données terrain
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                        shadowElevation = 0.dp,
                     ) {
                         Column {
                             FieldTerrainRow(
@@ -323,20 +427,26 @@ fun EquipementDetailScreen(
                                         Icons.Filled.Edit,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = SavioUi.Blue,
                                     )
                                 },
                                 label = "N° série",
                                 valueText = equipment.serialNumber?.takeIf { it.isNotBlank() } ?: "—",
                                 trailingSquareIcon = Icons.Filled.Edit,
-                                onTrailingClick = {
-                                    serialDraft = equipment.serialNumber.orEmpty()
-                                    showSerialDialog = true
-                                },
+                                onTrailingClick =
+                                    if (!isReplaced) {
+                                        {
+                                            serialDraft = equipment.serialNumber.orEmpty()
+                                            showSerialDialog = true
+                                        }
+                                    } else {
+                                        null
+                                    },
                             )
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
+                                thickness = 0.5.dp,
+                                color = SavioUi.CardBorder,
                             )
                             FieldTerrainRow(
                                 leadingIcon = {
@@ -344,83 +454,203 @@ fun EquipementDetailScreen(
                                         Icons.Filled.CalendarToday,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = SavioUi.Blue,
                                     )
                                 },
                                 label = "Mise en service",
                                 valueText = formatCommissioningDate(equipment.installDate),
                                 trailingSquareIcon = Icons.Filled.CalendarToday,
-                                onTrailingClick = {
-                                    val cal = Calendar.getInstance()
-                                    equipment.installDate?.take(10)?.let { s ->
-                                        try {
-                                            val ld = LocalDate.parse(s)
-                                            cal.set(ld.year, ld.monthValue - 1, ld.dayOfMonth)
-                                        } catch (_: Exception) {
+                                onTrailingClick =
+                                    if (!isReplaced) {
+                                        {
+                                            val cal = Calendar.getInstance()
+                                            equipment.installDate?.take(10)?.let { s ->
+                                                try {
+                                                    val ld = LocalDate.parse(s)
+                                                    cal.set(ld.year, ld.monthValue - 1, ld.dayOfMonth)
+                                                } catch (_: Exception) {
+                                                }
+                                            }
+                                            DatePickerDialog(
+                                                context,
+                                                { _, y, m, d ->
+                                                    val iso = String.format(
+                                                        Locale.US,
+                                                        "%04d-%02d-%02d",
+                                                        y,
+                                                        m + 1,
+                                                        d,
+                                                    )
+                                                    viewModel.saveCommissioningDate(iso)
+                                                },
+                                                cal.get(Calendar.YEAR),
+                                                cal.get(Calendar.MONTH),
+                                                cal.get(Calendar.DAY_OF_MONTH),
+                                            ).show()
                                         }
-                                    }
-                                    DatePickerDialog(
-                                        context,
-                                        { _, y, m, d ->
-                                            val iso = String.format(
-                                                Locale.US,
-                                                "%04d-%02d-%02d",
-                                                y,
-                                                m + 1,
-                                                d,
-                                            )
-                                            viewModel.saveCommissioningDate(iso)
-                                        },
-                                        cal.get(Calendar.YEAR),
-                                        cal.get(Calendar.MONTH),
-                                        cal.get(Calendar.DAY_OF_MONTH),
-                                    ).show()
-                                },
+                                    } else {
+                                        null
+                                    },
                             )
                         }
                     }
 
-                    // SECTION 3 — Actions
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.setChangeMode(true) },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.SwapVert,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Corriger")
-                        }
-                        OutlinedButton(
+                    if (showMeasures && !isReplaced) {
+                        Surface(
                             onClick = {
-                                onReplaceClick(equipment.interventionId, equipment.id)
+                                onMeasureClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                )
                             },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.error,
-                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                            shadowElevation = 0.dp,
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.SwapHoriz,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Remplacer")
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Analytics,
+                                    contentDescription = null,
+                                    tint = SavioUi.Blue,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Mesures",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        "Saisir les mesures de combustion",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    tint = SavioUi.Blue,
+                                )
+                            }
                         }
                     }
 
-                    // SECTION 4 — Catalogue (change mode)
+                    // Attestation VE — après Mesures ; pas sur le brûleur (rattaché à la chaudière)
+                    if (!isReplaced && !isBruleur) {
+                        Surface(
+                            onClick = { showAttestationPicker = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                            shadowElevation = 0.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Assignment,
+                                    contentDescription = null,
+                                    tint = SavioUi.Blue,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Attestation d'entretien",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = if (suggestedAttestationType != null) {
+                                            "Suggestion : ${attestationTypeLabel(suggestedAttestationType)}"
+                                        } else {
+                                            "Choisir le type d'attestation"
+                                        },
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    tint = SavioUi.Blue,
+                                )
+                            }
+                        }
+                    }
+
+                    // Corriger / Remplacer — bas de fiche (après Mesures + Attestation)
+                    if (!isReplaced) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.setChangeMode(true) },
+                                modifier = Modifier.weight(1f),
+                                border = BorderStroke(0.5.dp, SavioUi.Blue),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = SavioUi.Blue,
+                                    containerColor = Color.White,
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SwapVert,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Corriger")
+                            }
+                            if (!isNew) {
+                                OutlinedButton(
+                                    onClick = {
+                                        onReplaceClick(
+                                            viewModel.currentInterventionId,
+                                            equipment.id,
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = SavioUi.DestructiveRed,
+                                        containerColor = Color.White,
+                                    ),
+                                    border = BorderStroke(
+                                        0.5.dp,
+                                        SavioUi.DestructiveRed,
+                                    ),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.SwapHoriz,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Remplacer")
+                                }
+                            }
+                        }
+                        if (isNew) {
+                            Text(
+                                text =
+                                    "Appareil ajouté pendant cette intervention — " +
+                                        "supprimez-le si vous voulez l'annuler",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+
+                    // Catalogue (change mode)
                     if (changeMode) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -512,35 +742,20 @@ fun EquipementDetailScreen(
                         }
                     }
 
-                    // SECTION 5 — Document CERFA / Attestation
-                    documentType?.let { docType ->
-                        val avatarBg = if (docType == "attestation") {
-                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                        } else {
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-                        }
-                        val avatarIconTint = if (docType == "attestation") {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.secondary
-                        }
-                        val title = if (docType == "attestation") {
-                            "Attestation d'entretien"
-                        } else {
-                            "CERFA fluides frigorigènes"
-                        }
+                    // SECTION 5 — CERFA fluides (PAC / clim)
+                    if (isCerfaEligible) {
                         Surface(
                             onClick = {
-                                val interventionId = equipment.interventionId
-                                if (docType == "cerfa") {
-                                    onCerfaClick(interventionId, equipment.id)
-                                } else {
-                                    onAttestationClick(interventionId, equipment.id)
-                                }
+                                onCerfaClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.id,
+                                )
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                            shadowElevation = 0.dp,
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
@@ -556,13 +771,13 @@ fun EquipementDetailScreen(
                                     Surface(
                                         modifier = Modifier.fillMaxSize(),
                                         shape = CircleShape,
-                                        color = avatarBg,
+                                        color = SavioUi.ChipBackground,
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 Icons.Filled.Description,
                                                 contentDescription = null,
-                                                tint = avatarIconTint,
+                                                tint = SavioUi.Blue,
                                                 modifier = Modifier.size(20.dp),
                                             )
                                         }
@@ -570,23 +785,38 @@ fun EquipementDetailScreen(
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        title,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        "CERFA fluides frigorigènes",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                     Text(
                                         "Remplir ou consulter",
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 Icon(
                                     Icons.Filled.ChevronRight,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = SavioUi.Blue,
                                 )
                             }
                         }
+                    }
+
+                    if (showAttestationPicker && !isBruleur) {
+                        AttestationTypePickerSheet(
+                            suggestedType = suggestedAttestationType,
+                            onSelect = { type ->
+                                showAttestationPicker = false
+                                onAttestationVeClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                    type,
+                                )
+                            },
+                            onDismiss = { showAttestationPicker = false },
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -606,25 +836,21 @@ private fun formatCommissioningDate(installDate: String?): String {
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
-private fun TypeEnergyBadge(text: String, isType: Boolean) {
-    val upper = text.uppercase(Locale.FRANCE)
-    val neutralBg = MaterialTheme.colorScheme.surfaceContainerHighest
-    val neutralFg = MaterialTheme.colorScheme.onSurfaceVariant
-    val (bg, fg) = when {
-        isType && upper.contains("PAC") -> BadgePacBg to BadgePacFg
-        isType && (upper.contains("CLIM") || upper.contains("CLIMAT")) -> BadgeClimBg to BadgeClimFg
-        !isType && upper.contains("GAZ NAT") -> BadgeGazBg to BadgeGazFg
-        else -> neutralBg to neutralFg
-    }
-    BadgeChip(background = bg, content = fg, label = text)
+private fun TypeEnergyBadge(text: String, isType: Boolean = false) {
+    BadgeChip(
+        background = SavioUi.ChipBackground,
+        content = SavioUi.Blue,
+        label = text.uppercase(Locale.FRANCE),
+    )
 }
 
 @Composable
 private fun KwBadge(kw: Double) {
     BadgeChip(
-        background = BadgeKwBg,
-        content = BadgeKwFg,
+        background = SavioUi.ChipBackground,
+        content = SavioUi.Blue,
         label = "${if (kw % 1.0 == 0.0) kw.toInt() else kw} kW",
     )
 }
@@ -632,12 +858,12 @@ private fun KwBadge(kw: Double) {
 @Composable
 private fun BadgeChip(background: Color, content: Color, label: String) {
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(20.dp),
         color = background,
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = content,
@@ -651,7 +877,7 @@ private fun FieldTerrainRow(
     label: String,
     valueText: String,
     trailingSquareIcon: ImageVector,
-    onTrailingClick: () -> Unit,
+    onTrailingClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -668,7 +894,7 @@ private fun FieldTerrainRow(
             leadingIcon()
             Text(
                 text = label,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -679,22 +905,24 @@ private fun FieldTerrainRow(
             Text(
                 text = valueText,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
             )
-            Surface(
-                onClick = onTrailingClick,
-                modifier = Modifier.size(28.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        trailingSquareIcon,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            if (onTrailingClick != null) {
+                Surface(
+                    onClick = onTrailingClick,
+                    modifier = Modifier.size(28.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = SavioUi.ChipBackground,
+                    border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            trailingSquareIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = SavioUi.Blue,
+                        )
+                    }
                 }
             }
         }

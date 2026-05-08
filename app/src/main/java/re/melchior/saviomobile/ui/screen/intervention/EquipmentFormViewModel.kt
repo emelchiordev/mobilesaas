@@ -84,8 +84,12 @@ class EquipmentFormViewModel @Inject constructor(
             val opId = java.util.UUID.randomUUID().toString()
 
             val type = if (existingEquipmentId != null) "REPLACE_EQUIPMENT" else "CREATE_EQUIPMENT"
+            val nextMobileOrder = (
+                equipmentDao.getMaxOrderForUnit(unitId)?.takeIf { it >= 101 } ?: 100
+            ) + 1
             val payload = buildMap<String, Any?> {
                 put("unitId", unitId)
+                put("order", nextMobileOrder)
                 put("model", state.model)
                 put("brand", state.brand)
                 put("brandCode", state.brandCode)
@@ -120,8 +124,10 @@ class EquipmentFormViewModel @Inject constructor(
             pendingOperationDao.insert(op)
 
             val localEq = EquipmentEntity(
-                id = opId,
                 interventionId = interventionId,
+                order = nextMobileOrder,
+                id = opId,
+                unitId = unitId,
                 brand = state.brand,
                 model = state.model,
                 typeCode = state.typeCode,
@@ -130,7 +136,10 @@ class EquipmentFormViewModel @Inject constructor(
                 installDate = null,
                 isPrimary = state.isPrimary,
                 equipmentCatalogId = state.equipmentCatalogId,
+                catalogBrandId = state.catalogBrandId,
                 parentEquipmentId = if (existingEquipmentId == null) parentEquipmentId else null,
+                powerKw = null,
+                evacuationMode = null,
             )
             equipmentDao.insertAll(listOf(localEq))
 

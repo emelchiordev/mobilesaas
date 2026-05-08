@@ -1,0 +1,33 @@
+---
+description: Design system Savio (couleurs, typo, composants) — Android Compose
+globs: "**/*.kt"
+alwaysApply: false
+---
+
+# Savio — Design system (Compose)
+
+## Couleurs et typo
+
+- Ne jamais utiliser de `Color(0xFF...)` ni de hex en dur dans les écrans ou composants UI : utiliser `SavioPalette` (couleurs marque), `SavioType`, `SavioDimens`. Le `val SavioColors` dans `Theme.kt` est le **ColorScheme Material3** — ne pas y mélanger les tokens Compose Color.
+- `SavioUi` reste un alias rétrocompatible vers `SavioPalette` ; le code nouveau doit préférer `SavioPalette` / `SavioType` / `SavioDimens`.
+
+## Composants
+
+- Préférer les composants du package `re.melchior.saviomobile.ui.designsystem` : `AppHeader`, `SectionCard` / `SectionRow` / `SectionDivider`, `AvatarInitials`, `AppBadge`, `AppButton`, `BottomNavBar`, `AppEmptyState`, `OfflineBanner`, `SkeletonCard` / `SkeletonListItem`.
+- États vides / erreur réseau : `SavioEmptyState`, `SavioNetworkErrorState` dans `ui.component` (basés sur le design system).
+
+## Interactions
+
+- Tout composant cliquable : état pressed via ripple Material ou variation de couleur (ex. `AppButton` : `PrimaryDark` au pressed pour le primaire ; contours à opacité 0.85 pour les outline).
+
+## Formulaires
+
+- Champ en erreur : bordure `SavioPalette.Error` avec `SavioDimens.BorderMedium`, texte d’erreur `SavioType.BodySmall` + `SavioPalette.Error` sous le champ. Pas de dialog pour une erreur de validation inline.
+
+## Dialogs
+
+- Dialogs de confirmation : deux actions — annuler (texte secondaire / gris) et confirmer (style primaire `SavioPalette.Primary`).
+
+## Actions destructives
+
+- Toujours `SavioPalette.Error` pour supprimer / remplacer, avec confirmation dialog avant exécution.

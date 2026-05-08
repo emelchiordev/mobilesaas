@@ -53,6 +53,8 @@ data class InterventionDto(
     val completedAt: String? = null,
     @SerializedName("startedAt")
     val startedAt: String? = null,
+    @SerializedName("isChantier")
+    val isChantier: Boolean? = null,
     @SerializedName("history")
     val history: List<HistoryItemDto> = emptyList(),
     @SerializedName("notes")
@@ -150,7 +152,7 @@ data class EquipmentDto(
     val energyCode: String?,
     @SerializedName("serialNumber")
     val serialNumber: String?,
-    @SerializedName("installDate")
+    @SerializedName("commissioningDate")
     val installDate: String?,
     @SerializedName("is_primary")
     val isPrimary: Boolean,
@@ -158,6 +160,12 @@ data class EquipmentDto(
     val equipmentCatalogId: String? = null,
     @SerializedName("parentEquipmentId")
     val parentEquipmentId: String? = null,
+    @SerializedName("order")
+    val order: Int? = null,
+    @SerializedName("evacuation_mode")
+    val evacuationMode: String? = null,
+    @SerializedName("powerKw")
+    val powerKw: Double? = null,
 )
 
 data class ContractDto(

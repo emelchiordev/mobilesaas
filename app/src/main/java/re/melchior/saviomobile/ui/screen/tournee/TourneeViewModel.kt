@@ -2,10 +2,6 @@ package re.melchior.saviomobile.ui.screen.tournee
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.Constraints
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,10 +16,8 @@ import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.repository.CatalogSyncRepository
 import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.PhotoSyncRepository
-import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.data.repository.SyncResult
-import re.melchior.saviomobile.worker.SyncWorker
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -43,8 +37,6 @@ class TourneeViewModel @Inject constructor(
     private val catalogSyncRepository: CatalogSyncRepository,
     private val invoiceRepository: InvoiceRepository,
     private val photoSyncRepository: PhotoSyncRepository,
-    private val pushRepository: PushRepository,
-    private val workManager: WorkManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TourneeUiState())
@@ -100,7 +92,7 @@ class TourneeViewModel @Inject constructor(
         _resumeCandidate.value = syncRepository.getInProgressIntervention()
     }
 
-    fun pull() {
+    fun pull(force: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true, errorMessage = null) }
 
@@ -116,26 +108,8 @@ class TourneeViewModel @Inject constructor(
                 }
             }
 
-            launch {
-                try {
-                    val result = pushRepository.push()
-                    android.util.Log.d("TourneeVM", "Push result: $result")
-                } catch (e: Exception) {
-                    android.util.Log.w("TourneeVM", "Push error: ${e.message}")
-                }
-            }
-
-            // WorkManager pour le push interventions (existant)
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-//            val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-//                .setConstraints(constraints)
-//                .build()
-//            workManager.enqueue(syncRequest)
-
             // Pull interventions
-            when (val result = syncRepository.pull(_uiState.value.selectedDate)) {
+            when (val result = syncRepository.pull(_uiState.value.selectedDate, force)) {
                 is SyncResult.Success -> {
                     _uiState.update { it.copy(isSyncing = false) }
                     refreshResumeCandidate()

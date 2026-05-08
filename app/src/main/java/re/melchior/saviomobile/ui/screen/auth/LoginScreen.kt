@@ -21,8 +21,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,18 +58,11 @@ fun LoginScreen(
         if (uiState.isLoggedIn) onLoginSuccess()
     }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-        }
-    }
-
     // Navigation vers choix société
     LaunchedEffect(uiState.societesToChoose) {
         if (uiState.societesToChoose.isNotEmpty()) onChooseSociete()
     }
 
-    // Affichage erreur
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -77,7 +70,7 @@ fun LoginScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier

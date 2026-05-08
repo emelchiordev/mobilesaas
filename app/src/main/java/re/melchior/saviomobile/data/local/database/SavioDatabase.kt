@@ -16,12 +16,19 @@ import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.dao.PhotoDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
+import re.melchior.saviomobile.data.local.dao.AttestationVeDao
+import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
+import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
+import re.melchior.saviomobile.data.local.dao.MeasureDao
+import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
+import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
 import re.melchior.saviomobile.data.local.entity.CatalogEquipmentEntity
 import re.melchior.saviomobile.data.local.entity.ColdMeasureEntity
 import re.melchior.saviomobile.data.local.entity.CatalogNomenclatureEntity
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
+import re.melchior.saviomobile.data.local.entity.EquipmentSnapshotEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
@@ -30,6 +37,7 @@ import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.InvoicePaymentEntity
+import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
 import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
@@ -54,8 +62,12 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         CatalogEquipmentEntity::class,
         PendingOperationEntity::class,
         ColdMeasureEntity::class,
+        EquipmentSnapshotEntity::class,
+        MeasureEntity::class,
+        AttestationVeEntity::class,
+        AttestationVePointControleEntity::class,
     ],
-    version = 20,
+    version = 32,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {
@@ -85,5 +97,13 @@ abstract class SavioDatabase : RoomDatabase() {
     abstract fun pendingOperationDao(): PendingOperationDao
 
     abstract fun coldMeasureDao(): ColdMeasureDao
+
+    abstract fun equipmentSnapshotDao(): EquipmentSnapshotDao
+
+    abstract fun measureDao(): MeasureDao
+
+    abstract fun attestationVeDao(): AttestationVeDao
+
+    abstract fun attestationVePointControleDao(): AttestationVePointControleDao
 
 }

@@ -1,14 +1,13 @@
 package re.melchior.saviomobile.ui.screen.tournee
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,7 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LibraryBooks
@@ -36,8 +35,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -57,6 +57,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.component.SavioEmptyState
+import re.melchior.saviomobile.ui.component.SavioNetworkErrorState
+import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
+import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -82,29 +89,42 @@ fun TourneeScreen(
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    val isOnline = rememberIsNetworkOnline()
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.dismissError()
+    LaunchedEffect(uiState.errorMessage, interventions.isNotEmpty()) {
+        uiState.errorMessage?.let { msg ->
+            if (interventions.isNotEmpty()) {
+                val result =
+                    snackbarHostState.showSnackbar(
+                        message = msg,
+                        actionLabel = "Réessayer",
+                        duration = SnackbarDuration.Short,
+                    )
+                viewModel.dismissError()
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.pull(force = true)
+                }
+            }
         }
     }
 
     Scaffold(
-        containerColor = colorResource(R.color.screen_bg),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = SavioUi.PageBackground,
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "Ma tournée",
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorResource(R.color.savio_primary),
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = SavioUi.Blue,
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White,
                 ),
                 actions = {
                     // Badge interventions en attente de sync
@@ -120,45 +140,45 @@ fun TourneeScreen(
                             Icon(
                                 imageVector = Icons.Filled.Sync,
                                 contentDescription = "Sync en attente",
-                                tint = MaterialTheme.colorScheme.onPrimary
+                                tint = Color.White,
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     IconButton(
                         onClick = viewModel::syncCatalog,
-                        enabled = !uiState.isCatalogSyncing && !uiState.isSyncing
+                        enabled = isOnline && !uiState.isCatalogSyncing && !uiState.isSyncing
                     ) {
                         if (uiState.isCatalogSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
+                                color = Color.White,
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.LibraryBooks,
                                 contentDescription = "Synchroniser le catalogue",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                             )
                         }
                     }
                     // Bouton refresh manuel
                     IconButton(
-                        onClick = viewModel::pull,
-                        enabled = !uiState.isSyncing
+                        onClick = { viewModel.pull(force = true) },
+                        enabled = isOnline && !uiState.isSyncing
                     ) {
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
+                                color = Color.White,
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
                                 contentDescription = "Rafraîchir",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                             )
                         }
                     }
@@ -170,7 +190,7 @@ fun TourneeScreen(
 
         PullToRefreshBox(
             isRefreshing = uiState.isSyncing,
-            onRefresh = viewModel::pull,
+            onRefresh = { viewModel.pull(force = true) },
             state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
@@ -210,6 +230,10 @@ fun TourneeScreen(
                 // Barre de progression sync — supprime le LinearProgressIndicator
                 // PullToRefreshBox gère déjà l'indicateur visuel
 
+                if (!isOnline) {
+                    SavioOfflineBannerSurface()
+                }
+
                 // Sélecteur de date
                 DateSelector(
                     selectedDate = uiState.selectedDate,
@@ -232,27 +256,37 @@ fun TourneeScreen(
                 }
 
                 // Liste interventions
-                if (interventions.isEmpty() && !uiState.isSyncing) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Filled.CalendarToday,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Aucune intervention ce jour",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                when {
+                    !uiState.isSyncing &&
+                        interventions.isEmpty() &&
+                        uiState.errorMessage != null -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            SavioNetworkErrorState(onRetry = { viewModel.pull(force = true) })
+                        }
+                    }
+                    uiState.isSyncing &&
+                        interventions.isEmpty() &&
+                        uiState.errorMessage == null -> {
+                        SavioTourneeListSkeleton(Modifier.fillMaxSize())
+                    }
+                    interventions.isEmpty() &&
+                        !uiState.isSyncing &&
+                        uiState.errorMessage == null -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            SavioEmptyState(
+                                icon = Icons.Outlined.CalendarToday,
+                                title = "Aucune intervention aujourd'hui",
+                                subtitle = "Profitez de votre journée ☀️",
                             )
                         }
                     }
-                } else {
+                    else -> {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -270,6 +304,7 @@ fun TourneeScreen(
                             )
                         }
                         item { Spacer(modifier = Modifier.height(8.dp)) }
+                    }
                     }
                 }
             }
@@ -295,26 +330,36 @@ private fun DateSelector(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onPreviousDay) {
-            Icon(Icons.Filled.ChevronLeft, contentDescription = "Jour précédent")
+            Icon(
+                Icons.Filled.ChevronLeft,
+                contentDescription = "Jour précédent",
+                tint = SavioUi.Blue,
+            )
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (isToday) {
                 Text(
                     text = "Aujourd'hui",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 13.sp,
+                    color = SavioUi.Blue,
+                    fontWeight = FontWeight.Bold,
                 )
             }
             Text(
                 text = selectedDate.format(formatter).replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.titleMedium
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black,
             )
         }
 
         IconButton(onClick = onNextDay) {
-            Icon(Icons.Filled.ChevronRight, contentDescription = "Jour suivant")
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = "Jour suivant",
+                tint = SavioUi.Blue,
+            )
         }
     }
 }
@@ -325,6 +370,8 @@ private fun InterventionCard(
     onClick: () -> Unit
 ) {
     val (statusBadgeBg, statusBadgeText) = when {
+        intervention.status == "scheduled" ->
+            SavioUi.PlanifListBadgeBg to SavioUi.PlanifListBadgeFg
         intervention.syncStatus == "CONFLICT" ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
@@ -337,22 +384,12 @@ private fun InterventionCard(
             colorResource(R.color.badge_neutral_bg) to colorResource(R.color.badge_neutral_text)
     }
 
-    val accentBarColor = when {
-        intervention.syncStatus == "CONFLICT" -> MaterialTheme.colorScheme.error
-        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-            colorResource(R.color.accent_done)
-        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-            colorResource(R.color.accent_inprog)
-        intervention.syncStatus == "COMPLETED" -> colorResource(R.color.accent_inprog)
-        else -> colorResource(R.color.accent_todo)
-    }
-
     val statusText = when {
         intervention.syncStatus == "CONFLICT" -> "Conflit"
         intervention.syncStatus == "COMPLETED" -> "En attente"
         intervention.syncStatus == "IN_PROGRESS" -> "En cours"
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée"
-        intervention.status == "pending_validation" -> "À valider" // ← ajouté
+        intervention.status == "pending_validation" -> "À valider"
         intervention.status == "scheduled" -> "Planifiée"
         else -> intervention.status
     }
@@ -361,158 +398,146 @@ private fun InterventionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = colorResource(R.color.card_bg),
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        shadowElevation = 0.dp,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min)
+                .padding(14.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(accentBarColor)
-            )
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(12.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                // Ligne 1 : heure + badge type + badge statut
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = intervention.scheduledAt
-                                .substringAfter("T")
-                                .substring(0, 5),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(colorResource(R.color.badge_neutral_bg))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = intervention.typeLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colorResource(R.color.badge_neutral_text)
-                            )
-                        }
-                    }
-
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = intervention.scheduledAt
+                            .substringAfter("T")
+                            .substring(0, 5),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SavioUi.Blue,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(statusBadgeBg)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(SavioUi.ChipBackground)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusBadgeText,
-                            fontWeight = FontWeight.Medium
+                            text = intervention.typeLabel,
+                            fontSize = 11.sp,
+                            color = SavioUi.Blue,
+                            fontWeight = FontWeight.Medium,
                         )
                     }
                 }
 
-                if (intervention.syncStatus == "CONFLICT") {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(4.dp),
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(statusBadgeBg)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = statusText,
+                        fontSize = 11.sp,
+                        color = statusBadgeText,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+
+            if (intervention.syncStatus == "CONFLICT") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    shadowElevation = 0.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Text(
-                                "Conflit",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Text(
+                            "Conflit",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                // Nom du client
-                if (intervention.customerFirstName != null) {
-                    Text(
-                        text = "${intervention.customerFirstName} ${intervention.customerLastName}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Adresse
+            if (intervention.customerFirstName != null) {
                 Text(
-                    text = intervention.unitStreet,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "${intervention.customerFirstName} ${intervention.customerLastName}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.Black,
                 )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = intervention.unitStreet,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${intervention.unitPostalCode} ${intervention.unitCity}",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            intervention.number?.let {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${intervention.unitPostalCode} ${intervention.unitCity}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = it,
+                    fontSize = 11.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 )
+            }
 
-                intervention.number?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-
-                // Infos complémentaires
-                if (!intervention.unitFloor.isNullOrBlank() ||
-                    !intervention.unitDoorCode.isNullOrBlank()
-                ) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row {
-                        intervention.unitFloor?.let {
-                            Text(
-                                text = "Étage : $it",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        intervention.unitDoorCode?.let {
-                            Text(
-                                text = "Code : $it",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+            if (!intervention.unitFloor.isNullOrBlank() ||
+                !intervention.unitDoorCode.isNullOrBlank()
+            ) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row {
+                    intervention.unitFloor?.let {
+                        Text(
+                            text = "Étage : $it",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    intervention.unitDoorCode?.let {
+                        Text(
+                            text = "Code : $it",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

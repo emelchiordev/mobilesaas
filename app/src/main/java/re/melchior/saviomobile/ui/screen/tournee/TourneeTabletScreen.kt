@@ -2,21 +2,16 @@ package re.melchior.saviomobile.ui.screen.tournee
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -29,13 +24,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.component.SavioEmptyState
+import re.melchior.saviomobile.ui.component.SavioNetworkErrorState
+import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
+import re.melchior.saviomobile.ui.navigation.Screen
+import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -53,19 +54,13 @@ fun TourneeTabletScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
     val detailNavController = rememberNavController()
+    val isOnline = rememberIsNetworkOnline()
 
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH)
     }
     val currentDateLabel = remember(uiState.selectedDate) {
         uiState.selectedDate.format(dateFormatter).replaceFirstChar { it.uppercase() }
-    }
-
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.dismissError()
-        }
     }
 
     LaunchedEffect(uiState.selectedDate) {
@@ -77,14 +72,31 @@ fun TourneeTabletScreen(
 
     val items = interventions.map { it.toInterventionItem() }
 
+    LaunchedEffect(uiState.errorMessage, items.isNotEmpty()) {
+        uiState.errorMessage?.let { msg ->
+            if (items.isNotEmpty()) {
+                val result =
+                    snackbarHostState.showSnackbar(
+                        message = msg,
+                        actionLabel = "Réessayer",
+                        duration = SnackbarDuration.Short,
+                    )
+                viewModel.dismissError()
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.pull(force = true)
+                }
+            }
+        }
+    }
+
     Scaffold(
-        containerColor = colorResource(R.color.screen_bg),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = SavioUi.PageBackground,
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) },
     ) { padding ->
         val pullRefreshState = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = uiState.isSyncing,
-            onRefresh = viewModel::pull,
+            onRefresh = { viewModel.pull(force = true) },
             state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
@@ -113,6 +125,9 @@ fun TourneeTabletScreen(
                         )
                     }
             ) {
+                if (!isOnline && items.isEmpty()) {
+                    SavioOfflineBannerSurface()
+                }
                 resumeCandidate?.let { entity ->
                     ResumeBanner(
                         intervention = entity.toInterventionItem(),
@@ -120,7 +135,7 @@ fun TourneeTabletScreen(
                         onDismiss = { viewModel.ignoreResumeCandidate() }
                     )
                 }
-                if (items.isEmpty() && !uiState.isSyncing) {
+                if (items.isEmpty()) {
                     Column(Modifier.weight(1f).fillMaxWidth()) {
                         SavioTabletTopBar(
                             selectedIntervention = null,
@@ -129,28 +144,43 @@ fun TourneeTabletScreen(
                             pendingSyncCount = pendingSyncCount,
                             onSyncCatalog = viewModel::syncCatalog,
                             isCatalogSyncing = uiState.isCatalogSyncing,
-                            onRefresh = viewModel::pull,
+                            onRefresh = { viewModel.pull(force = true) },
                             isRefreshing = uiState.isSyncing,
+                            isNetworkOnline = isOnline,
                         )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Filled.CalendarToday,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        when {
+                            !uiState.isSyncing &&
+                                items.isEmpty() &&
+                                uiState.errorMessage != null -> {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    SavioNetworkErrorState(onRetry = { viewModel.pull(force = true) })
+                                }
+                            }
+                            uiState.isSyncing && uiState.errorMessage == null -> {
+                                SavioTourneeListSkeleton(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Aucune intervention ce jour",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            }
+                            else -> {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    SavioEmptyState(
+                                        icon = Icons.Outlined.CalendarToday,
+                                        title = "Aucune intervention aujourd'hui",
+                                        subtitle = "Profitez de votre journée ☀️",
+                                    )
+                                }
                             }
                         }
                     }
@@ -163,17 +193,21 @@ fun TourneeTabletScreen(
                         detailNavController = detailNavController,
                         onStartIntervention = { interventionId ->
                             parentNavController.navigate(
-                                re.melchior.saviomobile.ui.navigation.Screen.InterventionActive.createRoute(
+                                Screen.InterventionActive.createRoute(
                                     interventionId
                                 )
                             )
+                        },
+                        onClientClick = { customerId ->
+                            parentNavController.navigate(Screen.ClientDetail.createRoute(customerId))
                         },
                         currentDateLabel = currentDateLabel,
                         pendingSyncCount = pendingSyncCount,
                         onSyncCatalog = viewModel::syncCatalog,
                         isCatalogSyncing = uiState.isCatalogSyncing,
-                        onRefresh = viewModel::pull,
+                        onRefresh = { viewModel.pull(force = true) },
                         isRefreshing = uiState.isSyncing,
+                        isNetworkOnline = isOnline,
                     )
                 }
             }

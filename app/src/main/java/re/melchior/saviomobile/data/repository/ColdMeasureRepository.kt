@@ -10,6 +10,12 @@ class ColdMeasureRepository @Inject constructor(
     private val dao: ColdMeasureDao,
 ) {
 
+    suspend fun existsPersisted(
+        interventionId: String,
+        equipmentId: String,
+    ): Boolean =
+        dao.getByInterventionAndEquipment(interventionId, equipmentId) != null
+
     suspend fun getOrCreate(
         interventionId: String,
         equipmentId: String,

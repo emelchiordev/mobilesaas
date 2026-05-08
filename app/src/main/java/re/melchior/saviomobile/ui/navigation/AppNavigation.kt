@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import android.net.Uri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -29,8 +28,11 @@ import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailViewModel
 import re.melchior.saviomobile.ui.screen.intervention.cerfa.CerfaFroidScreen
+import re.melchior.saviomobile.ui.screen.intervention.cerfa.CerfaScreen
 import re.melchior.saviomobile.ui.screen.intervention.CatalogSearchScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipmentFormScreen
+import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationVeScreen
+import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
 import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
@@ -39,102 +41,10 @@ import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScre
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
 import re.melchior.saviomobile.ui.screen.tournee.TourneeTabletScreen
 import re.melchior.saviomobile.ui.screen.tournee.TourneeScreen
+import re.melchior.saviomobile.ui.screen.tournee.TourneeViewModel
 import re.melchior.saviomobile.ui.utils.SavioWindowSize
 import re.melchior.saviomobile.ui.utils.rememberSavioWindowSize
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
-
-sealed class Screen(val route: String) {
-    object Login : Screen("login")
-    object SelectSociete : Screen("select_societe")
-    object Tournee : Screen("tournee")
-    object InterventionDetail : Screen("intervention/{interventionId}") {
-        fun createRoute(interventionId: String) = "intervention/$interventionId"
-    }
-
-    object Invoice : Screen("invoice/{interventionId}") {
-        fun createRoute(interventionId: String) = "invoice/$interventionId"
-    }
-
-    object ClotureRapport : Screen("intervention/{interventionId}/cloture/rapport") {
-        fun createRoute(interventionId: String) = "intervention/$interventionId/cloture/rapport"
-    }
-
-    object ClotureSignature :
-        Screen("intervention/{interventionId}/cloture/signature/{preselectedActualTypeKeys}") {
-        fun createRoute(interventionId: String, preselectedActualTypeKeys: String = "_") =
-            "intervention/$interventionId/cloture/signature/${
-                Uri.encode(preselectedActualTypeKeys, "UTF-8")
-            }"
-    }
-    object InterventionActive : Screen("intervention/{interventionId}/active") {
-        fun createRoute(interventionId: String) = "intervention/$interventionId/active"
-    }
-    object ClientDetail : Screen("client/{customerId}") {
-        fun createRoute(customerId: String) = "client/$customerId"
-    }
-
-    object EquipementDetail : Screen("equipement/{equipmentId}") {
-        fun createRoute(equipmentId: String) = "equipement/$equipmentId"
-    }
-
-    object CerfaFroid : Screen("cerfa_froid/{interventionId}/{equipmentId}") {
-        fun createRoute(interventionId: String, equipmentId: String) =
-            "cerfa_froid/$interventionId/$equipmentId"
-    }
-
-    object Photos : Screen(
-        "intervention/{interventionId}/photos/{unitId}/{customerId}"
-    ) {
-        fun createRoute(
-            interventionId: String,
-            unitId: String,
-            customerId: String
-        ) = "intervention/$interventionId/photos/$unitId/$customerId"
-    }
-
-    object Camera : Screen(
-        "intervention/{interventionId}/camera/{unitId}/{customerId}"
-    ) {
-        fun createRoute(
-            interventionId: String,
-            unitId: String,
-            customerId: String
-        ) = "intervention/$interventionId/camera/$unitId/$customerId"
-    }
-
-    object CatalogSearch : Screen(
-        "catalog_search/{interventionId}/{unitId}?parentEquipmentId={parentEquipmentId}&existingEquipmentId={existingEquipmentId}"
-    ) {
-        fun createRoute(
-            interventionId: String,
-            unitId: String,
-            parentEquipmentId: String? = null,
-            existingEquipmentId: String? = null,
-        ): String {
-            val base = "catalog_search/$interventionId/$unitId"
-            val parts = mutableListOf<String>()
-            if (!parentEquipmentId.isNullOrBlank()) {
-                parts += "parentEquipmentId=$parentEquipmentId"
-            }
-            if (!existingEquipmentId.isNullOrBlank()) {
-                parts += "existingEquipmentId=$existingEquipmentId"
-            }
-            return if (parts.isEmpty()) base else "$base?${parts.joinToString("&")}"
-        }
-    }
-
-    object EquipmentForm : Screen(
-        "equipment_form/{interventionId}/{unitId}?catalogEquipmentId={catalogEquipmentId}&existingEquipmentId={existingEquipmentId}&parentEquipmentId={parentEquipmentId}"
-    ) {
-        fun createRoute(
-            interventionId: String,
-            unitId: String,
-            catalogEquipmentId: String? = null,
-            existingEquipmentId: String? = null,
-            parentEquipmentId: String? = null,
-        ) = "equipment_form/$interventionId/$unitId?catalogEquipmentId=${catalogEquipmentId ?: ""}&existingEquipmentId=${existingEquipmentId ?: ""}&parentEquipmentId=${parentEquipmentId ?: ""}"
-    }
-}
 
 @Composable
 fun AppNavigation(
@@ -237,8 +147,11 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.Tournee.route) {
+        composable(Screen.Tournee.route) { backStackEntry ->
             val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
+            // Un seul ViewModel partagé pour les deux écrans
+            val tourneeViewModel: TourneeViewModel = hiltViewModel(backStackEntry)
+
             if (savioWindowSize == SavioWindowSize.EXPANDED) {
                 TourneeTabletScreen(
                     parentNavController = navController,
@@ -246,7 +159,8 @@ fun AppNavigation(
                         navController.navigate(
                             Screen.InterventionActive.createRoute(interventionId)
                         )
-                    }
+                    },
+                    viewModel = tourneeViewModel,
                 )
             } else {
                 TourneeScreen(
@@ -259,7 +173,8 @@ fun AppNavigation(
                         navController.navigate(
                             Screen.InterventionActive.createRoute(interventionId)
                         )
-                    }
+                    },
+                    viewModel = tourneeViewModel,
                 )
             }
         }
@@ -271,7 +186,10 @@ fun AppNavigation(
                     navController.navigate(
                         Screen.InterventionActive.createRoute(interventionId)
                     )
-                }
+                },
+                onClientClick = { customerId ->
+                    navController.navigate(Screen.ClientDetail.createRoute(customerId))
+                },
             )
         }
 
@@ -289,7 +207,9 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.InterventionActive.route) {
+        composable(Screen.InterventionActive.route) { backStackEntry ->
+            val interventionId =
+                backStackEntry.arguments?.getString("interventionId") ?: return@composable
             InterventionActiveScreen(
                 onQuit = { navController.popBackStack(Screen.Tournee.route, false) },
                 onCloture = { id ->
@@ -297,17 +217,17 @@ fun AppNavigation(
                         Screen.ClotureRapport.createRoute(id)
                     )
                 },
-                onEquipementClick = { equipmentId ->
+                onEquipementClick = { interventionId, equipmentId ->
                     navController.navigate(
-                        Screen.EquipementDetail.createRoute(equipmentId)
+                        Screen.EquipementDetail.createRoute(interventionId, equipmentId)
                     )
                 },
                 onClientClick = { customerId ->
                     navController.navigate(Screen.ClientDetail.createRoute(customerId))
                 },
-                onPhotosClick = { iid, unitId, customerId ->
+                onOpenCamera = { unitId, customerId ->
                     navController.navigate(
-                        Screen.Photos.createRoute(iid, unitId, customerId)
+                        Screen.Camera.createRoute(interventionId, unitId, customerId),
                     )
                 },
                 onFactureClick = { iid ->
@@ -374,6 +294,20 @@ fun AppNavigation(
                     )
                 },
                 onBack = { navController.popBackStack() },
+                onEquipmentSelected = { _ ->
+                    // Remonter jusqu'à InterventionActive sans recréer
+                    // en utilisant la route template (pas la route résolue)
+                    navController.navigate(
+                        Screen.InterventionActive.createRoute(interventionId)
+                    ) {
+                        // Supprimer CatalogSearch et EquipementDetail du stack
+                        // sans recréer InterventionActive
+                        popUpTo(Screen.InterventionActive.route) {
+                            inclusive = false // false pour ne pas recréer
+                        }
+                        launchSingleTop = true // réutilise l'instance existante
+                    }
+                },
             )
         }
 
@@ -421,27 +355,87 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.EquipementDetail.route) { backStackEntry ->
+        composable(
+            route = Screen.Measure.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentOrder") { type = NavType.IntType },
+            ),
+        ) {
+            MeasureScreen(
+                onBack = { navController.popBackStack() },
+                windowSizeClass = windowSizeClass,
+            )
+        }
+
+        composable(
+            route = Screen.AttestationVe.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentOrder") { type = NavType.IntType },
+                navArgument("type") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val interventionId =
+                backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val equipmentOrder =
+                backStackEntry.arguments?.getInt("equipmentOrder") ?: return@composable
+            val type = backStackEntry.arguments?.getString("type") ?: return@composable
+            AttestationVeScreen(
+                interventionId = interventionId,
+                equipmentOrder = equipmentOrder,
+                type = type,
+                onBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(backStackEntry),
+            )
+        }
+
+        composable(
+            route = Screen.EquipementDetail.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentId") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
             val equipVm = hiltViewModel<EquipementDetailViewModel>(backStackEntry)
             val unitId by equipVm.interventionUnitId.collectAsStateWithLifecycle()
+
             EquipementDetailScreen(
                 onBack = { navController.popBackStack() },
                 onCerfaClick = { interventionId, equipmentId ->
                     navController.navigate(
-                        Screen.CerfaFroid.createRoute(interventionId, equipmentId),
+                        Screen.CerfaFroid.createRoute(interventionId, equipmentId)
+                    )
+                },
+                onAttestationVeClick = { _, equipmentOrder, attestationType ->
+                    navController.navigate(
+                        Screen.AttestationVe.createRoute(
+                            equipVm.currentInterventionId,
+                            equipmentOrder,
+                            attestationType,
+                        ),
+                    )
+                },
+                onMeasureClick = { interventionId, order ->
+                    navController.navigate(
+                        Screen.Measure.createRoute(interventionId, order),
                     )
                 },
                 onReplaceClick = { interventionId, equipmentId ->
+                    android.util.Log.d(
+                        "NAV",
+                        "onReplaceClick interventionId=$interventionId equipmentId=$equipmentId unitId=$unitId"
+                    )
                     unitId?.let { uid ->
-                        navController.navigate(
-                            Screen.CatalogSearch.createRoute(
-                                interventionId = interventionId,
-                                unitId = uid,
-                                existingEquipmentId = equipmentId,
-                                parentEquipmentId = null,
-                            ),
+                        val route = Screen.CatalogSearch.createRoute(
+                            interventionId = interventionId,
+                            unitId = uid,
+                            existingEquipmentId = equipmentId,
+                            parentEquipmentId = null,
                         )
-                    }
+                        android.util.Log.d("NAV", "navigating to $route")
+                        navController.navigate(route)
+                    } ?: android.util.Log.w("NAV", "unitId is null — navigation annulée")
                 },
                 viewModel = equipVm,
             )
@@ -453,10 +447,31 @@ fun AppNavigation(
                 navArgument("interventionId") { type = NavType.StringType },
                 navArgument("equipmentId") { type = NavType.StringType },
             ),
-        ) {
+        ) { backStackEntry ->
+            val interventionId =
+                backStackEntry.arguments?.getString("interventionId") ?: return@composable
+            val equipmentId =
+                backStackEntry.arguments?.getString("equipmentId") ?: return@composable
             CerfaFroidScreen(
                 onBack = { navController.popBackStack() },
                 windowSizeClass = windowSizeClass,
+                onApercuPdf = {
+                    navController.navigate(
+                        Screen.CerfaPdf.createRoute(interventionId, equipmentId),
+                    )
+                },
+            )
+        }
+
+        composable(
+            route = Screen.CerfaPdf.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentId") { type = NavType.StringType },
+            ),
+        ) {
+            CerfaScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 

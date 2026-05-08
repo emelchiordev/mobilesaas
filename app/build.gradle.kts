@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.3.0")
     implementation("androidx.compose.material3:material3-window-size-class:1.2.0")
     implementation(libs.androidx.compose.material.icons.extended)
 
@@ -114,6 +115,8 @@ dependencies {
     // Coil 3
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
+
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
     // Tests
     testImplementation(libs.junit)

@@ -45,6 +45,7 @@ fun SavioTabletTopBar(
     isCatalogSyncing: Boolean = false,
     onRefresh: () -> Unit,
     isRefreshing: Boolean,
+    isNetworkOnline: Boolean = true,
 ) {
     Box(
         Modifier
@@ -124,7 +125,7 @@ fun SavioTabletTopBar(
                 }
                 IconButton(
                     onClick = onRefresh,
-                    enabled = !isRefreshing,
+                    enabled = isNetworkOnline && !isRefreshing,
                 ) {
                     if (isRefreshing) {
                         CircularProgressIndicator(

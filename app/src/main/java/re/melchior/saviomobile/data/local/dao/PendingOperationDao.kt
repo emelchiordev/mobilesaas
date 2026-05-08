@@ -22,8 +22,43 @@ interface PendingOperationDao {
     @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
     fun getPendingCount(): Flow<Int>
 
+    @Query(
+        """
+        SELECT * FROM pending_operations 
+        WHERE interventionId = :interventionId 
+        AND status = 'pending'
+        """,
+    )
+    fun getPendingByInterventionId(
+        interventionId: String,
+    ): Flow<List<PendingOperationEntity>>
+
     @Query("SELECT * FROM pending_operations WHERE id = :id AND type = :type LIMIT 1")
     suspend fun getByIdAndType(id: String, type: String): PendingOperationEntity?
+
+    @Query(
+        """
+        SELECT * FROM pending_operations
+        WHERE interventionId = :interventionId
+        AND type = :type
+        """,
+    )
+    suspend fun getByInterventionIdAndType(
+        interventionId: String,
+        type: String,
+    ): List<PendingOperationEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_operations
+        WHERE interventionId = :interventionId
+        AND type IN (:types)
+        """,
+    )
+    suspend fun getByInterventionIdAndTypes(
+        interventionId: String,
+        types: List<String>,
+    ): List<PendingOperationEntity>
 
     @Query("DELETE FROM pending_operations WHERE id = :id")
     suspend fun deleteById(id: String)

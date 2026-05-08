@@ -30,7 +30,23 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_16_17
 import re.melchior.saviomobile.data.local.database.MIGRATION_17_18
 import re.melchior.saviomobile.data.local.database.MIGRATION_18_19
 import re.melchior.saviomobile.data.local.database.MIGRATION_19_20
+import re.melchior.saviomobile.data.local.database.MIGRATION_20_21
+import re.melchior.saviomobile.data.local.database.MIGRATION_21_22
+import re.melchior.saviomobile.data.local.database.MIGRATION_22_23
+import re.melchior.saviomobile.data.local.database.MIGRATION_23_24
+import re.melchior.saviomobile.data.local.database.MIGRATION_24_25
+import re.melchior.saviomobile.data.local.database.MIGRATION_25_26
+import re.melchior.saviomobile.data.local.database.MIGRATION_26_27
+import re.melchior.saviomobile.data.local.database.MIGRATION_27_28
+import re.melchior.saviomobile.data.local.database.MIGRATION_28_29
+import re.melchior.saviomobile.data.local.database.MIGRATION_29_30
+import re.melchior.saviomobile.data.local.database.MIGRATION_30_31
+import re.melchior.saviomobile.data.local.database.MIGRATION_31_32
 import re.melchior.saviomobile.data.local.database.SavioDatabase
+import re.melchior.saviomobile.data.local.dao.AttestationVeDao
+import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
+import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
+import re.melchior.saviomobile.data.local.dao.MeasureDao
 import javax.inject.Singleton
 
 @Module
@@ -44,8 +60,30 @@ object DatabaseModule {
     ): SavioDatabase = Room.databaseBuilder(
         context,
         SavioDatabase::class.java,
-        "savio.db"
+        "savio.db",
     )
+        .addMigrations(
+            MIGRATION_12_13,
+            MIGRATION_13_14,
+            MIGRATION_14_15,
+            MIGRATION_15_16,
+            MIGRATION_16_17,
+            MIGRATION_17_18,
+            MIGRATION_18_19,
+            MIGRATION_19_20,
+            MIGRATION_20_21,
+            MIGRATION_21_22,
+            MIGRATION_22_23,
+            MIGRATION_23_24,
+            MIGRATION_24_25,
+            MIGRATION_25_26,
+            MIGRATION_26_27,
+            MIGRATION_27_28,
+            MIGRATION_28_29,
+            MIGRATION_29_30,
+            MIGRATION_30_31,
+            MIGRATION_31_32,
+        )
         .fallbackToDestructiveMigration()
         .build()
 
@@ -108,5 +146,23 @@ object DatabaseModule {
     @Provides
     fun provideColdMeasureDao(db: SavioDatabase): ColdMeasureDao =
         db.coldMeasureDao()
+
+    @Provides
+    fun provideEquipmentSnapshotDao(db: SavioDatabase): EquipmentSnapshotDao =
+        db.equipmentSnapshotDao()
+
+    @Provides
+    fun provideMeasureDao(db: SavioDatabase): MeasureDao =
+        db.measureDao()
+
+    @Provides
+    fun provideAttestationVeDao(db: SavioDatabase): AttestationVeDao =
+        db.attestationVeDao()
+
+    @Provides
+    fun provideAttestationVePointControleDao(
+        db: SavioDatabase,
+    ): AttestationVePointControleDao =
+        db.attestationVePointControleDao()
 
 }

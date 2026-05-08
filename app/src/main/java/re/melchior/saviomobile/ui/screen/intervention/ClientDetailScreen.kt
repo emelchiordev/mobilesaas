@@ -1,5 +1,8 @@
 package re.melchior.saviomobile.ui.screen.intervention
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,15 +14,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,72 +36,118 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import re.melchior.saviomobile.ui.component.SavioClientDetailSkeleton
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.theme.SavioUi
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+private val SavioBlue = Color(0xFF1E6DB5)
+private val PageBackground = Color(0xFFF7F9FC)
+private val CardBackground = Color(0xFFF7F9FC)
+private val CardBorder = Color(0xFFDCE3EC)
+private val AvatarBackground = Color(0xFFDDEAF8)
+private val PlaceholderGrey = Color(0xFF9CA3AF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientDetailScreen(
     onBack: () -> Unit,
-    viewModel: ClientDetailViewModel = hiltViewModel()
+    viewModel: ClientDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val uriHandler = LocalUriHandler.current
 
     LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+        uiState.errorMessage?.let { msg ->
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = msg,
+                    actionLabel = "Réessayer",
+                    duration = SnackbarDuration.Short,
+                )
             viewModel.dismissError()
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.saveChanges()
+            }
         }
     }
 
     LaunchedEffect(uiState.savedSuccess) {
         if (uiState.savedSuccess) {
-            val message = if (uiState.updatesRequireValidation)
+            val message = if (uiState.updatesRequireValidation) {
                 "Modifications enregistrées — en attente de validation"
-            else
+            } else {
                 "Modifications enregistrées"
+            }
             snackbarHostState.showSnackbar(message)
             viewModel.dismissSuccess()
         }
     }
 
+    val titleName = uiState.intervention?.let { inv ->
+        "${inv.customerFirstName.orEmpty()} ${inv.customerLastName.orEmpty()}".trim()
+    }.orEmpty().ifBlank { "Fiche client" }
+
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = PageBackground,
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = SavioBlue,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White,
+                ),
                 title = {
                     Column {
                         Text(
-                            text = uiState.intervention?.let {
-                                "${it.customerFirstName ?: ""} ${it.customerLastName ?: ""}".trim()
-                            } ?: "Fiche client"
+                            text = titleName,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
                         )
                         if (uiState.updatesRequireValidation) {
                             Text(
                                 text = "Modifications soumises à validation",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.65f),
                             )
                         }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = Color.White,
+                        )
                     }
                 },
                 actions = {
@@ -101,23 +156,24 @@ fun ClientDetailScreen(
                             Icon(
                                 Icons.Filled.Edit,
                                 contentDescription = "Modifier",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color.White,
                             )
                         }
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         when {
             uiState.intervention == null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
+                        .padding(padding)
+                        .background(PageBackground),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator()
+                    SavioClientDetailSkeleton()
                 }
             }
             else -> {
@@ -126,194 +182,244 @@ fun ClientDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
+                        .background(PageBackground)
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    // Info validation si nécessaire
                     if (uiState.updatesRequireValidation && uiState.isEditing) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFFE8F1FB),
+                            border = BorderStroke(0.5.dp, CardBorder),
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 Icon(
                                     Icons.Filled.Info,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(18.dp)
+                                    tint = SavioBlue,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                                Spacer(modifier = Modifier.padding(4.dp))
                                 Text(
                                     text = "Vos modifications seront soumises à validation avant d'être appliquées.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
 
-                    // Infos fixes (non éditables)
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Identité",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ClientSectionCard {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ClientInitialsAvatar(
+                                firstName = intervention.customerFirstName,
+                                lastName = intervention.customerLastName,
+                                sizeDp = 44.dp,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ClientSectionTitle(
+                            icon = Icons.Filled.Person,
+                            title = "Identité",
+                        )
+                        ClientThinDivider()
+                        ClientDataRow(
+                            label = "Prénom",
+                            rawValue = intervention.customerFirstName,
+                        )
+                        ClientThinDivider()
+                        ClientDataRow(
+                            label = "Nom",
+                            rawValue = intervention.customerLastName,
+                        )
+                    }
+
+                    ClientSectionCard {
+                        ClientSectionTitle(
+                            icon = Icons.Filled.Phone,
+                            title = "Coordonnées",
+                        )
+                        ClientThinDivider()
+                        if (uiState.isEditing) {
+                            OutlinedTextField(
+                                value = uiState.phone,
+                                onValueChange = viewModel::onPhoneChange,
+                                label = { Text("Téléphone") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "${intervention.customerFirstName ?: ""} ${intervention.customerLastName ?: ""}".trim(),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                            OutlinedTextField(
+                                value = uiState.email,
+                                onValueChange = viewModel::onEmailChange,
+                                label = { Text("Email") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                isError = uiState.emailError != null,
+                                supportingText = {
+                                    uiState.emailError?.let { err ->
+                                        Text(
+                                            text = err,
+                                            color = SavioUi.DestructiveRed,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                },
+                                colors =
+                                    OutlinedTextFieldDefaults.colors(
+                                        errorBorderColor = SavioUi.DestructiveRed,
+                                        errorLabelColor = SavioUi.DestructiveRed,
+                                        errorSupportingTextColor = SavioUi.DestructiveRed,
+                                    ),
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = uiState.notes,
+                                onValueChange = viewModel::onNotesChange,
+                                label = { Text("Notes") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp),
+                                maxLines = 4,
+                            )
+                        } else {
+                            ClientDataRow(
+                                label = "Téléphone",
+                                rawValue = uiState.phone,
+                                linkColor = SavioBlue,
+                                onValueClick = uiState.phone.takeIf { it.isNotBlank() }?.let { phone ->
+                                    { uriHandler.openUri("tel:${phone.trim()}") }
+                                },
+                            )
+                            ClientThinDivider()
+                            ClientDataRow(
+                                label = "Email",
+                                rawValue = uiState.email,
+                                linkColor = SavioBlue,
+                                onValueClick = uiState.email.takeIf { it.isNotBlank() }?.let { email ->
+                                    { uriHandler.openUri("mailto:${email.trim()}") }
+                                },
+                            )
+                            ClientThinDivider()
+                            ClientDataRow(
+                                label = "Notes",
+                                rawValue = uiState.notes,
+                                multiline = true,
                             )
                         }
                     }
 
-                    // Coordonnées éditables
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Coordonnées",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ClientSectionCard {
+                        ClientSectionTitle(
+                            icon = Icons.Filled.LocationOn,
+                            title = "Accès logement",
+                        )
+                        ClientThinDivider()
+                        val addressLine =
+                            "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                        ClientDataRow(
+                            label = "Adresse",
+                            rawValue = addressLine,
+                            forceValue = true,
+                        )
+                        if (uiState.isEditing) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = uiState.addressLine2,
+                                onValueChange = viewModel::onAddressLine2Change,
+                                label = { Text("Complément d'adresse (bât, résidence...)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (uiState.isEditing) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedTextField(
-                                    value = uiState.phone,
-                                    onValueChange = viewModel::onPhoneChange,
-                                    label = { Text("Téléphone") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
+                                    value = uiState.floor,
+                                    onValueChange = viewModel::onFloorChange,
+                                    label = { Text("Étage") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedTextField(
-                                    value = uiState.email,
-                                    onValueChange = viewModel::onEmailChange,
-                                    label = { Text("Email") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = uiState.notes,
-                                    onValueChange = viewModel::onNotesChange,
-                                    label = { Text("Notes") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(100.dp),
-                                    maxLines = 4
-                                )
-                            } else {
-                                InfoLigne("Téléphone", uiState.phone.ifBlank { "Non renseigné" })
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                InfoLigne("Email", uiState.email.ifBlank { "Non renseigné" })
-                                if (uiState.notes.isNotBlank()) {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                    InfoLigne("Notes", uiState.notes)
-                                }
-                            }
-                        }
-                    }
-
-                    // Accès logement éditable
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Accès logement",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = intervention.unitStreet,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (uiState.isEditing) {
-                                OutlinedTextField(
-                                    value = uiState.addressLine2,
-                                    onValueChange = viewModel::onAddressLine2Change,
-                                    label = { Text("Complément d'adresse (bât, résidence...)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedTextField(
-                                        value = uiState.floor,
-                                        onValueChange = viewModel::onFloorChange,
-                                        label = { Text("Étage") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                    OutlinedTextField(
-                                        value = uiState.doorCode,
-                                        onValueChange = viewModel::onDoorCodeChange,
-                                        label = { Text("Code accès") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                }
-                            } else {
-                                if (uiState.addressLine2.isNotBlank()) {
-                                    InfoLigne("Complément", uiState.addressLine2)
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                }
-                                InfoLigne(
-                                    "Étage",
-                                    uiState.floor.ifBlank { "Non renseigné" }
-                                )
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                InfoLigne(
-                                    "Code accès",
-                                    uiState.doorCode.ifBlank { "Non renseigné" }
+                                    value = uiState.doorCode,
+                                    onValueChange = viewModel::onDoorCodeChange,
+                                    label = { Text("Code accès") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
                                 )
                             }
+                        } else {
+                            if (uiState.addressLine2.isNotBlank()) {
+                                ClientThinDivider()
+                                ClientDataRow(
+                                    label = "Complément",
+                                    rawValue = uiState.addressLine2,
+                                    forceValue = true,
+                                )
+                            }
+                            ClientThinDivider()
+                            ClientDataRow(
+                                label = "Étage",
+                                rawValue = uiState.floor,
+                            )
+                            ClientThinDivider()
+                            ClientDataRow(
+                                label = "Code accès",
+                                rawValue = uiState.doorCode,
+                            )
                         }
                     }
 
-                    // Boutons édition
                     if (uiState.isEditing) {
                         Button(
                             onClick = viewModel::saveChanges,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
-                            enabled = !uiState.isSaving
+                            enabled = !uiState.isSaving,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SavioBlue,
+                                contentColor = Color.White,
+                            ),
+                            shape = RoundedCornerShape(20.dp),
                         ) {
                             if (uiState.isSaving) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
                                 )
                             } else {
                                 Text(
-                                    text = if (uiState.updatesRequireValidation)
+                                    text = if (uiState.updatesRequireValidation) {
                                         "Soumettre les modifications"
-                                    else
-                                        "Enregistrer",
-                                    style = MaterialTheme.typography.titleMedium
+                                    } else {
+                                        "Enregistrer"
+                                    },
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
                                 )
                             }
                         }
 
                         OutlinedButton(
                             onClick = viewModel::cancelEditing,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = SavioBlue,
+                            ),
+                            border = BorderStroke(1.dp, SavioBlue),
                         ) {
-                            Text("Annuler")
+                            Text("Annuler", fontWeight = FontWeight.Medium)
                         }
                     }
 
@@ -325,22 +431,137 @@ fun ClientDetailScreen(
 }
 
 @Composable
-private fun InfoLigne(label: String, value: String) {
+private fun ClientSectionCard(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = CardBackground,
+        border = BorderStroke(0.5.dp, CardBorder),
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ClientSectionTitle(
+    icon: ImageVector,
+    title: String,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = SavioBlue,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun ClientThinDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 14.dp),
+        thickness = 0.5.dp,
+        color = CardBorder,
+    )
+}
+
+@Composable
+private fun ClientDataRow(
+    label: String,
+    rawValue: String?,
+    forceValue: Boolean = false,
+    multiline: Boolean = false,
+    linkColor: Color? = null,
+    onValueClick: (() -> Unit)? = null,
+) {
+    val trimmed = rawValue?.trim().orEmpty()
+    val isEmpty = trimmed.isBlank() && !forceValue
+    val display = if (isEmpty) "Non renseigné" else trimmed
+    val isPlaceholder = isEmpty
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.weight(1f),
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Start,
         )
+        val valueModifier = Modifier
+            .weight(1f)
+            .then(
+                if (onValueClick != null && !isPlaceholder) {
+                    Modifier.clickable(onClick = onValueClick)
+                } else {
+                    Modifier
+                },
+            )
         Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+            text = display,
+            modifier = valueModifier,
+            fontSize = 14.sp,
+            color = when {
+                isPlaceholder -> PlaceholderGrey
+                linkColor != null && onValueClick != null -> linkColor
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            fontStyle = if (isPlaceholder) FontStyle.Italic else FontStyle.Normal,
+            fontWeight = FontWeight.Normal,
+            textAlign = if (multiline) TextAlign.Start else TextAlign.End,
+            maxLines = if (multiline) 6 else 3,
         )
+    }
+}
+
+@Composable
+private fun ClientInitialsAvatar(
+    firstName: String?,
+    lastName: String?,
+    sizeDp: Dp,
+) {
+    val initials = customerInitials(firstName, lastName)
+    Box(
+        modifier = Modifier
+            .size(sizeDp)
+            .clip(CircleShape)
+            .background(AvatarBackground),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = initials,
+            color = SavioBlue,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+private fun customerInitials(firstName: String?, lastName: String?): String {
+    val f = firstName?.trim().orEmpty()
+    val l = lastName?.trim().orEmpty()
+    return when {
+        f.isNotEmpty() && l.isNotEmpty() ->
+            "${f.first().uppercaseChar()}${l.first().uppercaseChar()}"
+        f.length >= 2 -> f.take(2).uppercase()
+        f.isNotEmpty() -> f.first().uppercaseChar().toString()
+        l.length >= 2 -> l.take(2).uppercase()
+        l.isNotEmpty() -> l.first().uppercaseChar().toString()
+        else -> "?"
     }
 }

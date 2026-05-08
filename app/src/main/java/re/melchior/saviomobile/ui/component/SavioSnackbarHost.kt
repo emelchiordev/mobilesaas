@@ -1,0 +1,63 @@
+package re.melchior.saviomobile.ui.component
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioDimens
+
+@Composable
+fun SavioSnackbarHost(
+    hostState: SnackbarHostState,
+    modifier: Modifier = Modifier,
+) {
+    SnackbarHost(
+        hostState = hostState,
+        modifier = modifier.padding(horizontal = SavioDimens.SpaceLG, vertical = SavioDimens.SpaceSM),
+        snackbar = { data: SnackbarData ->
+            val msg = data.visuals.message
+            val isSuccess =
+                msg.contains("enregistr", ignoreCase = true) ||
+                    msg.contains("succès", ignoreCase = true) ||
+                    msg.contains("créée", ignoreCase = true) ||
+                    msg.contains("clôtur", ignoreCase = true) ||
+                    msg.contains("mise à jour", ignoreCase = true) ||
+                    msg.contains("validé", ignoreCase = true) ||
+                    msg.contains("termin", ignoreCase = true) ||
+                    msg.contains("soumise", ignoreCase = true)
+            val isWarning =
+                !isSuccess &&
+                    (
+                        msg.contains("attente", ignoreCase = true) ||
+                            msg.contains("validation", ignoreCase = true) ||
+                            msg.contains("attention", ignoreCase = true)
+                    )
+            val containerColor =
+                when {
+                    isSuccess -> SavioPalette.Success
+                    isWarning -> SavioPalette.SnackbarWarning
+                    else -> SavioPalette.SnackbarError
+                }
+            Snackbar(
+                snackbarData = data,
+                shape = RoundedCornerShape(SavioDimens.RadiusMD),
+                containerColor = containerColor,
+                contentColor = SavioPalette.White,
+                actionColor =
+                    if (isSuccess) {
+                        SavioPalette.PrimaryLight
+                    } else {
+                        SavioPalette.PrimaryLight
+                    },
+                dismissActionContentColor = SavioPalette.White.copy(alpha = 0.8f),
+            )
+        },
+    )
+}

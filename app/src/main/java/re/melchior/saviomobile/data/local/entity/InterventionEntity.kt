@@ -48,5 +48,7 @@ data class InterventionEntity(
     val startedAt: String? = null,
     // Meta
     val pulledAt: String,
-    val updatedAt: String? = null
+    /** Chantier : pas de reset auto in_progress, pas de timeout 48h. */
+    val isChantier: Boolean = false,
+    val updatedAt: String? = null,
 )

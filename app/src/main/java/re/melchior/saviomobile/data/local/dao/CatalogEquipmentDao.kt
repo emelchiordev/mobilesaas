@@ -39,6 +39,9 @@ interface CatalogEquipmentDao {
     @Query("SELECT * FROM catalog_equipment WHERE id = :id")
     suspend fun getById(id: String): CatalogEquipmentEntity?
 
+    @Query("SELECT brandId FROM catalog_equipment WHERE id = :catalogEquipmentId LIMIT 1")
+    suspend fun getBrandIdForCatalogEquipment(catalogEquipmentId: String): String?
+
     @Upsert
     suspend fun upsertAll(items: List<CatalogEquipmentEntity>)
 

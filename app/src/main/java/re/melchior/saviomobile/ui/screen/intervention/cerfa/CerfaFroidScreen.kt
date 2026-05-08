@@ -69,10 +69,12 @@ private val TAB_TITLES = listOf(
 fun CerfaFroidScreen(
     onBack: () -> Unit,
     windowSizeClass: WindowSizeClass,
+    onApercuPdf: () -> Unit = {},
     viewModel: CerfaFroidViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val hasPersistedCerfa by viewModel.hasPersistedData.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val columns = when (windowSizeClass.widthSizeClass) {
@@ -106,6 +108,12 @@ fun CerfaFroidScreen(
                     }
                 },
                 actions = {
+                    TextButton(
+                        onClick = onApercuPdf,
+                        enabled = hasPersistedCerfa,
+                    ) {
+                        Text("Aperçu PDF")
+                    }
                     TextButton(
                         onClick = { viewModel.saveLocally() },
                         enabled = !isSaving,

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
 import re.melchior.saviomobile.ui.navigation.Screen
 
 /**
@@ -26,12 +27,14 @@ fun TourneeAdaptiveLayout(
     interventions: List<InterventionItem>,
     detailNavController: NavHostController,
     onStartIntervention: (String) -> Unit,
+    onClientClick: (String) -> Unit = {},
     currentDateLabel: String,
     pendingSyncCount: Int,
     onSyncCatalog: () -> Unit,
     isCatalogSyncing: Boolean = false,
     onRefresh: () -> Unit,
     isRefreshing: Boolean,
+    isNetworkOnline: Boolean = true,
 ) {
     val navEntry by detailNavController.currentBackStackEntryAsState()
     val selectedId = navEntry?.arguments?.getString("interventionId")
@@ -48,7 +51,11 @@ fun TourneeAdaptiveLayout(
             isCatalogSyncing = isCatalogSyncing,
             onRefresh = onRefresh,
             isRefreshing = isRefreshing,
+            isNetworkOnline = isNetworkOnline,
         )
+        if (!isNetworkOnline) {
+            SavioOfflineBannerSurface()
+        }
         Row(
             Modifier
                 .weight(1f)
@@ -82,6 +89,7 @@ fun TourneeAdaptiveLayout(
                     modifier = Modifier.fillMaxSize(),
                     detailNavController = detailNavController,
                     onStartIntervention = onStartIntervention,
+                    onClientClick = onClientClick,
                 )
             }
         }

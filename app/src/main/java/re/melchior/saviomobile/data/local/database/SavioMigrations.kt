@@ -203,6 +203,392 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
     }
 }
 
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS equipment_snapshots (
+                equipmentId TEXT NOT NULL,
+                interventionId TEXT NOT NULL,
+                brand TEXT,
+                model TEXT,
+                typeCode TEXT,
+                energyCode TEXT,
+                serialNumber TEXT,
+                installDate TEXT,
+                isPrimary INTEGER NOT NULL DEFAULT 0,
+                equipment_catalog_id TEXT,
+                parent_equipment_id TEXT,
+                created_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (equipmentId, interventionId)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE equipments ADD COLUMN catalog_brand_id TEXT")
+        db.execSQL("ALTER TABLE equipment_snapshots ADD COLUMN catalog_brand_id TEXT")
+    }
+}
+
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE equipments_new (
+                id TEXT NOT NULL PRIMARY KEY,
+                interventionId TEXT NOT NULL DEFAULT '',
+                unitId TEXT,
+                `order` INTEGER,
+                brand TEXT,
+                model TEXT,
+                typeCode TEXT,
+                energyCode TEXT,
+                serialNumber TEXT,
+                installDate TEXT,
+                isPrimary INTEGER NOT NULL DEFAULT 0,
+                equipment_catalog_id TEXT,
+                catalog_brand_id TEXT,
+                parent_equipment_id TEXT
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            INSERT INTO equipments_new (
+                id, interventionId, unitId, `order`, brand, model, typeCode, energyCode,
+                serialNumber, installDate, isPrimary, equipment_catalog_id, catalog_brand_id,
+                parent_equipment_id
+            )
+            SELECT
+                id, interventionId, NULL, NULL, brand, model, typeCode, energyCode,
+                serialNumber, installDate, isPrimary, equipment_catalog_id, catalog_brand_id,
+                parent_equipment_id
+            FROM equipments
+            GROUP BY id
+            """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE equipments")
+        db.execSQL("ALTER TABLE equipments_new RENAME TO equipments")
+
+        db.execSQL("ALTER TABLE equipment_snapshots ADD COLUMN `order` INTEGER")
+        db.execSQL("ALTER TABLE equipment_snapshots ADD COLUMN unitId TEXT")
+    }
+}
+
+val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS attestation_ve (
+                id TEXT NOT NULL PRIMARY KEY,
+                interventionId TEXT NOT NULL,
+                equipmentOrder INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                appareilMesure TEXT NOT NULL DEFAULT '',
+                defautsCorriges TEXT NOT NULL DEFAULT '',
+                recommandationUsage TEXT NOT NULL DEFAULT '',
+                recommandationAmeliorations TEXT NOT NULL DEFAULT '',
+                recommandationRemplacement TEXT NOT NULL DEFAULT '',
+                commentaire TEXT NOT NULL DEFAULT '',
+                nomPersonnePresente TEXT NOT NULL DEFAULT '',
+                remarquesHydraulique TEXT NOT NULL DEFAULT '',
+                remarquesRegulation TEXT NOT NULL DEFAULT '',
+                remarquesGenerateur TEXT NOT NULL DEFAULT '',
+                co TEXT NOT NULL DEFAULT '',
+                tempFumees TEXT NOT NULL DEFAULT '',
+                tempAmbiante TEXT NOT NULL DEFAULT '',
+                co2Fumees TEXT NOT NULL DEFAULT '',
+                o2Fumees TEXT NOT NULL DEFAULT '',
+                rendementEvalue TEXT NOT NULL DEFAULT '',
+                noxEmissions TEXT NOT NULL DEFAULT '',
+                classeEnergetique TEXT NOT NULL DEFAULT '',
+                indiceNoircissement TEXT NOT NULL DEFAULT '',
+                pressionGicleur TEXT NOT NULL DEFAULT '',
+                emissionsPoussieres TEXT NOT NULL DEFAULT '',
+                emissionsCov TEXT NOT NULL DEFAULT '',
+                tExterieurChauf TEXT NOT NULL DEFAULT '',
+                tExterieurRefroid TEXT NOT NULL DEFAULT '',
+                tInterieurChauf TEXT NOT NULL DEFAULT '',
+                tInterieurRefroid TEXT NOT NULL DEFAULT '',
+                tensionStatique TEXT NOT NULL DEFAULT '',
+                tensionDynamique TEXT NOT NULL DEFAULT '',
+                fluideRef TEXT NOT NULL DEFAULT '',
+                chargeTotale TEXT NOT NULL DEFAULT '',
+                pressionBp TEXT NOT NULL DEFAULT '',
+                pressionHp TEXT NOT NULL DEFAULT '',
+                isDirty INTEGER NOT NULL DEFAULT 1,
+                updatedAt TEXT NOT NULL DEFAULT ''
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS attestation_ve_point_controle (
+                id TEXT NOT NULL PRIMARY KEY,
+                attestationId TEXT NOT NULL,
+                interventionId TEXT NOT NULL,
+                equipmentOrder INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                cle TEXT NOT NULL,
+                resultat TEXT NOT NULL DEFAULT ''
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_23_24 = object : Migration(23, 24) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS measures (
+                interventionId TEXT NOT NULL,
+                equipmentOrder INTEGER NOT NULL,
+                co REAL,
+                coamb REAL,
+                co2 REAL,
+                o2 REAL,
+                tair INTEGER,
+                temfu REAL,
+                rend REAL,
+                nox REAL,
+                eta REAL,
+                thpa REAL,
+                no REAL,
+                no2 REAL,
+                o2ven REAL,
+                condilu REAL,
+                tgaz INTEGER,
+                ta REAL,
+                pregas REAL,
+                prega REAL,
+                pregn REAL,
+                pregm REAL,
+                puisgaz REAL,
+                debga REAL,
+                temec REAL,
+                temef REAL,
+                delta REAL,
+                debio REAL,
+                debfuel REAL,
+                prefp REAL,
+                puisfuel REAL,
+                pulve REAL,
+                spot INTEGER,
+                testdsc TEXT,
+                remplacond TEXT,
+                templagigleur TEXT,
+                remplapoly TEXT,
+                etaventil TEXT,
+                ctranode TEXT,
+                ctrextvmc TEXT,
+                suie1 INTEGER,
+                suie2 INTEGER,
+                suie3 INTEGER,
+                residhuil INTEGER,
+                opaci REAL,
+                ionis REAL,
+                pgevg REAL,
+                pgepg REAL,
+                depre REAL,
+                depr2 REAL,
+                gican REAL,
+                gicle REAL,
+                pabs REAL,
+                perte REAL,
+                ppm INTEGER,
+                obser TEXT,
+                updated_at TEXT NOT NULL DEFAULT '',
+                is_dirty INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (interventionId, equipmentOrder)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE interventions ADD COLUMN isChantier INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+}
+
+val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE equipments ADD COLUMN evacuationMode TEXT")
+        db.execSQL("ALTER TABLE attestation_ve ADD COLUMN coConduitPpm REAL")
+    }
+}
+
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS equipments_new (
+                interventionId TEXT NOT NULL,
+                `order` INTEGER NOT NULL,
+                id TEXT NOT NULL,
+                unitId TEXT NOT NULL,
+                brand TEXT,
+                model TEXT,
+                typeCode TEXT,
+                energyCode TEXT,
+                serialNumber TEXT,
+                installDate TEXT,
+                isPrimary INTEGER NOT NULL DEFAULT 0,
+                equipment_catalog_id TEXT,
+                catalog_brand_id TEXT,
+                parent_equipment_id TEXT,
+                evacuationMode TEXT,
+                syncStatus TEXT NOT NULL DEFAULT 'SYNCED',
+                isChantier INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (interventionId, `order`)
+            )
+            """.trimIndent(),
+        )
+        database.execSQL(
+            """
+            INSERT OR IGNORE INTO equipments_new (
+                interventionId, `order`, id, unitId, brand, model, typeCode, energyCode,
+                serialNumber, installDate, isPrimary, equipment_catalog_id, catalog_brand_id,
+                parent_equipment_id, evacuationMode, syncStatus, isChantier
+            )
+            SELECT
+                interventionId,
+                COALESCE(`order`, 0),
+                id,
+                COALESCE(unitId, ''),
+                brand, model, typeCode, energyCode,
+                serialNumber, installDate, isPrimary,
+                equipment_catalog_id, catalog_brand_id, parent_equipment_id,
+                evacuationMode,
+                'SYNCED',
+                0
+            FROM equipments
+            """.trimIndent(),
+        )
+        database.execSQL("DROP TABLE equipments")
+        database.execSQL("ALTER TABLE equipments_new RENAME TO equipments")
+    }
+}
+
+val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE attestation_ve_new (
+                interventionId TEXT NOT NULL,
+                equipmentOrder INTEGER NOT NULL,
+                id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                appareilMesure TEXT NOT NULL DEFAULT '',
+                defautsCorriges TEXT NOT NULL DEFAULT '',
+                recommandationUsage TEXT NOT NULL DEFAULT '',
+                recommandationAmeliorations TEXT NOT NULL DEFAULT '',
+                recommandationRemplacement TEXT NOT NULL DEFAULT '',
+                commentaire TEXT NOT NULL DEFAULT '',
+                nomPersonnePresente TEXT NOT NULL DEFAULT '',
+                remarquesHydraulique TEXT NOT NULL DEFAULT '',
+                remarquesRegulation TEXT NOT NULL DEFAULT '',
+                remarquesGenerateur TEXT NOT NULL DEFAULT '',
+                co TEXT NOT NULL DEFAULT '',
+                coConduitPpm REAL,
+                tempFumees TEXT NOT NULL DEFAULT '',
+                tempAmbiante TEXT NOT NULL DEFAULT '',
+                co2Fumees TEXT NOT NULL DEFAULT '',
+                o2Fumees TEXT NOT NULL DEFAULT '',
+                rendementEvalue TEXT NOT NULL DEFAULT '',
+                noxEmissions TEXT NOT NULL DEFAULT '',
+                classeEnergetique TEXT NOT NULL DEFAULT '',
+                indiceNoircissement TEXT NOT NULL DEFAULT '',
+                pressionGicleur TEXT NOT NULL DEFAULT '',
+                emissionsPoussieres TEXT NOT NULL DEFAULT '',
+                emissionsCov TEXT NOT NULL DEFAULT '',
+                tExterieurChauf TEXT NOT NULL DEFAULT '',
+                tExterieurRefroid TEXT NOT NULL DEFAULT '',
+                tInterieurChauf TEXT NOT NULL DEFAULT '',
+                tInterieurRefroid TEXT NOT NULL DEFAULT '',
+                tensionStatique TEXT NOT NULL DEFAULT '',
+                tensionDynamique TEXT NOT NULL DEFAULT '',
+                fluideRef TEXT NOT NULL DEFAULT '',
+                chargeTotale TEXT NOT NULL DEFAULT '',
+                pressionBp TEXT NOT NULL DEFAULT '',
+                pressionHp TEXT NOT NULL DEFAULT '',
+                isDirty INTEGER NOT NULL DEFAULT 1,
+                updatedAt TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY(interventionId, equipmentOrder)
+            )
+            """.trimIndent(),
+        )
+        database.execSQL(
+            """
+            INSERT OR IGNORE INTO attestation_ve_new
+            SELECT interventionId, equipmentOrder, id, type,
+                   appareilMesure, defautsCorriges, recommandationUsage,
+                   recommandationAmeliorations, recommandationRemplacement,
+                   commentaire, nomPersonnePresente, remarquesHydraulique,
+                   remarquesRegulation, remarquesGenerateur,
+                   co, coConduitPpm, tempFumees, tempAmbiante,
+                   co2Fumees, o2Fumees, rendementEvalue, noxEmissions,
+                   classeEnergetique, indiceNoircissement, pressionGicleur,
+                   emissionsPoussieres, emissionsCov,
+                   tExterieurChauf, tExterieurRefroid,
+                   tInterieurChauf, tInterieurRefroid,
+                   tensionStatique, tensionDynamique,
+                   fluideRef, chargeTotale, pressionBp, pressionHp,
+                   isDirty, updatedAt
+            FROM attestation_ve
+            ORDER BY updatedAt DESC
+            """.trimIndent(),
+        )
+        database.execSQL("DROP TABLE attestation_ve")
+        database.execSQL("ALTER TABLE attestation_ve_new RENAME TO attestation_ve")
+    }
+}
+
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE attestation_ve ADD COLUMN bruleurMarque TEXT",
+        )
+        database.execSQL(
+            "ALTER TABLE attestation_ve ADD COLUMN bruleurModele TEXT",
+        )
+        database.execSQL(
+            "ALTER TABLE attestation_ve ADD COLUMN bruleurSerialNumber TEXT",
+        )
+        database.execSQL(
+            "ALTER TABLE attestation_ve ADD COLUMN bruleurCommissioningDate TEXT",
+        )
+        database.execSQL(
+            "ALTER TABLE attestation_ve ADD COLUMN bruleurPuissanceKw REAL",
+        )
+    }
+}
+
+val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            ALTER TABLE attestation_ve
+            ADD COLUMN bruleurEquipmentOrder INTEGER
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE equipments ADD COLUMN power_kw TEXT")
+    }
+}
+
 private fun createPendingOperationsTable(db: SupportSQLiteDatabase) {
     db.execSQL(
         """

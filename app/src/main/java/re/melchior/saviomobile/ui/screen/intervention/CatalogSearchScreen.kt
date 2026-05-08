@@ -1,6 +1,7 @@
 package re.melchior.saviomobile.ui.screen.intervention
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,11 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.entity.CatalogEquipmentSearchRow
+import re.melchior.saviomobile.ui.component.BrandLogo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +67,7 @@ fun CatalogSearchScreen(
     parentEquipmentId: String?,
     onManualEntry: () -> Unit,
     onBack: () -> Unit,
+    onEquipmentSelected: (equipmentId: String) -> Unit,
     viewModel: CatalogSearchViewModel = hiltViewModel(),
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -75,8 +79,8 @@ fun CatalogSearchScreen(
     val isCreating by viewModel.isCreating.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        viewModel.createdEquipmentId.collect {
-            onBack()
+        viewModel.createdEquipmentId.collect { newId ->
+            onEquipmentSelected(newId)
         }
     }
 
@@ -267,7 +271,7 @@ private fun CatalogEquipmentRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val typeUpper = row.typeLabel?.uppercase() ?: ""
-                val (iconRes, iconColor, iconBg) = when {
+                val (iconRes, iconColor, _) = when {
                     typeUpper.contains("CHAUDIERE") ->
                         Triple(
                             Icons.Filled.LocalFireDepartment,
@@ -308,16 +312,30 @@ private fun CatalogEquipmentRow(
 
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(iconBg),
+                        .width(52.dp)
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White)
+                        .border(
+                            width = 0.5.dp,
+                            color = Color(0xFFE8E8E8),
+                            shape = RoundedCornerShape(6.dp),
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = iconRes,
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(20.dp),
+                    BrandLogo(
+                        brandId = row.equipment.brandId,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(4.dp),
+                        fallback = {
+                            Icon(
+                                imageVector = iconRes,
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
                     )
                 }
 

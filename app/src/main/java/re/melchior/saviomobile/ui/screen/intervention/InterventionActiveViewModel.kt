@@ -9,11 +9,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
@@ -40,6 +44,7 @@ class InterventionActiveViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val invoiceRepository: InvoiceRepository,
     private val settingsDao: SettingsDao,
+    private val pendingOperationDao: PendingOperationDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -47,6 +52,25 @@ class InterventionActiveViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(InterventionActiveUiState())
     val uiState: StateFlow<InterventionActiveUiState> = _uiState.asStateFlow()
+
+    /** IDs d’équipements créés pendant l’intervention (ajout pur ou nouvel appareil après remplacement). */
+    val newEquipmentIds: StateFlow<Set<String>> =
+        pendingOperationDao
+            .getPendingByInterventionId(interventionId)
+            .map { ops ->
+                ops
+                    .filter {
+                        it.type == "CREATE_EQUIPMENT" ||
+                            it.type == "REPLACE_EQUIPMENT"
+                    }
+                    .map { it.id }
+                    .toSet()
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptySet(),
+            )
 
     private val _navigateToInvoice = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val navigateToInvoice: SharedFlow<String> = _navigateToInvoice.asSharedFlow()

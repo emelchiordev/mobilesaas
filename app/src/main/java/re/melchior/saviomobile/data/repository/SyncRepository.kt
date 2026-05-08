@@ -1,8 +1,10 @@
 package re.melchior.saviomobile.data.repository
 
 import com.google.gson.Gson
+import re.melchior.saviomobile.data.local.dao.CatalogEquipmentDao
 import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
+import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
 import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
@@ -11,6 +13,7 @@ import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
+import re.melchior.saviomobile.data.local.entity.EquipmentSnapshotEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
@@ -37,20 +40,57 @@ class SyncRepository @Inject constructor(
     private val syncApi: SyncApi,
     private val interventionDao: InterventionDao,
     private val equipmentDao: EquipmentDao,
+    private val catalogEquipmentDao: CatalogEquipmentDao,
     private val referentielDao: ReferentielDao,
     private val settingsDao: SettingsDao,
     private val interventionHistoryDao: InterventionHistoryDao,
     private val interventionActualTypeDao: InterventionActualTypeDao,
     private val pendingOperationDao: PendingOperationDao,
     private val coldMeasureDao: ColdMeasureDao,
+    private val equipmentSnapshotDao: EquipmentSnapshotDao,
+    private val measureRepository: MeasureRepository,
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
         equipmentDao.getEquipmentsByIntervention(interventionId)
 
     suspend fun startIntervention(interventionId: String) {
+        interventionDao.resetOtherInProgressToScheduled(
+            exceptInterventionId = interventionId,
+        )
         val now = java.time.Instant.now().toString()
         interventionDao.markAsInProgress(interventionId, now)
+        snapshotEquipments(interventionId)
+    }
+
+    private suspend fun snapshotEquipments(interventionId: String) {
+        val existing = equipmentSnapshotDao.countByInterventionId(interventionId)
+        if (existing > 0) return
+
+        val intervention = interventionDao.getInterventionByIdOnce(interventionId) ?: return
+        val equipments = equipmentDao.getEquipmentsByUnitId(intervention.unitId)
+        if (equipments.isEmpty()) return
+
+        val snapshots = equipments.map { eq ->
+            EquipmentSnapshotEntity(
+                equipmentId = eq.id,
+                interventionId = interventionId,
+                brand = eq.brand,
+                model = eq.model,
+                typeCode = eq.typeCode,
+                energyCode = eq.energyCode,
+                serialNumber = eq.serialNumber,
+                installDate = eq.installDate,
+                isPrimary = eq.isPrimary,
+                equipmentCatalogId = eq.equipmentCatalogId,
+                catalogBrandId = eq.catalogBrandId,
+                parentEquipmentId = eq.parentEquipmentId,
+                order = eq.order,
+                unitId = eq.unitId,
+                createdAt = java.time.Instant.now().toString(),
+            )
+        }
+        equipmentSnapshotDao.insertAll(snapshots)
     }
 
     suspend fun completeIntervention(
@@ -91,10 +131,11 @@ class SyncRepository @Inject constructor(
                 else -> selectedTypes.joinToString(", ") { it.label }
             }
         )
+        equipmentSnapshotDao.deleteByInterventionId(interventionId)
     }
 
     fun getEquipmentById(id: String) =
-        equipmentDao.getEquipmentById(id)
+        equipmentDao.getEquipmentByServerId(id)
 
     suspend fun saveReport(interventionId: String, report: String) {
         interventionDao.saveReport(interventionId, report)
@@ -103,41 +144,25 @@ class SyncRepository @Inject constructor(
     // Méthode au niveau de la classe — pas à l'intérieur de pull()
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
+            // Pull ne crée ni ne met à jour les lignes clôturées (même si le serveur les renvoyait).
+            if (entity.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL) {
+                return@forEach
+            }
             val existing = interventionDao.getInterventionByIdOnce(entity.id)
 
             when {
-                // Pas encore en local → insert direct
+                existing?.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL -> {
+                    android.util.Log.d("InsertAllSafe", "→ skip closed local ${entity.id}")
+                }
+
                 existing == null -> {
                     interventionDao.insertOrReplace(entity)
                 }
 
-                // Intervention terminée localement → données terrain font foi TOUJOURS
-                existing.status == "completed" || existing.status == "pending_validation" -> {
-                    interventionDao.insertOrReplace(
-                        existing.copy(
-                            // Seul le syncStatus peut être mis à jour par le serveur
-                            syncStatus = if (entity.status == "completed") "SYNCED" else existing.syncStatus,
-                            // Tout le reste : données locales prioritaires
-                            report = existing.report ?: entity.report,
-                            completedAt = existing.completedAt ?: entity.completedAt,
-                            startedAt = existing.startedAt ?: entity.startedAt,
-                            signaturePath = existing.signaturePath ?: entity.signaturePath,
-                            techSignaturePath = existing.techSignaturePath ?: entity.techSignaturePath,
-                            interventionTypeId = existing.interventionTypeId ?: entity.interventionTypeId,
-                            actualTypeId = existing.actualTypeId ?: entity.actualTypeId,
-                            actualTypeCode = existing.actualTypeCode ?: entity.actualTypeCode,
-                            actualTypeLabel = existing.actualTypeLabel ?: entity.actualTypeLabel
-                        )
-                    )
-                    android.util.Log.d("InsertAllSafe", "→ completed local, données terrain préservées ${entity.id}")
-                }
-
-                // En cours ou en attente de push → ne pas écraser
                 existing.syncStatus in listOf("IN_PROGRESS", "PENDING") -> {
                     android.util.Log.d("InsertAllSafe", "→ skip ${entity.id} (local=${existing.syncStatus})")
                 }
 
-                // SYNCED et pas completed → serveur fait foi
                 else -> {
                     interventionDao.insertOrReplace(entity)
                 }
@@ -148,8 +173,25 @@ class SyncRepository @Inject constructor(
     fun getInterventionByCustomerId(customerId: String) =
         interventionDao.getInterventionByCustomerId(customerId)
 
-    suspend fun pull(date: LocalDate): SyncResult {
+    suspend fun pull(date: LocalDate, force: Boolean = false): SyncResult {
         return try {
+            // Throttle — skip si pull < 5 min et pas forcé
+            if (!force) {
+                val localSettings = settingsDao.getSettingsOnce()
+                val lastPull = localSettings?.lastPulledAt
+                if (lastPull != null) {
+                    val elapsed = java.time.Instant.now().toEpochMilli() -
+                        java.time.Instant.parse(lastPull).toEpochMilli()
+                    if (elapsed < 5 * 60 * 1000) {
+                        android.util.Log.d(
+                            "SYNC",
+                            "Pull throttled — dernier pull il y a ${elapsed / 1000}s"
+                        )
+                        return SyncResult.Success
+                    }
+                }
+            }
+
             val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
 
             val localSettings = settingsDao.getSettingsOnce()
@@ -159,6 +201,7 @@ class SyncRepository @Inject constructor(
                 date = dateStr,
                 ifModifiedSince = ifModifiedSince
             )
+            
 
             val settings = response.settings ?: SettingsDto()
 
@@ -171,23 +214,31 @@ class SyncRepository @Inject constructor(
             val returnedInterventionIds = response.interventions.map { it.id }
             if (returnedInterventionIds.isEmpty()) {
                 equipmentDao.deleteEquipmentsForAllSyncedInterventionsOnDate(dateStr)
+                interventionDao.deleteSyncedOpenInterventionsForDateWhenPullEmpty(dateStr)
             } else {
-                equipmentDao.deleteEquipmentsForSyncedInterventionsNotInKeepList(dateStr, returnedInterventionIds)
+                equipmentDao.deleteEquipmentsForSyncedInterventionsNotInKeepList(
+                    dateStr,
+                    returnedInterventionIds,
+                )
+                interventionDao.deleteSyncedOpenForDateNotInKeepList(
+                    dateStr,
+                    returnedInterventionIds,
+                )
             }
-
-            interventionDao.deleteSyncedForDate(
-                date = dateStr,
-                keepIds = returnedInterventionIds,
-            )
 
             // Appel correct ici
             insertAllSafe(interventionEntities)
 
+            val cutoff48h = java.time.Instant.now()
+                .minusSeconds(48L * 60 * 60)
+                .toString()
+            interventionDao.resetStaleInProgressToScheduled(cutoff48h)
+
             response.interventions.forEach { dto ->
                 val existing = interventionDao.getInterventionByIdOnce(dto.id)
-                val preserveLocalCompleted =
-                    existing?.status == "completed" || existing?.status == "pending_validation"
-                if (!preserveLocalCompleted && dto.actualTypes.isNotEmpty()) {
+                val preserveLocalClosed =
+                    existing?.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL
+                if (!preserveLocalClosed && dto.actualTypes.isNotEmpty()) {
                     interventionActualTypeDao.deleteForIntervention(dto.id)
                     interventionActualTypeDao.insertAll(
                         dto.actualTypes.map { at ->
@@ -236,24 +287,68 @@ class SyncRepository @Inject constructor(
             // Dédupliquer les équipements — prioriser l'intervention active
             val equipmentMap = mutableMapOf<String, EquipmentEntity>()
             response.interventions
-                .sortedByDescending { it.status == "completed" } // terminées d'abord, actives en dernier
+                .sortedByDescending { it.status == INTERVENTION_STATUS_COMPLETED }
                 .forEach { intervention ->
-                    intervention.equipment.forEach { eq ->
-                        equipmentMap[eq.id] = EquipmentEntity(
-                            id = eq.id,
-                            interventionId = intervention.id,
-                            brand = eq.brand,
-                            model = eq.model,
-                            typeCode = eq.typeCode,
-                            energyCode = eq.energyCode,
-                            serialNumber = eq.serialNumber,
-                            installDate = eq.installDate,
-                            isPrimary = eq.isPrimary,
-                            equipmentCatalogId = eq.equipmentCatalogId,
-                            parentEquipmentId = eq.parentEquipmentId,
-                        )
+                    val existingIntervention =
+                        interventionDao.getInterventionByIdOnce(intervention.id)
+                    val blockLocalSync = existingIntervention?.syncStatus == "IN_PROGRESS" ||
+                        existingIntervention?.syncStatus == "PENDING"
+
+                    // Aligné sur deleteEquipmentsNotInList : seul IN_PROGRESS / PENDING bloque le serveur
+                    if (!blockLocalSync) {
+                        intervention.equipment.forEachIndexed { index, eq ->
+                            val catalogBrandId = eq.equipmentCatalogId?.let { cid ->
+                                catalogEquipmentDao.getBrandIdForCatalogEquipment(cid)
+                            }
+                            val ord = eq.order ?: (index + 1)
+                            val mapKey = "${intervention.id}_$ord"
+                            equipmentMap[mapKey] = EquipmentEntity(
+                                interventionId = intervention.id,
+                                order = ord,
+                                id = eq.id,
+                                unitId = intervention.unit.id,
+                                brand = eq.brand,
+                                model = eq.model,
+                                typeCode = eq.typeCode,
+                                energyCode = eq.energyCode,
+                                serialNumber = eq.serialNumber,
+                                installDate = eq.installDate,
+                                isPrimary = eq.isPrimary,
+                                equipmentCatalogId = eq.equipmentCatalogId,
+                                catalogBrandId = catalogBrandId,
+                                parentEquipmentId = eq.parentEquipmentId,
+                                powerKw = eq.powerKw?.let { p ->
+                                    if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
+                                },
+                                evacuationMode = eq.evacuationMode,
+                            )
+                        }
                     }
                 }
+
+            // Pour chaque intervention de la réponse : retirer les équipements de l'intervention
+            // absents côté serveur (sauf sync local IN_PROGRESS / PENDING).
+            response.interventions.forEach { intervention ->
+                val existingIntervention =
+                    interventionDao.getInterventionByIdOnce(intervention.id)
+                val isInProgress = existingIntervention?.syncStatus == "IN_PROGRESS"
+                val isPendingPush = existingIntervention?.syncStatus == "PENDING"
+
+                if (!isInProgress && !isPendingPush) {
+                    val serverOrders = intervention.equipment.mapIndexed { index, eq ->
+                        eq.order ?: (index + 1)
+                    }
+                    equipmentDao.deleteEquipmentsNotInList(
+                        interventionId = intervention.id,
+                        keepOrders = if (serverOrders.isEmpty()) {
+                            listOf(-1)
+                        } else {
+                            serverOrders
+                        },
+                    )
+                }
+            }
+
             equipmentDao.insertAll(equipmentMap.values.toList())
 
             response.referentiels?.let { refs ->
@@ -286,6 +381,36 @@ class SyncRepository @Inject constructor(
                     requireInvoiceValidation = response.technician.requireInvoiceValidation ?: false
                 )
             )
+
+            response.interventions.forEach { intervention ->
+                val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
+                val isInProgress = existingIntervention?.syncStatus == "IN_PROGRESS"
+                val isPendingPush = existingIntervention?.syncStatus == "PENDING"
+
+                android.util.Log.d("EQ_PURGE",
+                    "intervention=${intervention.id} " +
+                            "willPurge=${!isInProgress && !isPendingPush} " +
+                            "serverOrders=${
+                                intervention.equipment.mapIndexed { index, eq ->
+                                    eq.order ?: (index + 1)
+                                }
+                            }",
+                )
+
+                if (!isInProgress && !isPendingPush) {
+                    val serverOrders = intervention.equipment.mapIndexed { index, eq ->
+                        eq.order ?: (index + 1)
+                    }
+                    equipmentDao.deleteEquipmentsNotInList(
+                        interventionId = intervention.id,
+                        keepOrders = if (serverOrders.isEmpty()) {
+                            listOf(-1)
+                        } else {
+                            serverOrders
+                        },
+                    )
+                }
+            }
 
             val cutoffDate = date.minusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE)
             equipmentDao.deleteOlderThan(cutoffDate)
@@ -320,10 +445,60 @@ class SyncRepository @Inject constructor(
 
     suspend fun abandonInterventionLocally(interventionId: String) {
         pendingOperationDao.deleteByInterventionId(interventionId)
-        equipmentDao.deleteByInterventionId(interventionId)
+
+        val intervention = interventionDao.getInterventionByIdOnce(interventionId)
+        if (intervention != null) {
+            val toDelete = equipmentDao
+                .getEquipmentsByUnitId(intervention.unitId)
+                .filter { it.order >= 101 }
+            toDelete.forEach { eq ->
+                equipmentDao.deleteByInterventionAndOrder(eq.interventionId, eq.order)
+            }
+        }
+
+        val snapshots = equipmentSnapshotDao.getByInterventionId(interventionId)
+        val restored = snapshots.map { snap ->
+            EquipmentEntity(
+                interventionId = snap.interventionId.ifBlank { interventionId },
+                order = snap.order ?: 0,
+                id = snap.equipmentId,
+                unitId = snap.unitId ?: "",
+                brand = snap.brand,
+                model = snap.model,
+                typeCode = snap.typeCode,
+                energyCode = snap.energyCode,
+                serialNumber = snap.serialNumber,
+                installDate = snap.installDate,
+                isPrimary = snap.isPrimary,
+                equipmentCatalogId = snap.equipmentCatalogId,
+                catalogBrandId = snap.catalogBrandId,
+                parentEquipmentId = snap.parentEquipmentId,
+                powerKw = null,
+                evacuationMode = null,
+            )
+        }
+        if (restored.isNotEmpty()) {
+            equipmentDao.insertAll(restored)
+        }
+
         coldMeasureDao.deleteByInterventionId(interventionId)
+
+        measureRepository.deleteByInterventionId(interventionId)
+
+        equipmentSnapshotDao.deleteByInterventionId(interventionId)
+
         interventionActualTypeDao.deleteForIntervention(interventionId)
         interventionDao.resetToScheduledAfterAbandon(interventionId)
+    }
+
+    private companion object {
+        const val INTERVENTION_STATUS_COMPLETED = "completed"
+
+        /** Statuts d’intervention jamais créés ni mis à jour par le pull (ni supprimés par son nettoyage). */
+        val IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL = setOf(
+            INTERVENTION_STATUS_COMPLETED,
+            "pending_validation",
+        )
     }
 }
 
@@ -366,5 +541,6 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     report = report,
     completedAt = completedAt,
     startedAt = startedAt,
-    pulledAt = pulledAt
+    pulledAt = pulledAt,
+    isChantier = isChantier == true,
 )

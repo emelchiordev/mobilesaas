@@ -1,6 +1,5 @@
 package re.melchior.saviomobile.ui.screen.intervention.cloture
 
-import re.melchior.saviomobile.worker.SyncWorker
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -8,10 +7,6 @@ import android.graphics.Path
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.Constraints
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +18,7 @@ import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.remote.api.TourneeApi
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
+import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import java.io.File
 import java.io.FileOutputStream
@@ -69,8 +65,8 @@ data class ClotureSignatureUiState(
 @HiltViewModel
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val pushRepository: PushRepository,
     private val tourneeApi: TourneeApi,
-    private val workManager: WorkManager,
     private val settingsDao: SettingsDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -241,15 +237,8 @@ class ClotureSignatureViewModel @Inject constructor(
                     selectedTypes = selectedTypes
                 )
 
-                val constraints = Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-
-                val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-                    .setConstraints(constraints)
-                    .build()
-
-                workManager.enqueue(syncRequest)
+                val pushResult = pushRepository.push()
+                android.util.Log.d("ClotureVM", "Push result: $pushResult")
 
                 val requiresValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
                 _uiState.update {

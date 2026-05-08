@@ -40,12 +40,19 @@ class CerfaFroidViewModel @Inject constructor(
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
 
+    private val _hasPersistedData = MutableStateFlow(false)
+    val hasPersistedData: StateFlow<Boolean> = _hasPersistedData.asStateFlow()
+
     init {
         loadExisting()
     }
 
     private fun loadExisting() {
         viewModelScope.launch {
+            _hasPersistedData.value = repository.existsPersisted(
+                interventionId,
+                equipmentId,
+            )
             val existing = repository.getOrCreate(interventionId, equipmentId)
             _state.value = existing
         }
@@ -166,6 +173,7 @@ class CerfaFroidViewModel @Inject constructor(
         viewModelScope.launch {
             _isSaving.value = true
             repository.save(_state.value)
+            _hasPersistedData.value = true
             _isSaving.value = false
         }
     }

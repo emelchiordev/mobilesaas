@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,14 +43,16 @@ data class EquipementDetailUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class EquipementDetailViewModel @Inject constructor(
-    private val syncRepository: SyncRepository,
     private val catalogSyncRepository: CatalogSyncRepository,
     private val pendingOperationDao: PendingOperationDao,
     private val equipmentDao: EquipmentDao,
+    private val syncRepository: SyncRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
+    private val interventionId: String = checkNotNull(savedStateHandle["interventionId"])
     private val equipmentId: String = checkNotNull(savedStateHandle["equipmentId"])
+    val currentInterventionId: String get() = interventionId
 
     private val _uiState = MutableStateFlow(EquipementDetailUiState())
     val uiState: StateFlow<EquipementDetailUiState> = _uiState.asStateFlow()
@@ -77,6 +81,31 @@ class EquipementDetailViewModel @Inject constructor(
             catalogSyncRepository.searchEquipment(q, null, null, null)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** True si cet équipement est issu d'un CREATE/REPLACE encore en attente de sync (badge « Nouveau »). */
+    val isNewEquipment: StateFlow<Boolean> =
+        equipmentDao
+            .getEquipmentByInterventionAndServerId(interventionId, equipmentId)
+            .flatMapLatest { eq ->
+                if (eq == null) {
+                    flowOf(false)
+                } else {
+                    pendingOperationDao.getPendingByInterventionId(interventionId).map { ops ->
+                        ops.any {
+                            it.id == equipmentId &&
+                                (
+                                    it.type == "CREATE_EQUIPMENT" ||
+                                        it.type == "REPLACE_EQUIPMENT"
+                                    )
+                        }
+                    }
+                }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = false,
+            )
 
     init {
         loadEquipment()
@@ -133,6 +162,7 @@ class EquipementDetailViewModel @Inject constructor(
                 typeCode = type?.code ?: eq.typeCode,
                 energyCode = energy?.code ?: eq.energyCode,
                 equipmentCatalogId = selected.equipment.id,
+                catalogBrandId = selected.equipment.brandId,
             )
             equipmentDao.insertAll(listOf(updated))
 
@@ -146,7 +176,7 @@ class EquipementDetailViewModel @Inject constructor(
 
     private fun loadEquipment() {
         viewModelScope.launch {
-            syncRepository.getEquipmentById(equipmentId)
+            equipmentDao.getEquipmentByInterventionAndServerId(interventionId, equipmentId)
                 .collect { equipment ->
                     _uiState.update { it.copy(equipment = equipment) }
                     viewModelScope.launch {
@@ -156,8 +186,8 @@ class EquipementDetailViewModel @Inject constructor(
                         } else {
                             null
                         }
-                        _interventionUnitId.value = equipment?.let { eq ->
-                            syncRepository.getInterventionByIdOnce(eq.interventionId)?.unitId
+                        _interventionUnitId.value = equipment?.let {
+                            syncRepository.getInterventionByIdOnce(interventionId)?.unitId
                         }
                     }
                 }
@@ -228,7 +258,7 @@ class EquipementDetailViewModel @Inject constructor(
 
             val existingCreate = pendingOperationDao.getByIdAndType(eq.id, "CREATE_EQUIPMENT")
 
-            equipmentDao.deleteById(eq.id, eq.interventionId)
+            equipmentDao.deleteByInterventionAndOrder(eq.interventionId, eq.order)
 
             if (existingCreate != null) {
                 pendingOperationDao.deleteById(existingCreate.id)

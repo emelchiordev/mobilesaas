@@ -7,8 +7,12 @@ import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InvoiceDao
 import re.melchior.saviomobile.data.local.dao.InvoiceLineDao
+import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
+import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
+import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
+import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.remote.api.PushApi
 import re.melchior.saviomobile.data.remote.dto.PushOperationDto
 import re.melchior.saviomobile.data.remote.dto.PushRequestDto
@@ -18,6 +22,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 sealed class PushResult {
     object Success : PushResult()
@@ -41,6 +47,9 @@ class PushRepository @Inject constructor(
     private val pendingUpdateDao: PendingUpdateDao,
     private val pendingOperationDao: PendingOperationDao,
     private val coldMeasureRepository: ColdMeasureRepository,
+    private val measureRepository: MeasureRepository,
+    private val attestationVeRepository: AttestationVeRepository,
+    private val attestationVePointControleDao: AttestationVePointControleDao,
     @ApplicationContext private val context: Context
 ) {
 
@@ -48,265 +57,456 @@ class PushRepository @Inject constructor(
         MutableSharedFlow<ConflictEvent>(extraBufferCapacity = 64)
     val conflictEvents: SharedFlow<ConflictEvent> = _conflictEvents.asSharedFlow()
 
+    private val pushMutex = Mutex()
+
     suspend fun push(): PushResult {
-        return try {
-            val pendingInterventions = interventionDao.getPendingSyncOnce()
-            val pendingUpdates = pendingUpdateDao.getPendingOnce()
-            val pendingOps = pendingOperationDao.getPending()
-            val dirtyColdMeasures = coldMeasureRepository.getDirty()
+        if (pushMutex.isLocked) return PushResult.NothingToPush
+        return pushMutex.withLock {
+            try {
+                val pendingInterventions = interventionDao.getPendingSyncOnce()
+                val pendingUpdates = pendingUpdateDao.getPendingOnce()
+                val pendingOps = pendingOperationDao.getPending()
+                val dirtyColdMeasures = coldMeasureRepository.getDirty()
+                val dirtyMeasures = measureRepository.getDirty()
+                val dirtyAttestations = attestationVeRepository.getDirty()
 
-            if (pendingInterventions.isEmpty() &&
-                pendingUpdates.isEmpty() &&
-                pendingOps.isEmpty() &&
-                dirtyColdMeasures.isEmpty()
-            ) {
-                return PushResult.NothingToPush
-            }
+                if (pendingInterventions.isEmpty() &&
+                    pendingUpdates.isEmpty() &&
+                    pendingOps.isEmpty() &&
+                    dirtyColdMeasures.isEmpty() &&
+                    dirtyMeasures.isEmpty() &&
+                    dirtyAttestations.isEmpty()
+                ) {
+                    return PushResult.NothingToPush
+                }
+    
+                val startOps = mutableListOf<PushOperationDto>()
+                val completeOps = mutableListOf<PushOperationDto>()
 
-            val operations = mutableListOf<PushOperationDto>()
+                pendingInterventions.forEach { intervention ->
+                    intervention.startedAt?.let { startedAt ->
+                        startOps.add(
+                            PushOperationDto(
+                                id = "op-start-${intervention.id}",
+                                type = "START_INTERVENTION",
+                                occurredAt = startedAt,
+                                payload = mapOf(
+                                    "interventionId" to intervention.id,
+                                    "startedAt" to startedAt
+                                )
+                            )
+                        )
+                    }
+                    intervention.completedAt?.let { completedAt ->
+                        val storedActualTypes =
+                            interventionActualTypeDao
+                                .getActualTypesForInterventionOnce(intervention.id)
+                        val actualTypeIds = if (storedActualTypes.isNotEmpty()) {
+                            storedActualTypes.map { it.interventionTypeId }
+                        } else {
+                            listOfNotNull(intervention.actualTypeId)
+                                .filter { it.isNotBlank() }
+                        }
+                        completeOps.add(
+                            PushOperationDto(
+                                id = "op-complete-${intervention.id}",
+                                type = "COMPLETE_INTERVENTION",
+                                occurredAt = completedAt,
+                                payload = mapOf(
+                                    "interventionId" to intervention.id,
+                                    "report" to (intervention.report ?: ""),
+                                    "completedAt" to completedAt,
+                                    "actualTypeIds" to actualTypeIds,
+                                    "actualTypeId" to (actualTypeIds.firstOrNull() ?: "")
+                                )
+                            )
+                        )
+                    }
+                }
 
-            pendingInterventions.forEach { intervention ->
-                intervention.startedAt?.let { startedAt ->
+                val operations = mutableListOf<PushOperationDto>()
+
+                operations.addAll(startOps)
+
+                pendingUpdates.forEach { update ->
+                    val payload = com.google.gson.Gson()
+                        .fromJson(update.payload, Map::class.java) as Map<String, Any?>
+                    val operationId =
+                        if (update.id.startsWith("op-")) update.id
+                        else "op-update-${update.id}"
                     operations.add(
                         PushOperationDto(
-                            id = "op-start-${intervention.id}",
-                            type = "START_INTERVENTION",
-                            occurredAt = startedAt,
-                            payload = mapOf(
-                                "interventionId" to intervention.id,
-                                "startedAt" to startedAt
-                            )
+                            id = operationId,
+                            type = update.type,
+                            occurredAt = update.occurredAt,
+                            payload = payload
                         )
                     )
                 }
-                intervention.completedAt?.let { completedAt ->
-                    val storedActualTypes =
-                        interventionActualTypeDao.getActualTypesForInterventionOnce(intervention.id)
-                    val actualTypeIds = if (storedActualTypes.isNotEmpty()) {
-                        storedActualTypes.map { it.interventionTypeId }
-                    } else {
-                        listOfNotNull(intervention.actualTypeId).filter { it.isNotBlank() }
-                    }
+
+                pendingOps.forEach { op ->
+                    val payload = com.google.gson.Gson()
+                        .fromJson(op.payload, Map::class.java) as Map<String, Any?>
                     operations.add(
                         PushOperationDto(
-                            id = "op-complete-${intervention.id}",
-                            type = "COMPLETE_INTERVENTION",
-                            occurredAt = completedAt,
-                            payload = mapOf(
-                                "interventionId" to intervention.id,
-                                "report" to (intervention.report ?: ""),
-                                "completedAt" to completedAt,
-                                "actualTypeIds" to actualTypeIds,
-                                "actualTypeId" to (actualTypeIds.firstOrNull() ?: "")
-                            )
+                            id = op.id,
+                            type = op.type,
+                            occurredAt = op.occurredAt,
+                            payload = payload
                         )
                     )
                 }
-            }
 
-            pendingUpdates.forEach { update ->
-                val payload = com.google.gson.Gson()
-                    .fromJson(update.payload, Map::class.java) as Map<String, Any?>
-                val operationId =
-                    if (update.id.startsWith("op-")) update.id else "op-update-${update.id}"
-                operations.add(
-                    PushOperationDto(
-                        id = operationId,
-                        type = update.type,
-                        occurredAt = update.occurredAt,
-                        payload = payload
+                operations.addAll(completeOps)
+
+                dirtyColdMeasures.forEach { measure ->
+                    val payload = buildMap<String, Any?> {
+                        put("interventionId", measure.interventionId)
+                        put("equipmentId", measure.equipmentId)
+                        put("frigo", measure.frigo)
+                        put("charg", measure.charg.toDoubleOrNull())
+                        put("tonnage", measure.tonnage)
+                        put("minter1", measure.minter1)
+                        put("minter2", measure.minter2)
+                        put("minter3", measure.minter3)
+                        put("minter4", measure.minter4)
+                        put("minter5", measure.minter5)
+                        put("minter6", measure.minter6)
+                        put("minter7", measure.minter7)
+                        put("minter8", measure.minter8)
+                        put("minteraut", measure.minteraut)
+                        put("obsern1", measure.obsern1)
+                        put("obsern2", measure.obsern2)
+                        put("detm1", measure.detm1)
+                        put("dett1", measure.dett1)
+                        put("detd1", measure.detd1.ifBlank { null })
+                        put("autofuite", measure.autofuite)
+                        put("qtefri", measure.qtefri.toDoubleOrNull())
+                        put("qtefri2", measure.qtefri2.toDoubleOrNull())
+                        put("freqs1", measure.freqs1)
+                        put("freqs2", measure.freqs2)
+                        put("freqs3", measure.freqs3)
+                        put("freqa1", measure.freqa1)
+                        put("freqa2", measure.freqa2)
+                        put("freqa3", measure.freqa3)
+                        put("pasfuite", measure.pasfuite)
+                        put("fuiteloc1", measure.fuiteloc1)
+                        put("fuiterep1", measure.fuiterep1)
+                        put("fuiteloc2", measure.fuiteloc2)
+                        put("fuiterep2", measure.fuiterep2)
+                        put("fuiteloc3", measure.fuiteloc3)
+                        put("fuiterep3", measure.fuiterep3)
+                        put("fluidrein", measure.fluidrein.toDoubleOrNull())
+                        put("fluidecv", measure.fluidecv.toDoubleOrNull())
+                        put("fluidecr", measure.fluidecr.toDoubleOrNull())
+                        put("fluidecrg", measure.fluidecrg.toDoubleOrNull())
+                        put("fluidrecup", measure.fluidrecup.toDoubleOrNull())
+                        put("fluidert", measure.fluidert.toDoubleOrNull())
+                        put("fluideru", measure.fluideru.toDoubleOrNull())
+                        put("fluiderc", measure.fluiderc)
+                        put("un1078a", measure.un1078a)
+                        put("un1078b", measure.un1078b)
+                        put("nomdec", measure.nomdec)
+                        put("adres1dec", measure.adres1dec)
+                        put("adres2dec", measure.adres2dec)
+                        put("villedec", measure.villedec)
+                        put("nomtrans", measure.nomtrans)
+                        put("adres1trans", measure.adres1trans)
+                        put("adres2trans", measure.adres2trans)
+                        put("villetrans", measure.villetrans)
+                        put("fluidobs", measure.fluidobs)
+                        put("fluidobs2", measure.fluidobs2)
+                        put("bordeqte", measure.bordeqte)
+                        put("bordetrans", measure.bordetrans)
+                        put("instatrait", measure.instatrait)
+                        put("coderd", measure.coderd)
+                        put("qterecep", measure.qterecep.toDoubleOrNull())
+                        put("frigo2", measure.frigo2)
+                        put("bsff", measure.bsff)
+                        put("un3161a", measure.un3161a)
+                        put("un3161b", measure.un3161b)
+                    }
+                    operations.add(
+                        PushOperationDto(
+                            id = measure.id,
+                            type = "SAVE_COLD_MEASURE",
+                            occurredAt = measure.updatedAt.ifBlank {
+                                Instant.now().toString()
+                            },
+                            payload = payload,
+                        ),
+                    )
+                }
+
+                dirtyMeasures.forEach { measure ->
+                    operations.add(
+                        PushOperationDto(
+                            id = measure.interventionId +
+                                "_measure_" +
+                                measure.equipmentOrder,
+                            type = "SAVE_MEASURE",
+                            occurredAt = measure.updatedAt.ifBlank {
+                                Instant.now().toString()
+                            },
+                            payload = buildMeasurePayload(measure),
+                        ),
+                    )
+                }
+
+                dirtyAttestations.forEach { attestation ->
+                    val points = attestationVePointControleDao.getByAttestationOnce(
+                        attestation.interventionId,
+                        attestation.equipmentOrder,
+                        attestation.type,
+                    )
+                    operations.add(
+                        PushOperationDto(
+                            id = attestation.interventionId +
+                                "_attestation_" +
+                                attestation.equipmentOrder +
+                                "_" +
+                                attestation.type,
+                            type = "SAVE_ATTESTATION_VE",
+                            occurredAt = attestation.updatedAt.ifBlank {
+                                Instant.now().toString()
+                            },
+                            payload = buildAttestationPayload(attestation, points),
+                        ),
+                    )
+                }
+
+                if (operations.isEmpty()) return PushResult.NothingToPush
+    
+                val deviceId = Settings.Secure.getString(
+                    context.contentResolver,
+                    Settings.Secure.ANDROID_ID
+                ) ?: "unknown-device"
+    
+                val response = pushApi.push(
+                    PushRequestDto(
+                        deviceId = deviceId,
+                        pushedAt = Instant.now().toString(),
+                        operations = operations
                     )
                 )
-            }
-
-            pendingOps.forEach { op ->
-                val payload = com.google.gson.Gson()
-                    .fromJson(op.payload, Map::class.java) as Map<String, Any?>
-                operations.add(
-                    PushOperationDto(
-                        id = op.id,
-                        type = op.type,
-                        occurredAt = op.occurredAt,
-                        payload = payload
-                    )
-                )
-            }
-
-            dirtyColdMeasures.forEach { measure ->
-                val payload = buildMap<String, Any?> {
-                    put("interventionId", measure.interventionId)
-                    put("equipmentId", measure.equipmentId)
-                    put("frigo", measure.frigo)
-                    put("charg", measure.charg.toDoubleOrNull())
-                    put("tonnage", measure.tonnage)
-                    put("minter1", measure.minter1)
-                    put("minter2", measure.minter2)
-                    put("minter3", measure.minter3)
-                    put("minter4", measure.minter4)
-                    put("minter5", measure.minter5)
-                    put("minter6", measure.minter6)
-                    put("minter7", measure.minter7)
-                    put("minter8", measure.minter8)
-                    put("minteraut", measure.minteraut)
-                    put("obsern1", measure.obsern1)
-                    put("obsern2", measure.obsern2)
-                    put("detm1", measure.detm1)
-                    put("dett1", measure.dett1)
-                    put("detd1", measure.detd1.ifBlank { null })
-                    put("autofuite", measure.autofuite)
-                    put("qtefri", measure.qtefri.toDoubleOrNull())
-                    put("qtefri2", measure.qtefri2.toDoubleOrNull())
-                    put("freqs1", measure.freqs1)
-                    put("freqs2", measure.freqs2)
-                    put("freqs3", measure.freqs3)
-                    put("freqa1", measure.freqa1)
-                    put("freqa2", measure.freqa2)
-                    put("freqa3", measure.freqa3)
-                    put("pasfuite", measure.pasfuite)
-                    put("fuiteloc1", measure.fuiteloc1)
-                    put("fuiterep1", measure.fuiterep1)
-                    put("fuiteloc2", measure.fuiteloc2)
-                    put("fuiterep2", measure.fuiterep2)
-                    put("fuiteloc3", measure.fuiteloc3)
-                    put("fuiterep3", measure.fuiterep3)
-                    put("fluidrein", measure.fluidrein.toDoubleOrNull())
-                    put("fluidecv", measure.fluidecv.toDoubleOrNull())
-                    put("fluidecr", measure.fluidecr.toDoubleOrNull())
-                    put("fluidecrg", measure.fluidecrg.toDoubleOrNull())
-                    put("fluidrecup", measure.fluidrecup.toDoubleOrNull())
-                    put("fluidert", measure.fluidert.toDoubleOrNull())
-                    put("fluideru", measure.fluideru.toDoubleOrNull())
-                    put("fluiderc", measure.fluiderc)
-                    put("un1078a", measure.un1078a)
-                    put("un1078b", measure.un1078b)
-                    put("nomdec", measure.nomdec)
-                    put("adres1dec", measure.adres1dec)
-                    put("adres2dec", measure.adres2dec)
-                    put("villedec", measure.villedec)
-                    put("nomtrans", measure.nomtrans)
-                    put("adres1trans", measure.adres1trans)
-                    put("adres2trans", measure.adres2trans)
-                    put("villetrans", measure.villetrans)
-                    put("fluidobs", measure.fluidobs)
-                    put("fluidobs2", measure.fluidobs2)
-                    put("bordeqte", measure.bordeqte)
-                    put("bordetrans", measure.bordetrans)
-                    put("instatrait", measure.instatrait)
-                    put("coderd", measure.coderd)
-                    put("qterecep", measure.qterecep.toDoubleOrNull())
-                    put("frigo2", measure.frigo2)
-                    put("bsff", measure.bsff)
-                    put("un3161a", measure.un3161a)
-                    put("un3161b", measure.un3161b)
+    
+                val allOk = response.results.all {
+                    it.status == "ok"
                 }
-                operations.add(
-                    PushOperationDto(
-                        id = measure.id,
-                        type = "SAVE_COLD_MEASURE",
-                        occurredAt = measure.updatedAt.ifBlank {
-                            Instant.now().toString()
-                        },
-                        payload = payload,
-                    ),
-                )
-            }
-
-            if (operations.isEmpty()) return PushResult.NothingToPush
-
-            val deviceId = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID
-            ) ?: "unknown-device"
-
-            val response = pushApi.push(
-                PushRequestDto(
-                    deviceId = deviceId,
-                    pushedAt = Instant.now().toString(),
-                    operations = operations
-                )
-            )
-
-            val allOk = response.results.all {
-                it.status == "ok"
-            }
-
-            if (allOk) {
-                response.results.forEach { result ->
-                    pendingOps.find { it.id == result.operationId }?.let {
-                        pendingOperationDao.updateStatus(it.id, "sent")
-                    }
-                    dirtyColdMeasures.find { it.id == result.operationId }?.let {
-                        coldMeasureRepository.markClean(it.id)
-                    }
-                }
-                response.results.forEach { result ->
-                    if (result.operationId.startsWith("op-complete-")) {
-                        val interventionId = result.operationId
-                            .removePrefix("op-complete-")
-                        interventionDao.markAsSynced(interventionId)
-                    }
-                }
-                response.results.forEach { result ->
-                    when {
-                        result.operationId.startsWith("op-update-") -> {
-                            val updateId = result.operationId.removePrefix("op-update-")
-                            pendingUpdateDao.markAsSynced(updateId)
+    
+                if (allOk) {
+                    response.results.forEach { result ->
+                        pendingOps.find { it.id == result.operationId }?.let {
+                            pendingOperationDao.updateStatus(it.id, "sent")
                         }
-                        result.operationId.startsWith("op-submit-invoice-") -> {
-                            val localInvoiceId =
-                                result.operationId.removePrefix("op-submit-invoice-")
-                            result.serverData?.let { data ->
-                                val serverId = data["invoiceId"] as? String
-                                val serverNumber = data["invoiceNumber"] as? String
-                                val serverStatus = data["invoiceStatus"] as? String
-                                if (serverId != null) {
-                                    if (serverId != localInvoiceId) {
-                                        invoiceLineDao.reassignToInvoice(
-                                            localInvoiceId,
-                                            serverId
-                                        )
-                                    }
-                                    invoiceDao.updateServerData(
-                                        localId = localInvoiceId,
-                                        serverId = serverId,
-                                        number = serverNumber,
-                                        status = serverStatus ?: "pending_validation"
-                                    )
-                                }
-                            }
-                            pendingUpdateDao.markAsSynced(result.operationId)
+                        dirtyColdMeasures.find { it.id == result.operationId }?.let {
+                            coldMeasureRepository.markClean(it.id)
+                        }
+                        dirtyMeasures.find {
+                            result.operationId ==
+                                it.interventionId + "_measure_" + it.equipmentOrder
+                        }?.let {
+                            measureRepository.markClean(
+                                it.interventionId,
+                                it.equipmentOrder,
+                            )
+                        }
+                        dirtyAttestations.find {
+                            result.operationId ==
+                                it.interventionId + "_attestation_" +
+                                it.equipmentOrder + "_" + it.type
+                        }?.let {
+                            attestationVeRepository.markClean(
+                                it.interventionId,
+                                it.equipmentOrder,
+                                it.type,
+                            )
                         }
                     }
-                }
-                pendingUpdateDao.deleteSynced()
-            } else {
-                android.util.Log.w(
-                    "PushRepository",
-                    "Push partiel ou échoué — opérations conservées pour réessai"
-                )
-                response.results
-                    .filter { it.status == "conflict" }
-                    .forEach { result ->
+                    response.results.forEach { result ->
                         if (result.operationId.startsWith("op-complete-")) {
                             val interventionId = result.operationId
                                 .removePrefix("op-complete-")
-                            interventionDao.markAsConflict(interventionId)
-                            _conflictEvents.emit(
-                                ConflictEvent(
-                                    interventionId = interventionId,
-                                    conflictType = result.conflictType ?: "UNKNOWN",
-                                    message = result.message
-                                        ?: result.reason
-                                        ?: "Conflit détecté.",
-                                )
-                            )
+                            interventionDao.markAsSynced(interventionId)
                         }
                     }
-            }
+                    response.results.forEach { result ->
+                        when {
+                            result.operationId.startsWith("op-update-") -> {
+                                val updateId = result.operationId.removePrefix("op-update-")
+                                pendingUpdateDao.markAsSynced(updateId)
+                            }
+                            result.operationId.startsWith("op-submit-invoice-") -> {
+                                val localInvoiceId =
+                                    result.operationId.removePrefix("op-submit-invoice-")
+                                result.serverData?.let { data ->
+                                    val serverId = data["invoiceId"] as? String
+                                    val serverNumber = data["invoiceNumber"] as? String
+                                    val serverStatus = data["invoiceStatus"] as? String
+                                    if (serverId != null) {
+                                        if (serverId != localInvoiceId) {
+                                            invoiceLineDao.reassignToInvoice(
+                                                localInvoiceId,
+                                                serverId
+                                            )
+                                        }
+                                        invoiceDao.updateServerData(
+                                            localId = localInvoiceId,
+                                            serverId = serverId,
+                                            number = serverNumber,
+                                            status = serverStatus ?: "pending_validation"
+                                        )
+                                    }
+                                }
+                                pendingUpdateDao.markAsSynced(result.operationId)
+                            }
+                        }
+                    }
+                    pendingUpdateDao.deleteSynced()
+                } else {
+                    android.util.Log.w(
+                        "PushRepository",
+                        "Push partiel ou échoué — opérations conservées pour réessai"
+                    )
+                    response.results
+                        .filter { it.status == "conflict" }
+                        .forEach { result ->
+                            if (result.operationId.startsWith("op-complete-")) {
+                                val interventionId = result.operationId
+                                    .removePrefix("op-complete-")
+                                interventionDao.markAsConflict(interventionId)
+                                _conflictEvents.emit(
+                                    ConflictEvent(
+                                        interventionId = interventionId,
+                                        conflictType = result.conflictType ?: "UNKNOWN",
+                                        message = result.message
+                                            ?: result.reason
+                                            ?: "Conflit détecté.",
+                                    )
+                                )
+                            }
+                        }
+                }
 
-            PushResult.Success
-        } catch (e: Exception) {
-            PushResult.Error(e.message ?: "Erreur de synchronisation")
+                PushResult.Success
+            } catch (e: Exception) {
+                PushResult.Error(e.message ?: "Erreur de synchronisation")
+            }
         }
+    }
+
+    private fun buildMeasurePayload(
+        measure: MeasureEntity,
+    ): Map<String, Any?> = buildMap {
+        put("interventionId", measure.interventionId)
+        put("equipmentOrder", measure.equipmentOrder)
+        put("co", measure.co)
+        put("coamb", measure.coamb)
+        put("co2", measure.co2)
+        put("o2", measure.o2)
+        put("tair", measure.tair)
+        put("temfu", measure.temfu)
+        put("rend", measure.rend)
+        put("nox", measure.nox)
+        put("eta", measure.eta)
+        put("thpa", measure.thpa)
+        put("no", measure.no)
+        put("no2", measure.no2)
+        put("o2ven", measure.o2ven)
+        put("condilu", measure.condilu)
+        put("tgaz", measure.tgaz)
+        put("ta", measure.ta)
+        put("pregas", measure.pregas)
+        put("prega", measure.prega)
+        put("pregn", measure.pregn)
+        put("pregm", measure.pregm)
+        put("puisgaz", measure.puisgaz)
+        put("debga", measure.debga)
+        put("temec", measure.temec)
+        put("temef", measure.temef)
+        put("delta", measure.delta)
+        put("debio", measure.debio)
+        put("debfuel", measure.debfuel)
+        put("prefp", measure.prefp)
+        put("puisfuel", measure.puisfuel)
+        put("pulve", measure.pulve)
+        put("spot", measure.spot)
+        put("testdsc", measure.testdsc)
+        put("remplacond", measure.remplacond)
+        put("templagigleur", measure.templagigleur)
+        put("remplapoly", measure.remplapoly)
+        put("etaventil", measure.etaventil)
+        put("ctranode", measure.ctranode)
+        put("ctrextvmc", measure.ctrextvmc)
+        put("suie1", measure.suie1)
+        put("suie2", measure.suie2)
+        put("suie3", measure.suie3)
+        put("residhuil", measure.residhuil)
+        put("opaci", measure.opaci)
+        put("ionis", measure.ionis)
+        put("pgevg", measure.pgevg)
+        put("pgepg", measure.pgepg)
+        put("depre", measure.depre)
+        put("depr2", measure.depr2)
+        put("gican", measure.gican)
+        put("gicle", measure.gicle)
+        put("pabs", measure.pabs)
+        put("perte", measure.perte)
+        put("ppm", measure.ppm)
+        put("obser", measure.obser)
+    }
+
+    private fun buildAttestationPayload(
+        a: AttestationVeEntity,
+        points: List<AttestationVePointControleEntity>,
+    ): Map<String, Any?> = buildMap {
+        put("interventionId", a.interventionId)
+        put("equipmentOrder", a.equipmentOrder)
+        put("type", a.type)
+        put("appareilMesure", a.appareilMesure.ifBlank { null })
+        put("defautsCorriges", a.defautsCorriges.ifBlank { null })
+        put("recommandationUsage", a.recommandationUsage.ifBlank { null })
+        put("recommandationAmeliorations", a.recommandationAmeliorations.ifBlank { null })
+        put("recommandationRemplacement", a.recommandationRemplacement.ifBlank { null })
+        put("commentaire", a.commentaire.ifBlank { null })
+        put("nomPersonnePresente", a.nomPersonnePresente.ifBlank { null })
+        put("remarquesHydraulique", a.remarquesHydraulique.ifBlank { null })
+        put("remarquesRegulation", a.remarquesRegulation.ifBlank { null })
+        put("remarquesGenerateur", a.remarquesGenerateur.ifBlank { null })
+        put("co", a.co.toDoubleOrNull())
+        put("coConduitPpm", a.coConduitPpm)
+        put("tempFumees", a.tempFumees.toDoubleOrNull())
+        put("tempAmbiante", a.tempAmbiante.toDoubleOrNull())
+        put("co2Fumees", a.co2Fumees.toDoubleOrNull())
+        put("o2Fumees", a.o2Fumees.toDoubleOrNull())
+        put("rendementEvalue", a.rendementEvalue.toDoubleOrNull())
+        put("noxEmissions", a.noxEmissions.toDoubleOrNull())
+        put("classeEnergetique", a.classeEnergetique.ifBlank { null })
+        put("indiceNoircissement", a.indiceNoircissement.toDoubleOrNull())
+        put("pressionGicleur", a.pressionGicleur.toDoubleOrNull())
+        put("emissionsPoussieres", a.emissionsPoussieres.toDoubleOrNull())
+        put("emissionsCov", a.emissionsCov.toDoubleOrNull())
+        put("tExterieurChauf", a.tExterieurChauf.toDoubleOrNull())
+        put("tExterieurRefroid", a.tExterieurRefroid.toDoubleOrNull())
+        put("tInterieurChauf", a.tInterieurChauf.toDoubleOrNull())
+        put("tInterieurRefroid", a.tInterieurRefroid.toDoubleOrNull())
+        put("tensionStatique", a.tensionStatique.toDoubleOrNull())
+        put("tensionDynamique", a.tensionDynamique.toDoubleOrNull())
+        put("fluideRef", a.fluideRef.ifBlank { null })
+        put("chargeTotale", a.chargeTotale.toDoubleOrNull())
+        put("pressionBp", a.pressionBp.toDoubleOrNull())
+        put("pressionHp", a.pressionHp.toDoubleOrNull())
+        put("bruleurMarque", a.bruleurMarque)
+        put("bruleurModele", a.bruleurModele)
+        put("bruleurSerialNumber", a.bruleurSerialNumber)
+        put("bruleurCommissioningDate", a.bruleurCommissioningDate)
+        put("bruleurPuissanceKw", a.bruleurPuissanceKw)
+        put("bruleurEquipmentOrder", a.bruleurEquipmentOrder)
+        put(
+            "points",
+            points.map { p ->
+                mapOf("cle" to p.cle, "resultat" to p.resultat)
+            },
+        )
     }
 }

@@ -18,6 +18,7 @@ fun TourneeDetailNavHost(
     modifier: Modifier,
     detailNavController: NavHostController,
     onStartIntervention: (String) -> Unit,
+    onClientClick: (String) -> Unit = {},
 ) {
     NavHost(
         navController = detailNavController,
@@ -36,6 +37,7 @@ fun TourneeDetailNavHost(
             InterventionDetailScreen(
                 onBack = { detailNavController.popBackStack() },
                 onStartIntervention = onStartIntervention,
+                onClientClick = onClientClick,
                 embeddedInMasterDetail = true,
             )
         }

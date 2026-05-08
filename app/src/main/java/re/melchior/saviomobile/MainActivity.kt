@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge : équivalent à WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()
 
         // Enregistrer les workers périodiques

@@ -80,17 +80,26 @@ class CatalogSearchViewModel @Inject constructor(
         viewModelScope.launch {
             _isCreating.value = true
             try {
+                val nextMobileOrder = (
+                    equipmentDao.getMaxOrderForUnit(unitId)?.takeIf { it >= 101 } ?: 100
+                ) + 1
                 val newId = java.util.UUID.randomUUID().toString()
                 val brand = catalogSyncRepository.getNomenclatureById(row.equipment.brandId)
                 val type = catalogSyncRepository.getNomenclatureById(row.equipment.equipmentTypeId)
                 val energy = catalogSyncRepository.getNomenclatureById(row.equipment.energyId)
 
                 if (existingEquipmentId != null) {
-                    equipmentDao.markAsReplaced(existingEquipmentId, interventionId)
+                    val oldEq = equipmentDao.getEquipmentsByInterventionOnce(interventionId)
+                        .find { it.id == existingEquipmentId }
+                    if (oldEq != null) {
+                        equipmentDao.markAsReplaced(oldEq.interventionId, oldEq.order)
+                    }
 
                     val entity = EquipmentEntity(
-                        id = newId,
                         interventionId = interventionId,
+                        order = nextMobileOrder,
+                        id = newId,
+                        unitId = unitId,
                         brand = brand?.label,
                         model = row.equipment.model,
                         typeCode = type?.code,
@@ -99,12 +108,19 @@ class CatalogSearchViewModel @Inject constructor(
                         installDate = null,
                         isPrimary = false,
                         equipmentCatalogId = row.equipment.id,
+                        catalogBrandId = row.equipment.brandId,
                         parentEquipmentId = parentEquipmentId,
+                        powerKw = row.equipment.powerKw?.let { p ->
+                            if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
+                        },
+                        evacuationMode = null,
                     )
                     equipmentDao.insertAll(listOf(entity))
 
                     val payload = mapOf(
+                        "interventionId" to interventionId,
                         "unitId" to unitId,
+                        "order" to nextMobileOrder,
                         "oldEquipmentId" to existingEquipmentId,
                         "model" to row.equipment.model,
                         "brand" to (brand?.label ?: ""),
@@ -131,8 +147,10 @@ class CatalogSearchViewModel @Inject constructor(
                     pendingOperationDao.insert(op)
                 } else {
                     val entity = EquipmentEntity(
-                        id = newId,
                         interventionId = interventionId,
+                        order = nextMobileOrder,
+                        id = newId,
+                        unitId = unitId,
                         brand = brand?.label,
                         model = row.equipment.model,
                         typeCode = type?.code,
@@ -141,12 +159,19 @@ class CatalogSearchViewModel @Inject constructor(
                         installDate = null,
                         isPrimary = false,
                         equipmentCatalogId = row.equipment.id,
+                        catalogBrandId = row.equipment.brandId,
                         parentEquipmentId = parentEquipmentId,
+                        powerKw = row.equipment.powerKw?.let { p ->
+                            if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
+                        },
+                        evacuationMode = null,
                     )
                     equipmentDao.insertAll(listOf(entity))
 
                     val payload = mapOf(
+                        "interventionId" to interventionId,
                         "unitId" to unitId,
+                        "order" to nextMobileOrder,
                         "model" to row.equipment.model,
                         "brand" to (brand?.label ?: ""),
                         "brandCode" to (brand?.code ?: ""),

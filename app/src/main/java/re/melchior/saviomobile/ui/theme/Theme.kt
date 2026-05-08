@@ -18,9 +18,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 val SavioColors = lightColorScheme(
-    primary = Color(0xFF185FA5),
+    primary = SavioPalette.Primary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF0C447C),
+    primaryContainer = SavioPalette.PrimaryDark,
     onPrimaryContainer = Color.White,
     secondary = Color(0xFFE6F1FB),
     onSecondary = Color(0xFF0C447C),

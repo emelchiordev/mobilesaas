@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,27 +38,30 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -77,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -87,9 +92,18 @@ import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.R
 import re.melchior.saviomobile.ui.component.PhotoGrid
+import re.melchior.saviomobile.ui.component.SavioEmptyState
+import re.melchior.saviomobile.ui.component.SavioInterventionDetailSkeleton
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.PhotoViewerDialog
+import re.melchior.saviomobile.ui.designsystem.SectionDivider
+import re.melchior.saviomobile.ui.theme.SavioDimens
+import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioType
+import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 import java.io.File
+import java.util.Locale
 
 private data class DetailTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
@@ -98,6 +112,7 @@ private data class DetailTab(val label: String, val icon: androidx.compose.ui.gr
 fun InterventionDetailScreen(
     onBack: () -> Unit,
     onStartIntervention: (String) -> Unit,
+    onClientClick: (customerId: String) -> Unit = {},
     embeddedInMasterDetail: Boolean = false,
     viewModel: InterventionDetailViewModel = hiltViewModel()
 ) {
@@ -114,27 +129,32 @@ fun InterventionDetailScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = SavioUi.PageBackground,
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (!embeddedInMasterDetail) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = SavioUi.Blue,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White,
+                        actionIconContentColor = Color.White,
                     ),
-
                     title = {
                         Column {
                             Text(
-                                text = uiState.intervention?.typeLabel ?: "Intervention",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                text = "Dépannage",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
                             )
                             uiState.intervention?.let {
                                 Text(
                                     text = it.scheduledAt.substringAfter("T").substring(0, 5),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White,
                                 )
                             }
                         }
@@ -144,53 +164,83 @@ fun InterventionDetailScreen(
                             Icon(
                                 Icons.Filled.ArrowBack,
                                 contentDescription = "Retour",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = Color.White,
                             )
                         }
                     },
                     actions = {
                         uiState.intervention?.let { intervention ->
-                            val (statusColor, statusLabel) = when {
-                                intervention.syncStatus == "CONFLICT" ->
-                                    Pair(MaterialTheme.colorScheme.error, "Conflit")
-                                intervention.syncStatus == "COMPLETED" ->
-                                    Pair(MaterialTheme.colorScheme.secondary, "Terminée")
-                                intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-                                    Pair(MaterialTheme.colorScheme.secondary, "Terminée")
-                                intervention.status == "pending_validation" ->
-                                    Pair(Color(0xFFD97706), "À valider")
-                                intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-                                    Pair(MaterialTheme.colorScheme.tertiary, "En cours")
-                                intervention.status == "scheduled" ->
-                                    Pair(MaterialTheme.colorScheme.primary, "Planifiée")
-                                else ->
-                                    Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .padding(end = 16.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(statusColor.copy(alpha = 0.15f))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            val sync = intervention.syncStatus
+                            val st = intervention.status
+                            if (sync == "CONFLICT") {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(end = 12.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(MaterialTheme.colorScheme.errorContainer)
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
                                     Box(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(statusColor)
+                                            .background(MaterialTheme.colorScheme.error),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = statusLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = statusColor,
-                                        fontWeight = FontWeight.Bold
+                                        text = "Conflit",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            } else {
+                                val label = when {
+                                    sync == "COMPLETED" -> "En attente"
+                                    sync == "SYNCED" && st == "completed" -> "Terminée"
+                                    st == "pending_validation" -> "À valider"
+                                    sync == "IN_PROGRESS" || st == "in_progress" -> "En cours"
+                                    st == "scheduled" -> "Planifiée"
+                                    else -> intervention.status
+                                }
+                                val dotColor = when {
+                                    st == "pending_validation" -> Color(0xFFE65100)
+                                    else -> SavioUi.Blue
+                                }
+                                val bgColor = when {
+                                    st == "pending_validation" -> SavioUi.PlanifListBadgeBg
+                                    else -> SavioUi.ChipBackground
+                                }
+                                val fgColor = when {
+                                    st == "pending_validation" -> SavioUi.PlanifListBadgeFg
+                                    else -> SavioUi.Blue
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .padding(end = 12.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(bgColor)
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(dotColor),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp,
+                                        color = fgColor,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                 }
                             }
                         }
-                    }
+                    },
                 )
             }
         },
@@ -199,36 +249,55 @@ fun InterventionDetailScreen(
                 uiState.intervention?.let { intervention ->
                     val isActionable = intervention.status in listOf("scheduled", "in_progress")
                     if (isActionable) {
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).navigationBarsPadding()) {
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                .navigationBarsPadding(),
+                        ) {
                             Button(
                                 onClick = {
                                     if (intervention.status == "scheduled") viewModel.startIntervention()
                                     onStartIntervention(intervention.id)
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (intervention.status == "scheduled")
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.tertiary
-                                )
+                                    containerColor = SavioUi.Blue,
+                                    contentColor = Color.White,
+                                ),
+                                shape = RoundedCornerShape(28.dp),
                             ) {
-                                Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White,
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention",
-                                    style = MaterialTheme.typography.titleMedium
+                                    text = if (intervention.status == "scheduled") {
+                                        "Démarrer l'intervention"
+                                    } else {
+                                        "Reprendre l'intervention"
+                                    },
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
                                 )
                             }
                         }
                     }
                 }
             }
-        }
+        },
     ) { padding ->
         when {
             uiState.intervention == null -> {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    SavioInterventionDetailSkeleton()
                 }
             }
             else -> {
@@ -251,7 +320,12 @@ fun InterventionDetailScreen(
                     pageCount = { tabs.size }
                 )
 
-                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .background(SavioUi.PageBackground),
+                ) {
                     val actionable = intervention.status in listOf("scheduled", "in_progress")
                     val pagerModifier =
                         if (embeddedInMasterDetail && actionable) Modifier.weight(1f).fillMaxWidth()
@@ -285,13 +359,43 @@ fun InterventionDetailScreen(
                         }
                     }
 
-                    TabRow(selectedTabIndex = pagerState.currentPage) {
+                    TabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        containerColor = SavioUi.PageBackground,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        divider = {},
+                        indicator = { tabPositions ->
+                            val i = pagerState.currentPage
+                            if (i < tabPositions.size) {
+                                TabRowDefaults.SecondaryIndicator(
+                                    modifier = Modifier.tabIndicatorOffset(tabPositions[i]),
+                                    height = 3.dp,
+                                    color = SavioUi.Blue,
+                                )
+                            }
+                        },
+                    ) {
                         tabs.forEachIndexed { index, tab ->
+                            val selected = pagerState.currentPage == index
                             Tab(
-                                selected = pagerState.currentPage == index,
+                                selected = selected,
                                 onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                                text = { Text(text = tab.label, style = MaterialTheme.typography.labelMedium) },
-                                icon = { Icon(imageVector = tab.icon, contentDescription = tab.label, modifier = Modifier.size(18.dp)) }
+                                selectedContentColor = SavioUi.Blue,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = {
+                                    Text(
+                                        text = tab.label,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = tab.label,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
                             )
                         }
                     }
@@ -311,6 +415,7 @@ fun InterventionDetailScreen(
                             ) {
                                 DetailPage(
                                     intervention = intervention,
+                                    onClientClick = onClientClick,
                                     onCallClick = { phone ->
                                         context.startActivity(Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$phone") })
                                     },
@@ -335,8 +440,18 @@ fun InterventionDetailScreen(
                                 if (uiState.equipments.isNotEmpty()) {
                                     EquipmentsCard(equipments = uiState.equipments)
                                 } else {
-                                    Box(modifier = Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = "Aucun équipement associé", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 24.dp, bottom = 16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        SavioEmptyState(
+                                            icon = Icons.Outlined.VpnKey,
+                                            title = "Aucun équipement enregistré",
+                                            subtitle = "Aucun appareil n'est associé à cette intervention.",
+                                        )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -509,81 +624,100 @@ private fun StatusBadge(intervention: InterventionEntity, modifier: Modifier = M
     }
 }
 
+private fun plannedDetailInitials(first: String?, last: String?): String {
+    val f = first?.trim().orEmpty()
+    val l = last?.trim().orEmpty()
+    return when {
+        f.isNotEmpty() && l.isNotEmpty() ->
+            "${f.first().uppercaseChar()}${l.first().uppercaseChar()}"
+        f.length >= 2 -> f.take(2).uppercase(Locale.FRANCE)
+        f.isNotEmpty() -> f.first().uppercaseChar().toString()
+        l.length >= 2 -> l.take(2).uppercase(Locale.FRANCE)
+        l.isNotEmpty() -> l.first().uppercaseChar().toString()
+        else -> "?"
+    }
+}
+
 @Composable
 private fun DetailPage(
     intervention: InterventionEntity,
+    onClientClick: (customerId: String) -> Unit,
     onCallClick: (String) -> Unit,
-    onNavigateClick: () -> Unit
+    onNavigateClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        shadowElevation = 0.dp,
     ) {
         Column {
-            // Type d'intervention
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Build,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    tint = SavioUi.Blue,
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = "Type d'intervention",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = intervention.typeLabel,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
             if (!intervention.notes.isNullOrBlank()) {
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    thickness = 0.5.dp,
+                    color = SavioUi.CardBorder,
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.Top,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Info,
                         contentDescription = null,
-                        tint = Color(0xFFD97706), // amber
-                        modifier = Modifier.size(20.dp)
+                        tint = Color(0xFFD97706),
+                        modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = "Notes dispatcher",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFFEF3C7)
+                            color = Color(0xFFFEF3C7),
+                            shadowElevation = 0.dp,
                         ) {
                             Text(
                                 text = intervention.notes,
-                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 14.sp,
                                 color = Color(0xFF92400E),
                                 fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(10.dp)
+                                modifier = Modifier.padding(10.dp),
                             )
                         }
                     }
@@ -592,80 +726,112 @@ private fun DetailPage(
 
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
+                thickness = 0.5.dp,
+                color = SavioUi.CardBorder,
             )
 
-            // Client
+            val customerId = intervention.customerId
+            val clientName = if (intervention.customerFirstName != null) {
+                "${intervention.customerFirstName} ${intervention.customerLastName}".trim()
+            } else {
+                "Non renseigné"
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(
+                        if (customerId != null) {
+                            Modifier.clickable { onClientClick(customerId) }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(SavioUi.ChipBackground),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = plannedDetailInitials(
+                            intervention.customerFirstName,
+                            intervention.customerLastName,
+                        ),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SavioUi.Blue,
+                    )
+                }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Client",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = if (intervention.customerFirstName != null)
-                            "${intervention.customerFirstName} ${intervention.customerLastName}"
-                        else "Non renseigné",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
+                        text = clientName.uppercase(Locale.FRANCE),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (customerId != null) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = "Fiche client",
+                        tint = SavioUi.Blue,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
 
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
+                thickness = 0.5.dp,
+                color = SavioUi.CardBorder,
             )
 
-            // Adresse + bouton map
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.Filled.LocationOn,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    tint = SavioUi.Blue,
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Adresse",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = intervention.unitStreet,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     intervention.unitAddressLine2?.let {
                         Text(
                             text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Text(
                         text = "${intervention.unitPostalCode} ${intervention.unitCity}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (!intervention.unitFloor.isNullOrBlank() ||
                         !intervention.unitDoorCode.isNullOrBlank()
@@ -675,30 +841,30 @@ private fun DetailPage(
                             intervention.unitFloor?.let {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(SavioUi.ChipBackground)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
                                         text = "Étage $it",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 11.sp,
+                                        color = SavioUi.Blue,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                 }
                             }
                             intervention.unitDoorCode?.let {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(SavioUi.ChipBackground)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
                                         text = "Code $it",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 11.sp,
+                                        color = SavioUi.Blue,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                 }
                             }
@@ -709,34 +875,52 @@ private fun DetailPage(
                     Icon(
                         imageVector = Icons.Filled.LocationOn,
                         contentDescription = "Naviguer",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = SavioUi.Blue,
                     )
                 }
             }
 
-            // Téléphone
             intervention.customerPhone?.let { phone ->
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    thickness = 0.5.dp,
+                    color = SavioUi.CardBorder,
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilledTonalButton(
+                    Surface(
                         onClick = { onCallClick(phone) },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = SavioUi.ChipBackground,
+                        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                        shadowElevation = 0.dp,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Call,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(phone)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = SavioUi.Blue,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = phone,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SavioUi.Blue,
+                            )
+                        }
                     }
                 }
             }
@@ -918,11 +1102,11 @@ private fun RapportPage(
                         }
                     }
                 } else {
-                    Text(
-                        text = "Aucune photo",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 48.dp, bottom = 14.dp)
+                    SavioEmptyState(
+                        icon = Icons.Outlined.PhotoCamera,
+                        title = "Aucune photo ajoutée",
+                        subtitle = "Aucune image n'a été jointe au rapport.",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -938,121 +1122,101 @@ private fun RapportPage(
 private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        shadowElevation = 0.dp,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.secondary)
-            )
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Build,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Build,
+                    contentDescription = null,
+                    tint = SavioUi.Blue,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Équipements",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                        .clip(CircleShape)
+                        .background(SavioUi.Blue),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
-                        text = "Équipements",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
+                        text = equipments.size.toString(),
+                        fontSize = 11.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondary)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = equipments.size.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-                equipments.forEachIndexed { index, equipment ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
+            equipments.forEachIndexed { index, equipment ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 7.dp),
+                        thickness = 0.5.dp,
+                        color = SavioUi.CardBorder,
+                    )
+                }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = listOfNotNull(equipment.brand, equipment.model)
+                                .joinToString(" ")
+                                .ifEmpty { "Équipement sans nom" },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (equipment.isPrimary) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(SavioUi.ChipBackground)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
                                 Text(
-                                    text = listOfNotNull(equipment.brand, equipment.model)
-                                        .joinToString(" ")
-                                        .ifEmpty { "Équipement sans nom" },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                if (equipment.isPrimary) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "Principal",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                            equipment.typeCode?.let {
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            equipment.serialNumber?.let {
-                                Text(
-                                    text = "N° série : $it",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            equipment.installDate?.let {
-                                Text(
-                                    text = "Installé le : ${it.substring(0, 10)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "Principal",
+                                    fontSize = 11.sp,
+                                    color = SavioUi.Blue,
+                                    fontWeight = FontWeight.Medium,
                                 )
                             }
                         }
+                    }
+                    equipment.typeCode?.let {
+                        Text(
+                            text = it,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    equipment.serialNumber?.let {
+                        Text(
+                            text = "N° série : $it",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    equipment.installDate?.let {
+                        Text(
+                            text = "Installé le : ${it.substring(0, 10)}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -1068,30 +1232,35 @@ private fun HistoriquePage(
 ) {
     if (history.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .background(SavioPalette.BackgroundPage),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "Aucun historique disponible",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            SavioEmptyState(
+                icon = Icons.Outlined.Schedule,
+                title = "Aucun historique disponible",
+                subtitle = "Les interventions passées sur ce logement apparaîtront ici.",
             )
         }
         return
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SavioPalette.BackgroundPage)
+            .padding(horizontal = SavioDimens.SpaceLG, vertical = SavioDimens.SpaceSM),
+        verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceSM),
     ) {
-        item { Spacer(modifier = Modifier.height(4.dp)) }
+        item { Spacer(modifier = Modifier.height(SavioDimens.SpaceXS)) }
         items(history) { item ->
             HistoriqueItemCard(
                 item = item,
                 signedUrls = photoUrls[item.id] ?: emptyList()
             )
         }
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+        item { Spacer(modifier = Modifier.height(SavioDimens.SpaceSM)) }
     }
 }
 
@@ -1104,13 +1273,15 @@ private fun HistoriqueItemCard(
         try {
             item.typeColor?.let { Color(android.graphics.Color.parseColor(it)) }
         } catch (e: Exception) { null }
-    } ?: Color(0xFF2196F3)
+    } ?: SavioPalette.Primary
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(SavioDimens.RadiusLG),
+        color = SavioPalette.BackgroundCard,
+        border = BorderStroke(SavioDimens.BorderThin, SavioPalette.BorderDefault),
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier
@@ -1126,66 +1297,62 @@ private fun HistoriqueItemCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(
+                        horizontal = SavioDimens.SpaceLG,
+                        vertical = SavioDimens.SpaceMD,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Badge type
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(typeColor.copy(alpha = 0.12f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    Surface(
+                        shape = RoundedCornerShape(SavioDimens.RadiusBadge),
+                        color = typeColor.copy(alpha = 0.12f),
+                        shadowElevation = 0.dp,
+                        tonalElevation = 0.dp,
                     ) {
                         Text(
                             text = item.typeLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = typeColor
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = SavioType.Label,
+                            color = typeColor,
                         )
                     }
-                    // Date
                     Text(
                         text = item.completedAt?.substring(0, 10) ?: item.scheduledAt.substring(0, 10),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = SavioType.Label,
+                        color = SavioPalette.TextSecondary,
                     )
                 }
 
-                // Numéro
                 item.number?.let {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = SavioType.Label,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = SavioPalette.TextSecondary,
                     )
                 }
 
-                // Technicien
                 val techName = listOfNotNull(item.technicianFirstName, item.technicianLastName)
                     .joinToString(" ").ifEmpty { null }
                 techName?.let {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = SavioType.BodySmall,
+                        color = SavioPalette.TextSecondary,
                     )
                 }
 
-                // Rapport
                 item.report?.takeIf { it.isNotBlank() }?.let { report ->
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
+                    SectionDivider(modifier = Modifier.padding(vertical = SavioDimens.SpaceXS))
                     Text(
                         text = report,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        style = SavioType.BodySmall,
+                        color = SavioPalette.TextPrimary,
                         maxLines = 3,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
@@ -1193,12 +1360,12 @@ private fun HistoriqueItemCard(
 
                 if (signedUrls.isNotEmpty()) {
                     Column(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.padding(top = SavioDimens.SpaceXS),
+                        verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS)
                     ) {
                         signedUrls.chunked(3).forEach { row ->
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 row.forEach { url ->
@@ -1209,7 +1376,7 @@ private fun HistoriqueItemCard(
                                         modifier = Modifier
                                             .weight(1f)
                                             .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(SavioDimens.RadiusSM))
                                     )
                                 }
                                 repeat(3 - row.size) {
@@ -1219,7 +1386,6 @@ private fun HistoriqueItemCard(
                         }
                     }
                 } else {
-                    // Afficher juste le compteur si pas encore chargé
                     val photoCount = try {
                         item.photoKeys?.let {
                             com.google.gson.Gson()
@@ -1233,42 +1399,17 @@ private fun HistoriqueItemCard(
                                 imageVector = Icons.Filled.CameraAlt,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = SavioPalette.TextSecondary
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(SavioDimens.SpaceXS))
                             Text(
                                 text = "$photoCount photo${if (photoCount > 1) "s" else ""} — réseau requis",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                style = SavioType.Label,
+                                color = SavioPalette.TextSecondary
                             )
                         }
                     }
                 }
-
-
-                // Photos disponibles si réseau
-//                val photoCount = try {
-//                    item.photoKeys?.let {
-//                        com.google.gson.Gson().fromJson(it, Array<String>::class.java)?.size ?: 0
-//                    } ?: 0
-//                } catch (e: Exception) { 0 }
-//
-//                if (photoCount > 0) {
-//                    Row(verticalAlignment = Alignment.CenterVertically) {
-//                        Icon(
-//                            imageVector = Icons.Filled.CameraAlt,
-//                            contentDescription = null,
-//                            modifier = Modifier.size(14.dp),
-//                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-//                        )
-//                        Spacer(modifier = Modifier.width(4.dp))
-//                        Text(
-//                            text = "$photoCount photo${if (photoCount > 1) "s" else ""}",
-//                            style = MaterialTheme.typography.labelSmall,
-//                            color = MaterialTheme.colorScheme.onSurfaceVariant
-//                        )
-//                    }
-//                }
             }
         }
     }
