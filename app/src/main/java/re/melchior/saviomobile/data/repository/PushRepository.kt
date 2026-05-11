@@ -13,9 +13,11 @@ import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
 import re.melchior.saviomobile.data.local.entity.MeasureEntity
+import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.remote.api.PushApi
 import re.melchior.saviomobile.data.remote.dto.PushOperationDto
 import re.melchior.saviomobile.data.remote.dto.PushRequestDto
+import retrofit2.HttpException
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +50,7 @@ class PushRepository @Inject constructor(
     private val pendingOperationDao: PendingOperationDao,
     private val coldMeasureRepository: ColdMeasureRepository,
     private val measureRepository: MeasureRepository,
+    private val pacMeasureRepository: PacMeasureRepository,
     private val attestationVeRepository: AttestationVeRepository,
     private val attestationVePointControleDao: AttestationVePointControleDao,
     @ApplicationContext private val context: Context
@@ -59,15 +62,27 @@ class PushRepository @Inject constructor(
 
     private val pushMutex = Mutex()
 
+    companion object {
+        private const val LOG_TAG = "SavioPush"
+    }
+
     suspend fun push(): PushResult {
-        if (pushMutex.isLocked) return PushResult.NothingToPush
+        // Toujours logger en premier : si ce message n’apparaît pas, `push()` n’est pas appelé
+        // (autre écran, exception avant l’appel, worker arrêté faute de slug/token, mauvais processus Logcat).
+        android.util.Log.i(LOG_TAG, "push() invoqué (mutex verrouillé=${pushMutex.isLocked})")
+        if (pushMutex.isLocked) {
+            android.util.Log.w(LOG_TAG, "push ignoré: une synchronisation push est déjà en cours (mutex)")
+            return PushResult.NothingToPush
+        }
         return pushMutex.withLock {
             try {
+                android.util.Log.i(LOG_TAG, "push() — début (construction de la file)")
                 val pendingInterventions = interventionDao.getPendingSyncOnce()
                 val pendingUpdates = pendingUpdateDao.getPendingOnce()
                 val pendingOps = pendingOperationDao.getPending()
                 val dirtyColdMeasures = coldMeasureRepository.getDirty()
                 val dirtyMeasures = measureRepository.getDirty()
+                val dirtyPacMeasures = pacMeasureRepository.getDirty()
                 val dirtyAttestations = attestationVeRepository.getDirty()
 
                 if (pendingInterventions.isEmpty() &&
@@ -75,10 +90,28 @@ class PushRepository @Inject constructor(
                     pendingOps.isEmpty() &&
                     dirtyColdMeasures.isEmpty() &&
                     dirtyMeasures.isEmpty() &&
+                    dirtyPacMeasures.isEmpty() &&
                     dirtyAttestations.isEmpty()
                 ) {
+                    android.util.Log.i(
+                        LOG_TAG,
+                        "rien à pousser (interventions=${pendingInterventions.size}, " +
+                            "pendingUpdates=${pendingUpdates.size}, pendingOps=${pendingOps.size}, " +
+                            "coldMeasures=${dirtyColdMeasures.size}, measures=${dirtyMeasures.size}, " +
+                            "pacMeasures=${dirtyPacMeasures.size}, " +
+                            "attestations=${dirtyAttestations.size})",
+                    )
                     return PushResult.NothingToPush
                 }
+
+                android.util.Log.i(
+                    LOG_TAG,
+                    "file locale: interventions=${pendingInterventions.size}, " +
+                        "pendingUpdates=${pendingUpdates.size}, pendingOps=${pendingOps.size}, " +
+                        "coldMeasures=${dirtyColdMeasures.size}, measures=${dirtyMeasures.size}, " +
+                        "pacMeasures=${dirtyPacMeasures.size}, " +
+                        "attestations=${dirtyAttestations.size}",
+                )
     
                 val startOps = mutableListOf<PushOperationDto>()
                 val completeOps = mutableListOf<PushOperationDto>()
@@ -253,6 +286,21 @@ class PushRepository @Inject constructor(
                     )
                 }
 
+                dirtyPacMeasures.forEach { measure ->
+                    operations.add(
+                        PushOperationDto(
+                            id = measure.interventionId +
+                                "_pac_measure_" +
+                                measure.equipmentOrder,
+                            type = "SAVE_PAC_MEASURE",
+                            occurredAt = measure.updatedAt.ifBlank {
+                                Instant.now().toString()
+                            },
+                            payload = buildPacMeasurePayload(measure),
+                        ),
+                    )
+                }
+
                 dirtyAttestations.forEach { attestation ->
                     val points = attestationVePointControleDao.getByAttestationOnce(
                         attestation.interventionId,
@@ -275,13 +323,31 @@ class PushRepository @Inject constructor(
                     )
                 }
 
-                if (operations.isEmpty()) return PushResult.NothingToPush
-    
+                if (operations.isEmpty()) {
+                    android.util.Log.w(
+                        LOG_TAG,
+                        "données marquées « en attente » mais aucune opération construite (vérif startedAt/completedAt, etc.)",
+                    )
+                    return PushResult.NothingToPush
+                }
+
+                operations.forEachIndexed { index, op ->
+                    android.util.Log.i(
+                        LOG_TAG,
+                        "op[$index] id=${op.id} type=${op.type} occurredAt=${op.occurredAt}",
+                    )
+                }
+
                 val deviceId = Settings.Secure.getString(
                     context.contentResolver,
                     Settings.Secure.ANDROID_ID
                 ) ?: "unknown-device"
-    
+
+                android.util.Log.i(
+                    LOG_TAG,
+                    "envoi POST api/mobile/sync/push: ${operations.size} op(s), deviceId=$deviceId",
+                )
+
                 val response = pushApi.push(
                     PushRequestDto(
                         deviceId = deviceId,
@@ -293,7 +359,19 @@ class PushRepository @Inject constructor(
                 val allOk = response.results.all {
                     it.status == "ok"
                 }
-    
+
+                android.util.Log.i(
+                    LOG_TAG,
+                    "réponse push: applied=${response.applied} failed=${response.failed} " +
+                        "appliedAt=${response.appliedAt} allOk=$allOk",
+                )
+                response.results.forEach { r ->
+                    android.util.Log.i(
+                        LOG_TAG,
+                        "  → ${r.operationId} status=${r.status} reason=${r.reason} conflictType=${r.conflictType} message=${r.message}",
+                    )
+                }
+
                 if (allOk) {
                     response.results.forEach { result ->
                         pendingOps.find { it.id == result.operationId }?.let {
@@ -307,6 +385,15 @@ class PushRepository @Inject constructor(
                                 it.interventionId + "_measure_" + it.equipmentOrder
                         }?.let {
                             measureRepository.markClean(
+                                it.interventionId,
+                                it.equipmentOrder,
+                            )
+                        }
+                        dirtyPacMeasures.find {
+                            result.operationId ==
+                                it.interventionId + "_pac_measure_" + it.equipmentOrder
+                        }?.let {
+                            pacMeasureRepository.markClean(
                                 it.interventionId,
                                 it.equipmentOrder,
                             )
@@ -364,9 +451,9 @@ class PushRepository @Inject constructor(
                     }
                     pendingUpdateDao.deleteSynced()
                 } else {
-                    android.util.Log.w(
-                        "PushRepository",
-                        "Push partiel ou échoué — opérations conservées pour réessai"
+                    android.util.Log.e(
+                        LOG_TAG,
+                        "push partiel ou rejet/conflit — le client renvoie tout de même Success mais rien n’est marqué comme synchronisé",
                     )
                     response.results
                         .filter { it.status == "conflict" }
@@ -388,11 +475,74 @@ class PushRepository @Inject constructor(
                         }
                 }
 
+                android.util.Log.i(
+                    LOG_TAG,
+                    "push() terminé, retour Success (allOk=$allOk)",
+                )
                 PushResult.Success
             } catch (e: Exception) {
+                android.util.Log.e(LOG_TAG, "push exception: ${e.javaClass.simpleName}: ${e.message}", e)
+                if (e is HttpException) {
+                    val code = e.code()
+                    val body = try {
+                        e.response()?.errorBody()?.string()?.take(4000)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    android.util.Log.e(LOG_TAG, "HTTP $code corps erreur: $body")
+                }
                 PushResult.Error(e.message ?: "Erreur de synchronisation")
             }
         }
+    }
+
+    private fun buildPacMeasurePayload(
+        m: PacMeasureEntity,
+    ): Map<String, Any?> = buildMap {
+        put("interventionId", m.interventionId)
+        put("equipmentOrder", m.equipmentOrder)
+        put("pacVentilation", m.pacVentilation.ifBlank { null })
+        put("pacNetail", m.pacNetail.ifBlank { null })
+        put("pacVerail", m.pacVerail.ifBlank { null })
+        put("pacFiltre", m.pacFiltre.ifBlank { null })
+        put("pacFuite", m.pacFuite.ifBlank { null })
+        put("pacEvac", m.pacEvac.ifBlank { null })
+        put("pacPression1", m.pacPression1.ifBlank { null })
+        put("pacPression2", m.pacPression2.toDoubleOrNull())
+        put("pacGlycol1", m.pacGlycol1.ifBlank { null })
+        put("pacGlycol2", m.pacGlycol2.toDoubleOrNull())
+        put("pacTenStat", m.pacTenStat.toDoubleOrNull())
+        put("pacTenDyna", m.pacTenDyna.toDoubleOrNull())
+        put("pacIntensite", m.pacIntensite.toDoubleOrNull())
+        put("pacResserage1", m.pacResserage1.ifBlank { null })
+        put("pacResserage2", m.pacResserage2.ifBlank { null })
+        put("pacInterieure", m.pacInterieure.toDoubleOrNull())
+        put("pacExterieure", m.pacExterieure.toDoubleOrNull())
+        put("pacDepart", m.pacDepart.toDoubleOrNull())
+        put("pacRetour", m.pacRetour.toDoubleOrNull())
+        put("pacDeltaT", m.pacDeltaT.toDoubleOrNull())
+        put("pacHiver", m.pacHiver.toDoubleOrNull())
+        put("pacAppoint", m.pacAppoint.toDoubleOrNull())
+        put("pacConfort", m.pacConfort.toDoubleOrNull())
+        put("pacNonChauf", m.pacNonChauf.toDoubleOrNull())
+        put("pacEcsConsigne", m.pacEcsConsigne.toDoubleOrNull())
+        put("pacEcs", m.pacEcs.toDoubleOrNull())
+        put("pacManometreBp", m.pacManometreBp.toDoubleOrNull())
+        put("pacManometreHp", m.pacManometreHp.toDoubleOrNull())
+        put("pacDegivrage", m.pacDegivrage.ifBlank { null })
+        put("pacInversion", m.pacInversion.ifBlank { null })
+        put("pacHFonct", m.pacHFonct.toIntOrNull())
+        put("pacHComp1", m.pacHComp1.toIntOrNull())
+        put("pacHVenti", m.pacHVenti.toIntOrNull())
+        put("pacNbDemarr", m.pacNbDemarr.toIntOrNull())
+        put("pacHAppoint1", m.pacHAppoint1.toIntOrNull())
+        put("pacHAppoint2", m.pacHAppoint2.toIntOrNull())
+        put("pacAlarme1", m.pacAlarme1.ifBlank { null })
+        put("pacAlarme2", m.pacAlarme2.ifBlank { null })
+        put("pacBlocage1", m.pacBlocage1.ifBlank { null })
+        put("pacBlocage2", m.pacBlocage2.ifBlank { null })
+        put("pacReleve", m.pacReleve.toDoubleOrNull())
+        put("pacRem1", m.pacRem1.ifBlank { null })
     }
 
     private fun buildMeasurePayload(
@@ -464,6 +614,8 @@ class PushRepository @Inject constructor(
         put("equipmentOrder", a.equipmentOrder)
         put("type", a.type)
         put("appareilMesure", a.appareilMesure.ifBlank { null })
+        put("appareilMesureTension", a.appareilMesureTension.ifBlank { null })
+        put("appareilMesureGenerateur", a.appareilMesureGenerateur.ifBlank { null })
         put("defautsCorriges", a.defautsCorriges.ifBlank { null })
         put("recommandationUsage", a.recommandationUsage.ifBlank { null })
         put("recommandationAmeliorations", a.recommandationAmeliorations.ifBlank { null })

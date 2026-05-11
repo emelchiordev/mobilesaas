@@ -59,13 +59,13 @@ private val DetailCardBackground = Color(0xFFF7F9FC)
 private val DetailChipBackground = Color(0xFFDDEAF8)
 private val EquipmentCardBorder = Color(0xFFDCE3EC)
 
-private enum class EquipmentBadge {
+internal enum class EquipmentBadge {
     NONE,
     NEW,
     REPLACED,
 }
 
-private fun badgeFor(
+internal fun badgeFor(
     equipment: EquipmentEntity,
     newEquipmentIds: Set<String>,
 ): EquipmentBadge = when {
@@ -434,18 +434,37 @@ fun InterventionEquipementsTab(
                         color = EquipmentCardBorder,
                     )
 
+                    val hybrideGroups = computeHybrideGroups(
+                        equipmentRoots = rootEquipments,
+                        allEquipments = allActive,
+                        childrenByParent = childrenByParent,
+                    )
+                    val hybrideIds = hybrideEquipmentIds(hybrideGroups)
+                    val normalRootAndOrphans =
+                        (rootEquipments + orphans).filter { it.id !in hybrideIds }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        (rootEquipments + orphans).forEach { parent ->
+                        hybrideGroups.forEach { group ->
+                            HybrideGroupCard(
+                                group = group,
+                                newEquipmentIds = newEquipmentIds,
+                                interventionId = intervention.id,
+                                interactive = true,
+                                onEquipementClick = onEquipementClick,
+                            )
+                        }
+                        normalRootAndOrphans.forEach { parent ->
                             InterventionEquipmentGroupCard(
                                 parent = parent,
                                 children = childrenByParent[parent.id].orEmpty(),
                                 newEquipmentIds = newEquipmentIds,
                                 interventionId = intervention.id,
+                                interactive = true,
                                 onEquipementClick = onEquipementClick,
                             )
                         }
@@ -455,6 +474,7 @@ fun InterventionEquipementsTab(
                                 children = childrenByParent[parent.id].orEmpty(),
                                 newEquipmentIds = newEquipmentIds,
                                 interventionId = intervention.id,
+                                interactive = true,
                                 onEquipementClick = onEquipementClick,
                             )
                         }
@@ -657,11 +677,12 @@ private fun InfoChip(text: String) {
 }
 
 @Composable
-private fun InterventionEquipmentGroupCard(
+internal fun InterventionEquipmentGroupCard(
     parent: EquipmentEntity,
     children: List<EquipmentEntity>,
     newEquipmentIds: Set<String>,
     interventionId: String,
+    interactive: Boolean = true,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
 ) {
     Surface(
@@ -679,6 +700,7 @@ private fun InterventionEquipmentGroupCard(
                     isChild = false,
                     hasChildren = children.isNotEmpty(),
                 ),
+                interactive = interactive,
                 onClick = {
                     onEquipementClick(interventionId, parent.id)
                 },
@@ -697,6 +719,7 @@ private fun InterventionEquipmentGroupCard(
                         isChild = true,
                         hasChildren = false,
                     ),
+                    interactive = interactive,
                     onClick = {
                         onEquipementClick(interventionId, child.id)
                     },
@@ -707,18 +730,21 @@ private fun InterventionEquipmentGroupCard(
 }
 
 @Composable
-private fun EquipmentRowItem(
+internal fun EquipmentRowItem(
     equipment: EquipmentEntity,
     isChild: Boolean,
     badge: EquipmentBadge,
     roleLabel: String?,
+    interactive: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.Transparent)
-            .clickable(onClick = onClick)
+            .then(
+                if (interactive) Modifier.clickable(onClick = onClick) else Modifier,
+            )
             .padding(
                 start = if (isChild) 32.dp else 12.dp,
                 end = 12.dp,
@@ -840,16 +866,18 @@ private fun EquipmentRowItem(
             }
         }
 
-        Icon(
-            imageVector = Icons.Filled.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
+        if (interactive) {
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
-private fun EquipmentEntity.pacClimRoleLabel(
+internal fun EquipmentEntity.pacClimRoleLabel(
     isChild: Boolean,
     hasChildren: Boolean,
 ): String? {

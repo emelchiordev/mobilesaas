@@ -255,13 +255,27 @@ fun AttestationInstallationTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            AttestationTextField(
-                value = attestation?.appareilMesure ?: "",
-                onValueChange = { onFieldChange("appareilMesure", it) },
-                label = "Appareil de mesure utilisé",
-                singleLine = true,
-            )
+        when {
+            type == "PAC_HYBRIDE_GAZ" || type == "PAC_HYBRIDE_FIOUL" -> {
+                item {
+                    AttestationTextField(
+                        value = attestation?.appareilMesureGenerateur ?: "",
+                        onValueChange = { onFieldChange("appareilMesureGenerateur", it) },
+                        label = "Appareil de mesure (chaudière / fumées)",
+                        singleLine = true,
+                    )
+                }
+            }
+            type != "PAC" -> {
+                item {
+                    AttestationTextField(
+                        value = attestation?.appareilMesure ?: "",
+                        onValueChange = { onFieldChange("appareilMesure", it) },
+                        label = "Appareil de mesure utilisé",
+                        singleLine = true,
+                    )
+                }
+            }
         }
 
         item {
@@ -553,6 +567,14 @@ fun AttestationInstallationTab(
                     }
                 }
                 item {
+                    AttestationTextField(
+                        value = attestation?.appareilMesure ?: "",
+                        onValueChange = { onFieldChange("appareilMesure", it) },
+                        label = "Appareil mesure températures",
+                        singleLine = true,
+                    )
+                }
+                item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AttestationNumericField(
                             modifier = Modifier.weight(1f),
@@ -569,6 +591,14 @@ fun AttestationInstallationTab(
                             isNegative = false,
                         )
                     }
+                }
+                item {
+                    AttestationTextField(
+                        value = attestation?.appareilMesureTension ?: "",
+                        onValueChange = { onFieldChange("appareilMesureTension", it) },
+                        label = "Appareil mesure tensions",
+                        singleLine = true,
+                    )
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -589,12 +619,15 @@ fun AttestationInstallationTab(
                     }
                 }
                 item {
+                    AttestationSectionTitle("Étanchéité")
+                }
+                item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AttestationNumericField(
                             modifier = Modifier.weight(1f),
                             value = attestation?.pressionBp ?: "",
                             onValueChange = { onFieldChange("pressionBp", it) },
-                            label = "Pression BP (bar)",
+                            label = "Pression relevée (bar)",
                             isNegative = false,
                         )
                         AttestationNumericField(
@@ -635,6 +668,32 @@ fun AttestationInstallationTab(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AttestationNumericField(
                         modifier = Modifier.weight(1f),
+                        value = attestation?.tExterieurRefroid ?: "",
+                        onValueChange = { onFieldChange("tExterieurRefroid", it) },
+                        label = "T° ext. refroid. (°C)",
+                        isNegative = true,
+                    )
+                    AttestationNumericField(
+                        modifier = Modifier.weight(1f),
+                        value = attestation?.tInterieurRefroid ?: "",
+                        onValueChange = { onFieldChange("tInterieurRefroid", it) },
+                        label = "T° int. refroid. (°C)",
+                        isNegative = true,
+                    )
+                }
+            }
+            item {
+                AttestationTextField(
+                    value = attestation?.appareilMesure ?: "",
+                    onValueChange = { onFieldChange("appareilMesure", it) },
+                    label = "Appareil mesure températures",
+                    singleLine = true,
+                )
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AttestationNumericField(
+                        modifier = Modifier.weight(1f),
                         value = attestation?.tensionStatique ?: "",
                         onValueChange = { onFieldChange("tensionStatique", it) },
                         label = "Tension statique (V)",
@@ -648,6 +707,25 @@ fun AttestationInstallationTab(
                         isNegative = false,
                     )
                 }
+            }
+            item {
+                AttestationTextField(
+                    value = attestation?.appareilMesureTension ?: "",
+                    onValueChange = { onFieldChange("appareilMesureTension", it) },
+                    label = "Appareil mesure tensions",
+                    singleLine = true,
+                )
+            }
+            item {
+                AttestationSectionTitle("Étanchéité")
+            }
+            item {
+                AttestationNumericField(
+                    value = attestation?.pressionBp ?: "",
+                    onValueChange = { onFieldChange("pressionBp", it) },
+                    label = "Pression relevée (bar)",
+                    isNegative = false,
+                )
             }
         }
 

@@ -28,14 +28,20 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -46,6 +52,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +61,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,7 +76,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
 import re.melchior.saviomobile.ui.screen.intervention.attestation.attestationTypeLabel
 import re.melchior.saviomobile.ui.utils.equipmentIcon
@@ -88,11 +100,15 @@ fun EquipementDetailScreen(
         type: String,
     ) -> Unit = { _, _, _ -> },
     onMeasureClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
+    onPacMeasureClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
+    onPacFichePdfClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
     onReplaceClick: (interventionId: String, equipmentId: String) -> Unit = { _, _ -> },
     viewModel: EquipementDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val catalogEquipment by viewModel.catalogEquipment.collectAsStateWithLifecycle()
+    val interventionEquipments by viewModel.interventionEquipments.collectAsStateWithLifecycle()
+    val hasPacMeasureSaisie by viewModel.hasPacMeasureSaisieForThisEquipment.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -214,13 +230,48 @@ fun EquipementDetailScreen(
                     )
                 }
 
+                val typeCodeNorm = remember(equipment.typeCode) {
+                    (equipment.typeCode ?: "").trim().uppercase()
+                }
+                val isChaudiereEquipment = typeCodeNorm == "CHAUDIERE"
+                val showHybrideStartBadge =
+                    isChaudiereEquipment && !equipment.hybridePacEquipmentId.isNullOrBlank()
+
+                val chauffageHybride = remember(interventionEquipments, equipment.id) {
+                    interventionEquipments.firstOrNull { eq ->
+                        (eq.typeCode ?: "").trim().uppercase() == "CHAUDIERE" &&
+                            !eq.hybridePacEquipmentId.isNullOrBlank() &&
+                            eq.hybridePacEquipmentId == equipment.id
+                    }
+                }
+                val isPacEquipment = typeCodeNorm == "PAC" ||
+                    typeCodeNorm == "PAC A/E" ||
+                    typeCodeNorm == "PAC A/A"
+                val isPartOfHybrideAsPac = chauffageHybride != null && isPacEquipment
+
                 val suggestedAttestationType = remember(
                     equipment.typeCode,
                     equipment.energyCode,
+                    equipment.hybridePacEquipmentId,
                 ) {
                     val tc = (equipment.typeCode ?: "").uppercase()
                     val ec = (equipment.energyCode ?: "").uppercase()
+                    val isHybride = equipment.hybridePacEquipmentId?.isNotBlank() == true
                     when {
+                        tc == "CHAUDIERE" && isHybride ->
+                            if (ec.contains("FIOUL") || ec.contains("FUEL")) {
+                                "PAC_HYBRIDE_FIOUL"
+                            } else {
+                                "PAC_HYBRIDE_GAZ"
+                            }
+
+                        tc == "CHAUDIERE" ->
+                            when {
+                                ec.contains("FIOUL") || ec.contains("FUEL") || tc.contains("FIOUL") -> "FIOUL"
+                                ec.contains("GAZ") || tc.contains("GAZ") -> "GAZ"
+                                else -> null
+                            }
+
                         tc.contains("PAC") &&
                             (tc.contains("HYBRIDE") || ec.contains("GAZ")) &&
                             ec.contains("GAZ") -> "PAC_HYBRIDE_GAZ"
@@ -262,6 +313,12 @@ fun EquipementDetailScreen(
                         "FIOUL",
                         "INCONNU",
                     ) && !isBruleur
+                }
+
+                val isPacOrClim = remember(equipment.typeCode) {
+                    listOf("PAC", "PAC A/E", "PAC A/A", "CLIMATISEUR").contains(
+                        equipment.typeCode?.trim()?.uppercase(Locale.ROOT),
+                    )
                 }
 
                 if (showSerialDialog) {
@@ -385,6 +442,48 @@ fun EquipementDetailScreen(
                         }
                     }
 
+                    val energyUc = (equipment.energyCode ?: "").uppercase(Locale.getDefault())
+                    val typeUc = (equipment.typeCode ?: "").uppercase(Locale.getDefault())
+                    val hasBruleurChild = interventionEquipments.any {
+                        (it.parentEquipmentId ?: "") == equipment.id &&
+                            (it.typeCode ?: "").uppercase(Locale.getDefault()) == "BRULEUR"
+                    }
+                    val showPompeTabA = typeUc == "CHAUDIERE" &&
+                        (energyUc.contains("FIOUL") || energyUc.contains("FUEL") ||
+                            (energyUc.contains("GAZ") && hasBruleurChild))
+                    val showGicleurTabA =
+                        typeUc == "CHAUDIERE" && (energyUc.contains("FIOUL") || energyUc.contains("FUEL"))
+                    val tabLabelsCh = remember(showPompeTabA, showGicleurTabA) {
+                        buildList {
+                            add("Appareil")
+                            if (showPompeTabA) add("Pompe")
+                            if (showGicleurTabA) add("Gicleur")
+                        }
+                    }
+                    var chTabIdx by remember(equipment.id) { mutableIntStateOf(0) }
+                    if (tabLabelsCh.size > 1 && !isReplaced) {
+                        TabRow(selectedTabIndex = chTabIdx) {
+                            tabLabelsCh.forEachIndexed { i, title ->
+                                Tab(
+                                    selected = chTabIdx == i,
+                                    onClick = { chTabIdx = i },
+                                    text = { Text(title, style = MaterialTheme.typography.labelMedium) },
+                                )
+                            }
+                        }
+                    }
+                    val chTabLabel = tabLabelsCh.getOrNull(chTabIdx) ?: "Appareil"
+
+                    when (chTabLabel) {
+                        "Pompe" -> if (!isReplaced && showPompeTabA) {
+                            PompeFioulInstallTab(viewModel = viewModel, equipment = equipment)
+                        }
+
+                        "Gicleur" -> if (!isReplaced && showGicleurTabA) {
+                            GicleurFioulInstallTab(viewModel = viewModel, equipment = equipment)
+                        }
+
+                        else -> {
                     if (isReplaced) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -541,48 +640,205 @@ fun EquipementDetailScreen(
                         }
                     }
 
-                    // Attestation VE — après Mesures ; pas sur le brûleur (rattaché à la chaudière)
-                    if (!isReplaced && !isBruleur) {
-                        Surface(
-                            onClick = { showAttestationPicker = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color.White,
-                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
-                            shadowElevation = 0.dp,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    if (isPacOrClim && !isReplaced) {
+                        val pacMesuresSurface: @Composable (Modifier) -> Unit = { mod ->
+                            Surface(
+                                onClick = {
+                                    onPacMeasureClick(
+                                        viewModel.currentInterventionId,
+                                        equipment.order ?: 0,
+                                    )
+                                },
+                                modifier = mod,
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White,
+                                border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                                shadowElevation = 0.dp,
                             ) {
-                                Icon(
-                                    Icons.Filled.Assignment,
-                                    contentDescription = null,
-                                    tint = SavioUi.Blue,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.AcUnit,
+                                        contentDescription = null,
+                                        tint = SavioUi.Blue,
+                                        modifier = Modifier.size(22.dp),
+                                    )
                                     Text(
-                                        "Attestation d'entretien",
-                                        fontSize = 14.sp,
+                                        "Mesures froid",
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
                                     )
                                     Text(
-                                        text = if (suggestedAttestationType != null) {
-                                            "Suggestion : ${attestationTypeLabel(suggestedAttestationType)}"
-                                        } else {
-                                            "Choisir le type d'attestation"
-                                        },
-                                        fontSize = 12.sp,
+                                        "Saisie terrain",
+                                        fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
+                            }
+                        }
+                        if (hasPacMeasureSaisie) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                pacMesuresSurface(Modifier.weight(1f))
+                                Surface(
+                                    onClick = {
+                                        onPacFichePdfClick(
+                                            viewModel.currentInterventionId,
+                                            equipment.order ?: 0,
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color.White,
+                                    border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                                    shadowElevation = 0.dp,
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.PictureAsPdf,
+                                            contentDescription = null,
+                                            tint = SavioUi.Blue,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                        Text(
+                                            "Fiche PAC/CLIM",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            "Sign. clôture intervention",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            pacMesuresSurface(Modifier.fillMaxWidth())
+                        }
+                    }
+
+                    // Hybride — badge chaudière (point de départ attestation)
+                    if (!isReplaced && !isBruleur && showHybrideStartBadge) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
                                 Icon(
-                                    Icons.Filled.ChevronRight,
+                                    imageVector = Icons.Filled.Bolt,
                                     contentDescription = null,
-                                    tint = SavioUi.Blue,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(16.dp),
                                 )
+                                Text(
+                                    text = "Point de départ de l'attestation hybride",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                        }
+                    }
+
+                    // Attestation VE — après Mesures ; pas sur le brûleur (rattaché à la chaudière)
+                    if (!isReplaced && !isBruleur) {
+                        if (isPartOfHybrideAsPac) {
+                            val ch = checkNotNull(chauffageHybride)
+                            val chaudiereLabel = listOfNotNull(
+                                ch.brand?.takeIf { it.isNotBlank() },
+                                ch.model?.takeIf { it.isNotBlank() },
+                            ).joinToString(" ")
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text(
+                                            text = "Système PAC Hybride",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Text(
+                                            text = "L'attestation se démarre depuis la chaudière $chaudiereLabel.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Surface(
+                                onClick = { showAttestationPicker = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White,
+                                border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                                shadowElevation = 0.dp,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Assignment,
+                                        contentDescription = null,
+                                        tint = SavioUi.Blue,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Attestation d'entretien",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            text = if (suggestedAttestationType != null) {
+                                                "Suggestion : ${attestationTypeLabel(suggestedAttestationType)}"
+                                            } else {
+                                                "Choisir le type d'attestation"
+                                            },
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Filled.ChevronRight,
+                                        contentDescription = null,
+                                        tint = SavioUi.Blue,
+                                    )
+                                }
                             }
                         }
                     }
@@ -820,7 +1076,189 @@ fun EquipementDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PompeFioulInstallTab(
+    viewModel: EquipementDetailViewModel,
+    equipment: EquipmentEntity,
+) {
+    var marque by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var modele by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var pression by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    LaunchedEffect(equipment.attrsJson, equipment.id) {
+        val o = try {
+            JsonParser.parseString(equipment.attrsJson ?: "{}").asJsonObject
+        } catch (_: Exception) {
+            JsonObject()
+        }
+        val p = o.getAsJsonObject("pompe")
+        marque = p?.get("marque")?.asString.orEmpty()
+        modele = p?.get("modele")?.asString.orEmpty()
+        pression = p?.get("pression")?.asString.orEmpty()
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Pompe", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = marque,
+                onValueChange = { marque = it },
+                label = { Text("Marque") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = modele,
+                onValueChange = { modele = it },
+                label = { Text("Modèle") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = pression,
+                onValueChange = { pression = it },
+                label = { Text("Pression (bar)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            TextButton(
+                onClick = {
+                    viewModel.saveInstallationAttrs(
+                        mapOf("marque" to marque, "modele" to modele, "pression" to pression),
+                        emptyMap(),
+                    )
+                },
+            ) {
+                Text("Enregistrer")
+            }
+        }
+    }
+}
+
+@Composable
+private fun GicleurFioulInstallTab(
+    viewModel: EquipementDetailViewModel,
+    equipment: EquipmentEntity,
+) {
+    var marque by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var debitUs by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var debitEu by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var angle by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var type by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    var norme by remember(equipment.id, equipment.attrsJson) { mutableStateOf("EU") }
+    var boite by remember(equipment.id, equipment.attrsJson) { mutableStateOf("") }
+    LaunchedEffect(equipment.attrsJson, equipment.id) {
+        val o = try {
+            JsonParser.parseString(equipment.attrsJson ?: "{}").asJsonObject
+        } catch (_: Exception) {
+            JsonObject()
+        }
+        val g = o.getAsJsonObject("gicleur")
+        marque = g?.get("marque")?.asString.orEmpty()
+        debitUs = g?.get("debit_us")?.asString.orEmpty()
+        debitEu = g?.get("debit_eu")?.asString.orEmpty()
+        angle = g?.get("angle")?.asString.orEmpty()
+        type = g?.get("type")?.asString.orEmpty()
+        val normeRaw = g?.get("norme")?.asString?.trim().orEmpty()
+        norme = if (normeRaw.isBlank()) "EU" else normeRaw
+        boite = g?.get("boite_controle")?.asString.orEmpty()
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Gicleur fioul", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = marque,
+                onValueChange = { marque = it },
+                label = { Text("Marque") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = norme,
+                onValueChange = { norme = it },
+                label = { Text("Norme (EU / US)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            if (norme.uppercase(Locale.getDefault()).contains("US")) {
+                OutlinedTextField(
+                    value = debitUs,
+                    onValueChange = { debitUs = it },
+                    label = { Text("Débit (GPH)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            } else {
+                OutlinedTextField(
+                    value = debitEu,
+                    onValueChange = { debitEu = it },
+                    label = { Text("Débit (kg/h)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
+            OutlinedTextField(
+                value = angle,
+                onValueChange = { angle = it },
+                label = { Text("Angle") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = type,
+                onValueChange = { type = it },
+                label = { Text("Type (S / H / B)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = boite,
+                onValueChange = { boite = it },
+                label = { Text("Boîte de contrôle") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            TextButton(
+                onClick = {
+                    viewModel.saveInstallationAttrs(
+                        emptyMap(),
+                        mapOf(
+                            "marque" to marque,
+                            "debit_us" to debitUs,
+                            "debit_eu" to debitEu,
+                            "angle" to angle,
+                            "type" to type,
+                            "norme" to norme,
+                            "boite_controle" to boite,
+                        ),
+                    )
+                },
+            ) {
+                Text("Enregistrer")
             }
         }
     }

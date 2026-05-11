@@ -30,6 +30,11 @@ data class EquipmentEntity(
     @ColumnInfo(name = "power_kw")
     val powerKw: String? = null,
     val evacuationMode: String? = null,
+    @ColumnInfo(name = "hybride_pac_equipment_id")
+    val hybridePacEquipmentId: String? = null,
+    /** JSON `equipment.attrs` (pompe, gicleur, …). */
+    @ColumnInfo(name = "attrsJson")
+    val attrsJson: String? = null,
     val syncStatus: String = "SYNCED",
     val isChantier: Int = 0,
 )

@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import re.melchior.saviomobile.data.remote.api.DocumentApi
+import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.remote.api.InvoiceApi
 import re.melchior.saviomobile.data.remote.api.PushApi
 import re.melchior.saviomobile.data.remote.api.SyncApi
@@ -40,4 +41,9 @@ object ApiModule {
     @Singleton
     fun provideInvoiceApi(retrofit: Retrofit): InvoiceApi =
         retrofit.create(InvoiceApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideInterventionPdfApi(retrofit: Retrofit): InterventionPdfApi =
+        retrofit.create(InterventionPdfApi::class.java)
 }

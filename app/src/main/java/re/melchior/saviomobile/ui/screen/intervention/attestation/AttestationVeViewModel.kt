@@ -169,6 +169,10 @@ class AttestationVeViewModel @Inject constructor(
         val updated = when (key) {
             "appareilMesure" ->
                 current.copy(appareilMesure = value)
+            "appareilMesureTension" ->
+                current.copy(appareilMesureTension = value)
+            "appareilMesureGenerateur" ->
+                current.copy(appareilMesureGenerateur = value)
             "defautsCorriges" ->
                 current.copy(defautsCorriges = value)
             "recommandationUsage" ->

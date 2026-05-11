@@ -589,6 +589,123 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
     }
 }
 
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE equipments ADD COLUMN hybride_pac_equipment_id TEXT")
+    }
+}
+
+/** JSON (tableau d’ordres) — aligné sur l’entité [AttestationVeEntity.linkedEquipmentOrders]. */
+val MIGRATION_33_34 = object : Migration(33, 34) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            ALTER TABLE attestation_ve
+            ADD COLUMN linkedEquipmentOrders TEXT NOT NULL DEFAULT ''
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_34_35 = object : Migration(34, 35) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            ALTER TABLE attestation_ve
+            ADD COLUMN appareilMesureTension TEXT NOT NULL DEFAULT ''
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_35_36 = object : Migration(35, 36) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            ALTER TABLE attestation_ve
+            ADD COLUMN appareilMesureGenerateur TEXT NOT NULL DEFAULT ''
+            """.trimIndent(),
+        )
+        database.execSQL(
+            """
+            UPDATE attestation_ve
+            SET appareilMesureGenerateur = appareilMesure
+            WHERE type IN ('PAC_HYBRIDE_GAZ', 'PAC_HYBRIDE_FIOUL')
+              AND trim(appareilMesure) <> ''
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_36_37 = object : Migration(36, 37) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            ALTER TABLE equipments
+            ADD COLUMN attrsJson TEXT
+            """.trimIndent(),
+        )
+    }
+}
+
+val MIGRATION_37_38 = object : Migration(37, 38) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS pac_measures (
+                interventionId TEXT NOT NULL,
+                equipmentOrder INTEGER NOT NULL,
+                pacVentilation TEXT NOT NULL DEFAULT '',
+                pacNetail TEXT NOT NULL DEFAULT '',
+                pacVerail TEXT NOT NULL DEFAULT '',
+                pacFiltre TEXT NOT NULL DEFAULT '',
+                pacFuite TEXT NOT NULL DEFAULT '',
+                pacEvac TEXT NOT NULL DEFAULT '',
+                pacPression1 TEXT NOT NULL DEFAULT '',
+                pacPression2 TEXT NOT NULL DEFAULT '',
+                pacGlycol1 TEXT NOT NULL DEFAULT '',
+                pacGlycol2 TEXT NOT NULL DEFAULT '',
+                pacTenStat TEXT NOT NULL DEFAULT '',
+                pacTenDyna TEXT NOT NULL DEFAULT '',
+                pacIntensite TEXT NOT NULL DEFAULT '',
+                pacResserage1 TEXT NOT NULL DEFAULT '',
+                pacResserage2 TEXT NOT NULL DEFAULT '',
+                pacInterieure TEXT NOT NULL DEFAULT '',
+                pacExterieure TEXT NOT NULL DEFAULT '',
+                pacDepart TEXT NOT NULL DEFAULT '',
+                pacRetour TEXT NOT NULL DEFAULT '',
+                pacDeltaT TEXT NOT NULL DEFAULT '',
+                pacHiver TEXT NOT NULL DEFAULT '',
+                pacAppoint TEXT NOT NULL DEFAULT '',
+                pacConfort TEXT NOT NULL DEFAULT '',
+                pacNonChauf TEXT NOT NULL DEFAULT '',
+                pacEcsConsigne TEXT NOT NULL DEFAULT '',
+                pacEcs TEXT NOT NULL DEFAULT '',
+                pacManometreBp TEXT NOT NULL DEFAULT '',
+                pacManometreHp TEXT NOT NULL DEFAULT '',
+                pacDegivrage TEXT NOT NULL DEFAULT '',
+                pacInversion TEXT NOT NULL DEFAULT '',
+                pacHFonct TEXT NOT NULL DEFAULT '',
+                pacHComp1 TEXT NOT NULL DEFAULT '',
+                pacHVenti TEXT NOT NULL DEFAULT '',
+                pacNbDemarr TEXT NOT NULL DEFAULT '',
+                pacHAppoint1 TEXT NOT NULL DEFAULT '',
+                pacHAppoint2 TEXT NOT NULL DEFAULT '',
+                pacAlarme1 TEXT NOT NULL DEFAULT '',
+                pacAlarme2 TEXT NOT NULL DEFAULT '',
+                pacBlocage1 TEXT NOT NULL DEFAULT '',
+                pacBlocage2 TEXT NOT NULL DEFAULT '',
+                pacReleve TEXT NOT NULL DEFAULT '',
+                pacRem1 TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT '',
+                is_dirty INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (interventionId, equipmentOrder)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
 private fun createPendingOperationsTable(db: SupportSQLiteDatabase) {
     db.execSQL(
         """

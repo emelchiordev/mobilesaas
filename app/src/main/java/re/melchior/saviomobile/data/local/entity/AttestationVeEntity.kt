@@ -13,6 +13,8 @@ data class AttestationVeEntity(
     val type: String,
 
     val appareilMesure: String = "",
+    val appareilMesureTension: String = "",
+    val appareilMesureGenerateur: String = "",
     val defautsCorriges: String = "",
     val recommandationUsage: String = "",
     val recommandationAmeliorations: String = "",

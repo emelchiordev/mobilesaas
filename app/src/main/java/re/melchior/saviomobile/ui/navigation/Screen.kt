@@ -118,4 +118,18 @@ sealed class Screen(val route: String) {
             equipmentOrder: Int,
         ) = "measure/$interventionId/$equipmentOrder"
     }
+
+    object PacMeasure : Screen("pac_measures/{interventionId}/{equipmentOrder}") {
+        fun createRoute(
+            interventionId: String,
+            equipmentOrder: Int,
+        ) = "pac_measures/$interventionId/$equipmentOrder"
+    }
+
+    object PacFichePdf : Screen("pac_fiche_pdf/{interventionId}/{equipmentOrder}") {
+        fun createRoute(
+            interventionId: String,
+            equipmentOrder: Int,
+        ) = "pac_fiche_pdf/$interventionId/$equipmentOrder"
+    }
 }

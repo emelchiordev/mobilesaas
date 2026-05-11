@@ -23,6 +23,9 @@ import re.melchior.saviomobile.data.repository.ConflictEvent
 import re.melchior.saviomobile.data.repository.PhotoSyncRepository
 import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.PushResult
+
+private const val SAVIO_PUSH_LOG = "SavioPush"
+
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -34,17 +37,22 @@ class SyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
+            android.util.Log.i(SAVIO_PUSH_LOG, "SyncWorker.doWork() démarré")
             val slug = tokenDataStore.societeSlug.first()
             if (slug.isNullOrBlank()) {
+                android.util.Log.w(SAVIO_PUSH_LOG, "sync annulée: pas de slug société (tokenDataStore vide ?)")
                 android.util.Log.w("SyncWorker", "Pas de slug — sync annulée")
                 return Result.success()
             }
 
             val token = tokenDataStore.accessToken.first()
             if (token.isNullOrBlank()) {
+                android.util.Log.w(SAVIO_PUSH_LOG, "sync annulée: pas de jeton JWT (déconnecté ?)")
                 android.util.Log.w("SyncWorker", "Pas de token — sync annulée")
                 return Result.success()
             }
+
+            android.util.Log.i(SAVIO_PUSH_LOG, "SyncWorker: slug OK, token OK → lancement pushRepository.push()")
 
             // 1. Push interventions — collecter les conflits en parallèle (SharedFlow)
             val pushResult = coroutineScope {
@@ -62,6 +70,7 @@ class SyncWorker @AssistedInject constructor(
                 conflictJob.cancel()
                 result
             }
+            android.util.Log.i(SAVIO_PUSH_LOG, "SyncWorker: push terminé → $pushResult")
             android.util.Log.d("SyncWorker", "Push result: $pushResult")
 
             // 2. Upload photos PENDING ← ajouté
@@ -81,6 +90,7 @@ class SyncWorker @AssistedInject constructor(
             }
 
         } catch (e: Exception) {
+            android.util.Log.e(SAVIO_PUSH_LOG, "SyncWorker exception: ${e.message}", e)
             android.util.Log.e("SyncWorker", "Sync error: ${e.message}", e)
             Result.retry()
         }

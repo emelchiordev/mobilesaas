@@ -33,6 +33,8 @@ import re.melchior.saviomobile.ui.screen.intervention.CatalogSearchScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipmentFormScreen
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationVeScreen
 import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureScreen
+import re.melchior.saviomobile.ui.screen.intervention.pacmeasure.PacMeasureScreen
+import re.melchior.saviomobile.ui.screen.intervention.pacfiche.PacFichePdfScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
 import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
@@ -369,6 +371,30 @@ fun AppNavigation(
         }
 
         composable(
+            route = Screen.PacMeasure.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentOrder") { type = NavType.IntType },
+            ),
+        ) {
+            PacMeasureScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Screen.PacFichePdf.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("equipmentOrder") { type = NavType.IntType },
+            ),
+        ) {
+            PacFichePdfScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
             route = Screen.AttestationVe.route,
             arguments = listOf(
                 navArgument("interventionId") { type = NavType.StringType },
@@ -419,6 +445,16 @@ fun AppNavigation(
                 onMeasureClick = { interventionId, order ->
                     navController.navigate(
                         Screen.Measure.createRoute(interventionId, order),
+                    )
+                },
+                onPacMeasureClick = { interventionId, order ->
+                    navController.navigate(
+                        Screen.PacMeasure.createRoute(interventionId, order),
+                    )
+                },
+                onPacFichePdfClick = { interventionId, order ->
+                    navController.navigate(
+                        Screen.PacFichePdf.createRoute(interventionId, order),
                     )
                 },
                 onReplaceClick = { interventionId, equipmentId ->

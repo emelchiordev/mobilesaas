@@ -49,6 +49,7 @@ class SyncRepository @Inject constructor(
     private val coldMeasureDao: ColdMeasureDao,
     private val equipmentSnapshotDao: EquipmentSnapshotDao,
     private val measureRepository: MeasureRepository,
+    private val pacMeasureRepository: PacMeasureRepository,
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
@@ -321,6 +322,8 @@ class SyncRepository @Inject constructor(
                                     if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
                                 },
                                 evacuationMode = eq.evacuationMode,
+                                hybridePacEquipmentId = eq.hybridePacEquipmentId,
+                                attrsJson = eq.attrs?.toString(),
                             )
                         }
                     }
@@ -350,6 +353,15 @@ class SyncRepository @Inject constructor(
             }
 
             equipmentDao.insertAll(equipmentMap.values.toList())
+
+            response.interventions.forEach { intervention ->
+                val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
+                val blockLocalSync = existingIntervention?.syncStatus == "IN_PROGRESS" ||
+                    existingIntervention?.syncStatus == "PENDING"
+                if (!blockLocalSync && intervention.pacMeasures.isNotEmpty()) {
+                    pacMeasureRepository.mergeFromPull(intervention.pacMeasures, intervention.id)
+                }
+            }
 
             response.referentiels?.let { refs ->
                 refs.interventionTypes?.let { types ->
@@ -475,6 +487,7 @@ class SyncRepository @Inject constructor(
                 parentEquipmentId = snap.parentEquipmentId,
                 powerKw = null,
                 evacuationMode = null,
+                hybridePacEquipmentId = null,
             )
         }
         if (restored.isNotEmpty()) {
@@ -484,6 +497,8 @@ class SyncRepository @Inject constructor(
         coldMeasureDao.deleteByInterventionId(interventionId)
 
         measureRepository.deleteByInterventionId(interventionId)
+
+        pacMeasureRepository.deleteByInterventionId(interventionId)
 
         equipmentSnapshotDao.deleteByInterventionId(interventionId)
 

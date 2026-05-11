@@ -1,5 +1,6 @@
 package re.melchior.saviomobile.data.remote.dto
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 data class PullResponseDto(
@@ -67,6 +68,56 @@ data class InterventionDto(
     val actualTypeLabel: String? = null,
     @SerializedName("actualTypes")
     val actualTypes: List<InterventionActualTypeItemDto> = emptyList(),
+    @SerializedName("pacMeasures")
+    val pacMeasures: List<PacMeasurePullDto> = emptyList(),
+)
+
+data class PacMeasurePullDto(
+    @SerializedName("interventionId") val interventionId: String = "",
+    @SerializedName("equipmentOrder") val equipmentOrder: Int = 0,
+    @SerializedName("pacVentilation") val pacVentilation: String? = null,
+    @SerializedName("pacNetail") val pacNetail: String? = null,
+    @SerializedName("pacVerail") val pacVerail: String? = null,
+    @SerializedName("pacFiltre") val pacFiltre: String? = null,
+    @SerializedName("pacFuite") val pacFuite: String? = null,
+    @SerializedName("pacEvac") val pacEvac: String? = null,
+    @SerializedName("pacPression1") val pacPression1: String? = null,
+    @SerializedName("pacPression2") val pacPression2: Double? = null,
+    @SerializedName("pacGlycol1") val pacGlycol1: String? = null,
+    @SerializedName("pacGlycol2") val pacGlycol2: Double? = null,
+    @SerializedName("pacTenStat") val pacTenStat: Double? = null,
+    @SerializedName("pacTenDyna") val pacTenDyna: Double? = null,
+    @SerializedName("pacIntensite") val pacIntensite: Double? = null,
+    @SerializedName("pacResserage1") val pacResserage1: String? = null,
+    @SerializedName("pacResserage2") val pacResserage2: String? = null,
+    @SerializedName("pacInterieure") val pacInterieure: Double? = null,
+    @SerializedName("pacExterieure") val pacExterieure: Double? = null,
+    @SerializedName("pacDepart") val pacDepart: Double? = null,
+    @SerializedName("pacRetour") val pacRetour: Double? = null,
+    @SerializedName("pacDeltaT") val pacDeltaT: Double? = null,
+    @SerializedName("pacHiver") val pacHiver: Double? = null,
+    @SerializedName("pacAppoint") val pacAppoint: Double? = null,
+    @SerializedName("pacConfort") val pacConfort: Double? = null,
+    @SerializedName("pacNonChauf") val pacNonChauf: Double? = null,
+    @SerializedName("pacEcsConsigne") val pacEcsConsigne: Double? = null,
+    @SerializedName("pacEcs") val pacEcs: Double? = null,
+    @SerializedName("pacManometreBp") val pacManometreBp: Double? = null,
+    @SerializedName("pacManometreHp") val pacManometreHp: Double? = null,
+    @SerializedName("pacDegivrage") val pacDegivrage: String? = null,
+    @SerializedName("pacInversion") val pacInversion: String? = null,
+    @SerializedName("pacHFonct") val pacHFonct: Double? = null,
+    @SerializedName("pacHComp1") val pacHComp1: Double? = null,
+    @SerializedName("pacHVenti") val pacHVenti: Double? = null,
+    @SerializedName("pacNbDemarr") val pacNbDemarr: Double? = null,
+    @SerializedName("pacHAppoint1") val pacHAppoint1: Double? = null,
+    @SerializedName("pacHAppoint2") val pacHAppoint2: Double? = null,
+    @SerializedName("pacAlarme1") val pacAlarme1: String? = null,
+    @SerializedName("pacAlarme2") val pacAlarme2: String? = null,
+    @SerializedName("pacBlocage1") val pacBlocage1: String? = null,
+    @SerializedName("pacBlocage2") val pacBlocage2: String? = null,
+    @SerializedName("pacReleve") val pacReleve: Double? = null,
+    @SerializedName("pacRem1") val pacRem1: String? = null,
+    @SerializedName("updatedAt") val updatedAt: String? = null,
 )
 
 data class InterventionActualTypeItemDto(
@@ -164,8 +215,12 @@ data class EquipmentDto(
     val order: Int? = null,
     @SerializedName("evacuation_mode")
     val evacuationMode: String? = null,
+    @SerializedName("hybridePacEquipmentId")
+    val hybridePacEquipmentId: String? = null,
     @SerializedName("powerKw")
     val powerKw: Double? = null,
+    @SerializedName("attrs")
+    val attrs: JsonElement? = null,
 )
 
 data class ContractDto(

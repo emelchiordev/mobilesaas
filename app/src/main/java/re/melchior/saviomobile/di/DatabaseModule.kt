@@ -42,11 +42,18 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_28_29
 import re.melchior.saviomobile.data.local.database.MIGRATION_29_30
 import re.melchior.saviomobile.data.local.database.MIGRATION_30_31
 import re.melchior.saviomobile.data.local.database.MIGRATION_31_32
+import re.melchior.saviomobile.data.local.database.MIGRATION_32_33
+import re.melchior.saviomobile.data.local.database.MIGRATION_33_34
+import re.melchior.saviomobile.data.local.database.MIGRATION_34_35
+import re.melchior.saviomobile.data.local.database.MIGRATION_35_36
+import re.melchior.saviomobile.data.local.database.MIGRATION_36_37
+import re.melchior.saviomobile.data.local.database.MIGRATION_37_38
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
 import re.melchior.saviomobile.data.local.dao.MeasureDao
+import re.melchior.saviomobile.data.local.dao.PacMeasureDao
 import javax.inject.Singleton
 
 @Module
@@ -83,6 +90,12 @@ object DatabaseModule {
             MIGRATION_29_30,
             MIGRATION_30_31,
             MIGRATION_31_32,
+            MIGRATION_32_33,
+            MIGRATION_33_34,
+            MIGRATION_34_35,
+            MIGRATION_35_36,
+            MIGRATION_36_37,
+            MIGRATION_37_38,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -154,6 +167,10 @@ object DatabaseModule {
     @Provides
     fun provideMeasureDao(db: SavioDatabase): MeasureDao =
         db.measureDao()
+
+    @Provides
+    fun providePacMeasureDao(db: SavioDatabase): PacMeasureDao =
+        db.pacMeasureDao()
 
     @Provides
     fun provideAttestationVeDao(db: SavioDatabase): AttestationVeDao =

@@ -7,6 +7,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,6 +22,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import re.melchior.saviomobile.data.local.dao.PacMeasureDao
+import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -46,6 +50,7 @@ class EquipementDetailViewModel @Inject constructor(
     private val catalogSyncRepository: CatalogSyncRepository,
     private val pendingOperationDao: PendingOperationDao,
     private val equipmentDao: EquipmentDao,
+    private val pacMeasureDao: PacMeasureDao,
     private val syncRepository: SyncRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -82,6 +87,16 @@ class EquipementDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Tous les équipements de l'intervention (ex. détection PAC hybride). */
+    val interventionEquipments: StateFlow<List<EquipmentEntity>> =
+        equipmentDao
+            .getEquipmentsByIntervention(interventionId)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList(),
+            )
+
     /** True si cet équipement est issu d'un CREATE/REPLACE encore en attente de sync (badge « Nouveau »). */
     val isNewEquipment: StateFlow<Boolean> =
         equipmentDao
@@ -98,6 +113,25 @@ class EquipementDetailViewModel @Inject constructor(
                                         it.type == "REPLACE_EQUIPMENT"
                                     )
                         }
+                    }
+                }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = false,
+            )
+
+    /** Au moins un champ métier renseigné localement (aligné logique API `hasSaisie`). */
+    val hasPacMeasureSaisieForThisEquipment: StateFlow<Boolean> =
+        equipmentDao
+            .getEquipmentByInterventionAndServerId(interventionId, equipmentId)
+            .flatMapLatest { eq ->
+                if (eq == null) {
+                    flowOf(false)
+                } else {
+                    pacMeasureDao.observeByInterventionId(interventionId).map { rows ->
+                        rows.find { it.equipmentOrder == eq.order }?.let { pacEntityHasSaisie(it) } ?: false
                     }
                 }
             }
@@ -297,4 +331,97 @@ class EquipementDetailViewModel @Inject constructor(
             }
         }
     }
+
+    /** Fusionne `pompe` / `gicleur` dans `equipment.attrs` (sync mobile). */
+    fun saveInstallationAttrs(pompeFields: Map<String, String?>, gicleurFields: Map<String, String?>) {
+        viewModelScope.launch {
+            val eq = _uiState.value.equipment ?: return@launch
+            val gson = Gson()
+            val root = try {
+                JsonParser.parseString(eq.attrsJson ?: "{}").asJsonObject
+            } catch (_: Exception) {
+                JsonObject()
+            }
+            fun putNested(name: String, fields: Map<String, String?>) {
+                val nested = JsonObject()
+                fields.forEach { (k, v) ->
+                    val t = v?.trim().orEmpty()
+                    if (t.isNotEmpty()) nested.addProperty(k, t)
+                }
+                if (nested.size() == 0) {
+                    root.remove(name)
+                } else {
+                    root.add(name, nested)
+                }
+            }
+            putNested("pompe", pompeFields)
+            putNested("gicleur", gicleurFields)
+            val json = gson.toJson(root)
+            val payload = JsonObject()
+            payload.addProperty("equipmentId", eq.id)
+            payload.addProperty("interventionId", eq.interventionId)
+            payload.add("attrs", root)
+            val op = PendingOperationEntity(
+                id = java.util.UUID.randomUUID().toString(),
+                type = "UPDATE_EQUIPMENT",
+                payload = payload.toString(),
+                occurredAt = java.time.Instant.now().toString(),
+                interventionId = eq.interventionId,
+                status = "pending",
+                createdAt = java.time.Instant.now().toString(),
+            )
+            pendingOperationDao.insert(op)
+            val updated = eq.copy(attrsJson = json)
+            equipmentDao.insertAll(listOf(updated))
+            _uiState.update { it.copy(equipment = updated) }
+        }
+    }
 }
+
+private fun pacEntityHasSaisie(e: PacMeasureEntity): Boolean =
+    with(e) {
+        listOf(
+            pacVentilation,
+            pacNetail,
+            pacVerail,
+            pacFiltre,
+            pacFuite,
+            pacEvac,
+            pacPression1,
+            pacPression2,
+            pacGlycol1,
+            pacGlycol2,
+            pacTenStat,
+            pacTenDyna,
+            pacIntensite,
+            pacResserage1,
+            pacResserage2,
+            pacInterieure,
+            pacExterieure,
+            pacDepart,
+            pacRetour,
+            pacDeltaT,
+            pacHiver,
+            pacAppoint,
+            pacConfort,
+            pacNonChauf,
+            pacEcsConsigne,
+            pacEcs,
+            pacManometreBp,
+            pacManometreHp,
+            pacDegivrage,
+            pacInversion,
+            pacHFonct,
+            pacHComp1,
+            pacHVenti,
+            pacNbDemarr,
+            pacHAppoint1,
+            pacHAppoint2,
+            pacAlarme1,
+            pacAlarme2,
+            pacBlocage1,
+            pacBlocage2,
+            pacReleve,
+            pacRem1,
+        ).any { it.isNotBlank() }
+    }

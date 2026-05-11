@@ -438,7 +438,10 @@ fun InterventionDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 if (uiState.equipments.isNotEmpty()) {
-                                    EquipmentsCard(equipments = uiState.equipments)
+                                    PlanningEquipmentsSection(
+                                        interventionId = intervention.id,
+                                        equipments = uiState.equipments,
+                                    )
                                 } else {
                                     Box(
                                         modifier =
@@ -1119,7 +1122,11 @@ private fun RapportPage(
 
 
 @Composable
-private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
+private fun PlanningEquipmentsSection(
+    interventionId: String,
+    equipments: List<EquipmentEntity>,
+) {
+    val newEquipmentIds = emptySet<String>()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1127,8 +1134,13 @@ private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Icon(
                     imageVector = Icons.Filled.Build,
                     contentDescription = null,
@@ -1160,64 +1172,80 @@ private fun EquipmentsCard(equipments: List<EquipmentEntity>) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                thickness = 0.5.dp,
+                color = SavioUi.CardBorder,
+            )
 
-            equipments.forEachIndexed { index, equipment ->
-                if (index > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 7.dp),
-                        thickness = 0.5.dp,
-                        color = SavioUi.CardBorder,
+            val allActive = equipments.filter { it.typeCode != "replaced" }
+            val allReplaced = equipments.filter { it.typeCode == "replaced" }
+            val rootEquipments = allActive
+                .filter { it.parentEquipmentId == null }
+                .sortedWith(
+                    compareByDescending<EquipmentEntity> { it.isPrimary }
+                        .thenBy { it.order },
+                )
+            val childrenByParent = allActive
+                .filter { it.parentEquipmentId != null }
+                .groupBy { it.parentEquipmentId }
+                .mapValues { (_, list) ->
+                    list.sortedWith(
+                        compareBy<EquipmentEntity> { it.order }.thenBy { it.id },
                     )
                 }
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = listOfNotNull(equipment.brand, equipment.model)
-                                .joinToString(" ")
-                                .ifEmpty { "Équipement sans nom" },
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (equipment.isPrimary) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(SavioUi.ChipBackground)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                            ) {
-                                Text(
-                                    text = "Principal",
-                                    fontSize = 11.sp,
-                                    color = SavioUi.Blue,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                        }
-                    }
-                    equipment.typeCode?.let {
-                        Text(
-                            text = it,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    equipment.serialNumber?.let {
-                        Text(
-                            text = "N° série : $it",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    equipment.installDate?.let {
-                        Text(
-                            text = "Installé le : ${it.substring(0, 10)}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+            val orphans = allActive.filter { eq ->
+                eq.parentEquipmentId != null &&
+                    rootEquipments.none { it.id == eq.parentEquipmentId }
+            }
+            val rootReplaced = allReplaced
+                .filter { it.parentEquipmentId == null }
+                .sortedWith(
+                    compareBy<EquipmentEntity> { it.order }.thenBy { it.id },
+                )
+
+            val hybrideGroups = computeHybrideGroups(
+                equipmentRoots = rootEquipments,
+                allEquipments = allActive,
+                childrenByParent = childrenByParent,
+            )
+            val hybrideIds = hybrideEquipmentIds(hybrideGroups)
+            val normalRootAndOrphans = (rootEquipments + orphans).filter { it.id !in hybrideIds }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                hybrideGroups.forEach { group ->
+                    HybrideGroupCard(
+                        group = group,
+                        newEquipmentIds = newEquipmentIds,
+                        interventionId = interventionId,
+                        interactive = false,
+                        onEquipementClick = { _, _ -> },
+                    )
+                }
+                normalRootAndOrphans.forEach { parent ->
+                    InterventionEquipmentGroupCard(
+                        parent = parent,
+                        children = childrenByParent[parent.id].orEmpty(),
+                        newEquipmentIds = newEquipmentIds,
+                        interventionId = interventionId,
+                        interactive = false,
+                        onEquipementClick = { _, _ -> },
+                    )
+                }
+                rootReplaced.forEach { parent ->
+                    InterventionEquipmentGroupCard(
+                        parent = parent,
+                        children = childrenByParent[parent.id].orEmpty(),
+                        newEquipmentIds = newEquipmentIds,
+                        interventionId = interventionId,
+                        interactive = false,
+                        onEquipementClick = { _, _ -> },
+                    )
                 }
             }
         }

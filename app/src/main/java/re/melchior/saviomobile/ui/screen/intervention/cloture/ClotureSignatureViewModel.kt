@@ -26,6 +26,7 @@ import java.time.Instant
 import javax.inject.Inject
 
 private const val ROUTE_NO_PRESELECT = "_"
+private const val SAVIO_PUSH_LOG = "SavioPush"
 
 data class ClotureSignatureUiState(
     val intervention: InterventionEntity? = null,
@@ -192,6 +193,7 @@ class ClotureSignatureViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
+                android.util.Log.i(SAVIO_PUSH_LOG, "clôture: début interventionId=$interventionId")
                 val state = _uiState.value
                 val selectedTypes = state.selectedCloseTypes
                 if (selectedTypes.isEmpty()) {
@@ -237,7 +239,9 @@ class ClotureSignatureViewModel @Inject constructor(
                     selectedTypes = selectedTypes
                 )
 
+                android.util.Log.i(SAVIO_PUSH_LOG, "clôture: DB à jour → appel push()")
                 val pushResult = pushRepository.push()
+                android.util.Log.i(SAVIO_PUSH_LOG, "clôture: push() retourne $pushResult")
                 android.util.Log.d("ClotureVM", "Push result: $pushResult")
 
                 val requiresValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
@@ -249,6 +253,7 @@ class ClotureSignatureViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                android.util.Log.e(SAVIO_PUSH_LOG, "clôture échouée avant/après push: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
