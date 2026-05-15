@@ -40,16 +40,31 @@ class AuthViewModel @Inject constructor(
 
     fun login() {
         val state = _uiState.value
+        loginWithCredentials(state.email, state.password)
+    }
 
-        if (state.email.isBlank() || state.password.isBlank()) {
+    /**
+     * Connexion explicite (écran login ou après activation) : persistance JWT via [AuthRepository.login].
+     */
+    fun loginWithCredentials(email: String, password: String) {
+        val em = email.trim()
+        if (em.isBlank() || password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Email et mot de passe requis") }
             return
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    email = em,
+                    password = password,
+                    societesToChoose = emptyList(),
+                )
+            }
 
-            when (val result = authRepository.login(state.email, state.password)) {
+            when (val result = authRepository.login(em, password)) {
                 is AuthResult.Success -> {
                     _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
@@ -57,7 +72,7 @@ class AuthViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            societesToChoose = result.societes
+                            societesToChoose = result.societes,
                         )
                     }
                 }
@@ -65,7 +80,7 @@ class AuthViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = result.message
+                            errorMessage = result.message,
                         )
                     }
                 }
@@ -73,24 +88,34 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun selectSociete(societe: SocieteDto) {
+    fun selectSociete(societe: SocieteDto, isRegistrationFlow: Boolean = false, onCompleted: () -> Unit = {}) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            authRepository.selectSociete(societe)
+            authRepository.selectSociete(societe, isRegistrationFlow)
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     isLoggedIn = true,
-                    societesToChoose = emptyList()
+                    societesToChoose = emptyList(),
                 )
             }
+            onCompleted()
         }
     }
 
-    fun logout() {
+    fun importSocietesForSelection(societes: List<SocieteDto>) {
+        _uiState.update { it.copy(societesToChoose = societes) }
+    }
+
+    fun logout(onLoggedOut: () -> Unit = {}) {
         viewModelScope.launch {
             authRepository.logout()
             _uiState.update { AuthUiState() }
+            onLoggedOut()
         }
+    }
+
+    fun clearErrorMessage() {
+        _uiState.update { it.copy(errorMessage = null) }
     }
 }

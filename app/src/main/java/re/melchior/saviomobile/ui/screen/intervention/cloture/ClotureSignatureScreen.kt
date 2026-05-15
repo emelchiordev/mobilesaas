@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.SavioPalette
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureSignatureScreen(
@@ -311,10 +312,10 @@ private fun SignatureZone(
             .fillMaxWidth()
             .height(180.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
+            .background(SavioPalette.SurfaceCard)
             .border(
                 width = if (hasSignature) 2.dp else 1.dp,
-                color = if (hasSignature) Color(0xFF185FA5) else Color.LightGray,
+                color = if (hasSignature) SavioPalette.Accent else SavioPalette.TextHint,
                 shape = RoundedCornerShape(12.dp)
             )
             .onSizeChanged { size -> onSizeChanged(size.width, size.height) }
@@ -338,7 +339,7 @@ private fun SignatureZone(
             }
             drawPath(
                 path = path,
-                color = Color.Black,
+                color = SavioPalette.TextPrimary,
                 style = Stroke(
                     width = 4f,
                     cap = StrokeCap.Round,
@@ -355,7 +356,7 @@ private fun SignatureZone(
                 Text(
                     text = placeholder,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.LightGray
+                    color = SavioPalette.TextSecondary
                 )
             }
         }

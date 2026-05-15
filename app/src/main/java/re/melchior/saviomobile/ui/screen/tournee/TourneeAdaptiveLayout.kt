@@ -30,11 +30,14 @@ fun TourneeAdaptiveLayout(
     onClientClick: (String) -> Unit = {},
     currentDateLabel: String,
     pendingSyncCount: Int,
+    pendingOfflineInterventionCount: Int = 0,
+    onPendingOfflineList: (() -> Unit)? = null,
     onSyncCatalog: () -> Unit,
     isCatalogSyncing: Boolean = false,
     onRefresh: () -> Unit,
     isRefreshing: Boolean,
     isNetworkOnline: Boolean = true,
+    onLogout: (() -> Unit)? = null,
 ) {
     val navEntry by detailNavController.currentBackStackEntryAsState()
     val selectedId = navEntry?.arguments?.getString("interventionId")
@@ -47,11 +50,14 @@ fun TourneeAdaptiveLayout(
             currentDate = currentDateLabel,
             remainingCount = remainingCount,
             pendingSyncCount = pendingSyncCount,
+            pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+            onPendingOfflineClick = onPendingOfflineList,
             onSyncCatalog = onSyncCatalog,
             isCatalogSyncing = isCatalogSyncing,
             onRefresh = onRefresh,
             isRefreshing = isRefreshing,
             isNetworkOnline = isNetworkOnline,
+            onLogout = onLogout,
         )
         if (!isNetworkOnline) {
             SavioOfflineBannerSurface()

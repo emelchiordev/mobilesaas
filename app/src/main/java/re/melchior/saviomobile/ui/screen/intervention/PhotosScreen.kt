@@ -35,10 +35,13 @@ fun PhotosScreen(
     val pendingCount by viewModel.pendingCount.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
                 title = {
                     Column {
@@ -61,6 +64,7 @@ fun PhotosScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Retour",
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },

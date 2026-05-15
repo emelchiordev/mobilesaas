@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -29,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,8 +47,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collect
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
-private val InterventionBlue = SavioUi.Blue
 private val InterventionPageBackground = SavioUi.PageBackground
 
 @OptIn(
@@ -98,44 +98,41 @@ fun InterventionActiveScreen(
 
     NavigationSuiteScaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = SavioPalette.BackgroundPage,
+        navigationSuiteColors =
+            NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = SavioPalette.BackgroundPage,
+                navigationBarContentColor = SavioPalette.TextSecondary,
+            ),
         navigationSuiteItems = {
             InterventionTab.entries.forEach { tab ->
                 item(
                     icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selectedTab == tab) {
-                                        InterventionBlue
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = if (selectedTab == tab) tab.selectedIcon else tab.icon,
-                                contentDescription = tab.label,
-                                tint = if (selectedTab == tab) {
-                                    Color.White
+                        Icon(
+                            imageVector =
+                                if (selectedTab == tab) tab.selectedIcon else tab.icon,
+                            contentDescription = tab.label,
+                            tint =
+                                if (selectedTab == tab) {
+                                    SavioPalette.Accent
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    SavioPalette.TextSecondary
                                 },
-                            )
-                        }
+                            modifier = Modifier.size(24.dp),
+                        )
                     },
                     label = {
                         Text(
                             text = tab.label,
                             fontSize = 10.sp,
-                            fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedTab == tab) {
-                                InterventionBlue
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            fontWeight =
+                                if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
+                            color =
+                                if (selectedTab == tab) {
+                                    SavioPalette.Accent
+                                } else {
+                                    SavioPalette.TextSecondary
+                                },
                         )
                     },
                     selected = selectedTab == tab,
@@ -161,7 +158,7 @@ fun InterventionActiveScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .background(InterventionBlue)
+                        .background(SavioPalette.Accent)
                         .padding(16.dp),
                 )
             }
@@ -216,7 +213,7 @@ private fun InterventionActiveTopBar(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(InterventionBlue)
+            .background(SavioPalette.Accent)
             .windowInsetsPadding(WindowInsets.statusBars),
     ) {
         Row(
@@ -247,7 +244,7 @@ private fun InterventionActiveTopBar(
                     onClick = onClotureClick,
                     colors = ButtonDefaults.textButtonColors(
                         containerColor = Color.White,
-                        contentColor = InterventionBlue,
+                        contentColor = SavioPalette.Accent,
                     ),
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))

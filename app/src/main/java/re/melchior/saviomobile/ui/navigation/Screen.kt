@@ -3,9 +3,28 @@ package re.melchior.saviomobile.ui.navigation
 import android.net.Uri
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
+
+    object Welcome : Screen("welcome")
+
+    object Register : Screen("register")
+
+    object Onboarding : Screen("onboarding")
+
     object Login : Screen("login")
-    object SelectSociete : Screen("select_societe")
+
+    object SelectSociete : Screen("select_societe/{registerFlow}") {
+        fun createRoute(registerFlow: Boolean = false) = "select_societe/$registerFlow"
+    }
+
     object Tournee : Screen("tournee")
+
+    object CreateClient : Screen("create_client")
+
+    object CreateOfflineIntervention : Screen("create_offline_intervention")
+
+    object PendingOfflineInterventions : Screen("pending_offline_interventions")
+
     object InterventionDetail : Screen("intervention/{interventionId}") {
         fun createRoute(interventionId: String) = "intervention/$interventionId"
     }
@@ -126,10 +145,9 @@ sealed class Screen(val route: String) {
         ) = "pac_measures/$interventionId/$equipmentOrder"
     }
 
-    object PacFichePdf : Screen("pac_fiche_pdf/{interventionId}/{equipmentOrder}") {
-        fun createRoute(
-            interventionId: String,
-            equipmentOrder: Int,
-        ) = "pac_fiche_pdf/$interventionId/$equipmentOrder"
+    /** Deep link + navigation interne : jeton d’activation compte (URL-encoded). */
+    object Activation : Screen("activation/{token}") {
+        fun createRoute(token: String) =
+            "activation/${Uri.encode(token, "UTF-8")}"
     }
 }

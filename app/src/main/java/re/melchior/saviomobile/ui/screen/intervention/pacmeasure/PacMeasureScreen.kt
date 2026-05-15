@@ -3,13 +3,20 @@ package re.melchior.saviomobile.ui.screen.intervention.pacmeasure
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +36,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +53,8 @@ fun PacMeasureScreen(
     viewModel: PacMeasureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pdfUi by viewModel.pdfUi.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
 
     DisposableEffect(Unit) {
@@ -52,6 +62,7 @@ fun PacMeasureScreen(
     }
 
     Scaffold(
+        containerColor = SavioPalette.BackgroundPage,
         topBar = {
             TopAppBar(
                 title = { Text("Mesures froid") },
@@ -65,13 +76,15 @@ fun PacMeasureScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
+                            tint = SavioPalette.TextPrimary,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioPalette.Primary,
-                    titleContentColor = SavioPalette.White,
-                    navigationIconContentColor = SavioPalette.White,
+                    containerColor = SavioPalette.BackgroundPage,
+                    titleContentColor = SavioPalette.TextPrimary,
+                    navigationIconContentColor = SavioPalette.TextPrimary,
+                    actionIconContentColor = SavioPalette.TextPrimary,
                 ),
             )
         },
@@ -99,7 +112,7 @@ fun PacMeasureScreen(
             val scroll = rememberScrollState()
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
                     .verticalScroll(scroll)
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -110,6 +123,33 @@ fun PacMeasureScreen(
                     2 -> PacTabTemperatures(state, viewModel::updateField)
                     3 -> PacTabTests(state, viewModel::updateField)
                     4 -> PacTabRemarques(state, viewModel::updateField)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            pdfUi.errorMessage?.let { msg ->
+                Text(
+                    text = msg,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
+            Button(
+                onClick = { viewModel.generateAndOpenPdf(context) },
+                enabled = !pdfUi.isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                if (pdfUi.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Générer la fiche PAC/CLIM")
                 }
             }
         }

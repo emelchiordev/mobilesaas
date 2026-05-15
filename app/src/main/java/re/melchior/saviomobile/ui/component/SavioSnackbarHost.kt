@@ -8,7 +8,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioDimens
@@ -26,6 +25,7 @@ fun SavioSnackbarHost(
             val isSuccess =
                 msg.contains("enregistr", ignoreCase = true) ||
                     msg.contains("succès", ignoreCase = true) ||
+                    msg.contains("créé", ignoreCase = true) ||
                     msg.contains("créée", ignoreCase = true) ||
                     msg.contains("clôtur", ignoreCase = true) ||
                     msg.contains("mise à jour", ignoreCase = true) ||
@@ -41,22 +41,22 @@ fun SavioSnackbarHost(
                     )
             val containerColor =
                 when {
-                    isSuccess -> SavioPalette.Success
+                    isSuccess -> SavioPalette.SuccessDark
                     isWarning -> SavioPalette.SnackbarWarning
                     else -> SavioPalette.SnackbarError
+                }
+            val contentColor =
+                when {
+                    isSuccess -> SavioPalette.Success
+                    else -> SavioPalette.TextPrimary
                 }
             Snackbar(
                 snackbarData = data,
                 shape = RoundedCornerShape(SavioDimens.RadiusMD),
                 containerColor = containerColor,
-                contentColor = SavioPalette.White,
-                actionColor =
-                    if (isSuccess) {
-                        SavioPalette.PrimaryLight
-                    } else {
-                        SavioPalette.PrimaryLight
-                    },
-                dismissActionContentColor = SavioPalette.White.copy(alpha = 0.8f),
+                contentColor = contentColor,
+                actionColor = SavioPalette.Accent,
+                dismissActionContentColor = SavioPalette.TextPrimary.copy(alpha = 0.8f),
             )
         },
     )

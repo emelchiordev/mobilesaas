@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @Composable
 fun QuitInterventionDialog(
@@ -21,30 +22,32 @@ fun QuitInterventionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(12.dp),
-        containerColor = Color.White,
+        containerColor = SavioPalette.SurfaceCard,
         title = {
             Text(
                 text = "Quitter l'intervention ?",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF2C2C2A)
+                color = SavioPalette.TextPrimary,
             )
         },
         text = {
             Text(
-                text = "Toute saisie en cours sera perdue. L'intervention repassera en \"À venir\".",
+                text =
+                    "Toute saisie en cours sera perdue. L'intervention repassera en \"À venir\".",
                 fontSize = 14.sp,
-                color = Color(0xFF888780),
-                lineHeight = 20.sp
+                color = SavioPalette.TextSecondary,
+                lineHeight = 20.sp,
             )
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE24B4A)
-                ),
-                shape = RoundedCornerShape(8.dp)
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE24B4A),
+                    ),
+                shape = RoundedCornerShape(8.dp),
             ) {
                 Text("Quitter", color = Color.White, fontSize = 13.sp)
             }
@@ -52,11 +55,11 @@ fun QuitInterventionDialog(
         dismissButton = {
             OutlinedButton(
                 onClick = onDismiss,
-                border = BorderStroke(1.dp, Color(0xFF185FA5)),
-                shape = RoundedCornerShape(8.dp)
+                border = BorderStroke(1.dp, SavioPalette.Accent),
+                shape = RoundedCornerShape(8.dp),
             ) {
-                Text("Rester", color = Color(0xFF185FA5), fontSize = 13.sp)
+                Text("Rester", color = SavioPalette.TextPrimary, fontSize = 13.sp)
             }
-        }
+        },
     )
 }

@@ -22,8 +22,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import re.melchior.saviomobile.data.local.dao.PacMeasureDao
-import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -50,7 +48,6 @@ class EquipementDetailViewModel @Inject constructor(
     private val catalogSyncRepository: CatalogSyncRepository,
     private val pendingOperationDao: PendingOperationDao,
     private val equipmentDao: EquipmentDao,
-    private val pacMeasureDao: PacMeasureDao,
     private val syncRepository: SyncRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -113,25 +110,6 @@ class EquipementDetailViewModel @Inject constructor(
                                         it.type == "REPLACE_EQUIPMENT"
                                     )
                         }
-                    }
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = false,
-            )
-
-    /** Au moins un champ métier renseigné localement (aligné logique API `hasSaisie`). */
-    val hasPacMeasureSaisieForThisEquipment: StateFlow<Boolean> =
-        equipmentDao
-            .getEquipmentByInterventionAndServerId(interventionId, equipmentId)
-            .flatMapLatest { eq ->
-                if (eq == null) {
-                    flowOf(false)
-                } else {
-                    pacMeasureDao.observeByInterventionId(interventionId).map { rows ->
-                        rows.find { it.equipmentOrder == eq.order }?.let { pacEntityHasSaisie(it) } ?: false
                     }
                 }
             }
@@ -377,51 +355,3 @@ class EquipementDetailViewModel @Inject constructor(
         }
     }
 }
-
-private fun pacEntityHasSaisie(e: PacMeasureEntity): Boolean =
-    with(e) {
-        listOf(
-            pacVentilation,
-            pacNetail,
-            pacVerail,
-            pacFiltre,
-            pacFuite,
-            pacEvac,
-            pacPression1,
-            pacPression2,
-            pacGlycol1,
-            pacGlycol2,
-            pacTenStat,
-            pacTenDyna,
-            pacIntensite,
-            pacResserage1,
-            pacResserage2,
-            pacInterieure,
-            pacExterieure,
-            pacDepart,
-            pacRetour,
-            pacDeltaT,
-            pacHiver,
-            pacAppoint,
-            pacConfort,
-            pacNonChauf,
-            pacEcsConsigne,
-            pacEcs,
-            pacManometreBp,
-            pacManometreHp,
-            pacDegivrage,
-            pacInversion,
-            pacHFonct,
-            pacHComp1,
-            pacHVenti,
-            pacNbDemarr,
-            pacHAppoint1,
-            pacHAppoint2,
-            pacAlarme1,
-            pacAlarme2,
-            pacBlocage1,
-            pacBlocage2,
-            pacReleve,
-            pacRem1,
-        ).any { it.isNotBlank() }
-    }

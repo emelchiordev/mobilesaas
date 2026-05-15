@@ -17,6 +17,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Saviomobilite">
+        <!-- SHA-256 du certificat release / debug : voir public/.well-known/ASSETLINKS_INSTRUCTIONS.txt (front web) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -26,6 +27,15 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="app.savio.re"
+                    android:pathPrefix="/activate" />
             </intent-filter>
         </activity>
 

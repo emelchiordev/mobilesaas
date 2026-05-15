@@ -1,9 +1,13 @@
 package re.melchior.saviomobile
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.work.Constraints
@@ -18,6 +22,7 @@ import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
 import re.melchior.saviomobile.ui.SavioApp
 import re.melchior.saviomobile.worker.CatalogSyncWorker
+import re.melchior.saviomobile.worker.PendingInterventionSyncWorker
 import re.melchior.saviomobile.worker.SyncWorker
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -33,8 +38,11 @@ class MainActivity : ComponentActivity() {
 
     private val workManager by lazy { WorkManager.getInstance(this) }
 
+    private lateinit var deepLinkIntentState: MutableState<Intent?>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        deepLinkIntentState = mutableStateOf(intent)
         // Edge-to-edge : équivalent à WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()
 
@@ -42,15 +50,27 @@ class MainActivity : ComponentActivity() {
         scheduleSyncWorker()
         enqueueOneTimeSyncWhenOnline()
         CatalogSyncWorker.enqueue(workManager)
+        PendingInterventionSyncWorker.enqueue(workManager)
 
         setContent {
-            val windowSizeClass = calculateWindowSizeClass(this)
+            val deepLinkIntent by deepLinkIntentState
             SavioApp(
-                windowSizeClass = windowSizeClass,
+                windowSizeClass = calculateWindowSizeClass(this),
                 tokenDataStore = tokenDataStore,
                 authEventBus = authEventBus,
+                deepLinkIntent = deepLinkIntent,
+                onConsumeDeepLinkIntent = {
+                    deepLinkIntentState.value = null
+                    setIntent(Intent(this@MainActivity, MainActivity::class.java))
+                },
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deepLinkIntentState.value = intent
     }
 
     private fun scheduleSyncWorker() {

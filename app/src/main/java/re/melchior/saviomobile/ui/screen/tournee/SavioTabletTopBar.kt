@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
@@ -27,13 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioUi
 
 @Composable
 fun SavioTabletTopBar(
@@ -41,16 +42,19 @@ fun SavioTabletTopBar(
     currentDate: String,
     remainingCount: Int,
     pendingSyncCount: Int,
+    pendingOfflineInterventionCount: Int = 0,
+    onPendingOfflineClick: (() -> Unit)? = null,
     onSyncCatalog: () -> Unit,
     isCatalogSyncing: Boolean = false,
     onRefresh: () -> Unit,
     isRefreshing: Boolean,
     isNetworkOnline: Boolean = true,
+    onLogout: (() -> Unit)? = null,
 ) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(colorResource(R.color.savio_primary))
+            .background(SavioPalette.BackgroundPage)
             .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
         Row(
@@ -61,19 +65,19 @@ fun SavioTabletTopBar(
             Column(Modifier.weight(0.28f)) {
                 Text(
                     text = "Ma tournée",
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = SavioPalette.TextPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = "$remainingCount restantes",
-                    color = colorResource(R.color.savio_primary_light).copy(alpha = 0.95f),
+                    color = SavioPalette.TextSecondary,
                     fontSize = 12.sp
                 )
             }
             Text(
                 text = currentDate,
-                color = colorResource(R.color.savio_primary_light),
+                color = SavioPalette.TextSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -87,6 +91,21 @@ fun SavioTabletTopBar(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (pendingOfflineInterventionCount > 0 && onPendingOfflineClick != null) {
+                    BadgedBox(
+                        badge = {
+                            Badge(
+                                containerColor = SavioPalette.Accent,
+                                contentColor = SavioPalette.OnAccent,
+                            ) { Text(pendingOfflineInterventionCount.toString()) }
+                        },
+                    ) {
+                        IconButton(onClick = onPendingOfflineClick) {
+                            Text("☁️", fontSize = 20.sp)
+                        }
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
                 if (pendingSyncCount > 0) {
                     BadgedBox(
                         badge = {
@@ -99,7 +118,7 @@ fun SavioTabletTopBar(
                         Icon(
                             imageVector = Icons.Filled.Sync,
                             contentDescription = "Sync en attente",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = SavioPalette.TextPrimary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -113,13 +132,13 @@ fun SavioTabletTopBar(
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = SavioPalette.TextPrimary,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Filled.LibraryBooks,
                             contentDescription = "Synchroniser le catalogue",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = SavioPalette.TextPrimary,
                         )
                     }
                 }
@@ -131,13 +150,25 @@ fun SavioTabletTopBar(
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = SavioPalette.TextPrimary,
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Filled.Refresh,
                             contentDescription = "Rafraîchir",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = SavioPalette.TextPrimary,
+                        )
+                    }
+                }
+                onLogout?.let { logout ->
+                    IconButton(
+                        onClick = logout,
+                        enabled = !isRefreshing && !isCatalogSyncing,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Se déconnecter",
+                            tint = SavioPalette.TextPrimary,
                         )
                     }
                 }
@@ -145,7 +176,7 @@ fun SavioTabletTopBar(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = selectedIntervention.typeLabel,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = SavioPalette.TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -171,38 +202,38 @@ private fun TabletInterventionStatusBadge(intervention: InterventionItem) {
             )
         intervention.syncStatus == "COMPLETED" ->
             Triple(
-                colorResource(R.color.badge_inprog_bg),
-                colorResource(R.color.badge_inprog_text),
+                SavioPalette.WarningTintBg,
+                SavioPalette.Accent,
                 "En attente"
             )
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
             Triple(
-                colorResource(R.color.badge_done_bg),
-                colorResource(R.color.badge_done_text),
+                SavioPalette.SuccessDark,
+                SavioPalette.Success,
                 "Terminée"
             )
         intervention.status == "pending_validation" ->
             Triple(
-                colorResource(R.color.badge_inprog_bg),
-                colorResource(R.color.badge_inprog_text),
+                SavioPalette.WarningTintBg,
+                SavioPalette.Accent,
                 "À valider"
             )
         intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
             Triple(
-                colorResource(R.color.badge_inprog_bg),
-                colorResource(R.color.badge_inprog_text),
+                SavioPalette.WarningTintBg,
+                SavioPalette.Accent,
                 "En cours"
             )
         intervention.status == "scheduled" ->
             Triple(
-                colorResource(R.color.badge_neutral_bg),
-                colorResource(R.color.savio_primary),
+                SavioUi.PlanifListBadgeBg,
+                SavioUi.PlanifListBadgeFg,
                 "Planifiée"
             )
         else ->
             Triple(
-                colorResource(R.color.badge_neutral_bg),
-                colorResource(R.color.badge_neutral_text),
+                SavioPalette.SurfaceElevated,
+                SavioPalette.TextSecondary,
                 intervention.status
             )
     }

@@ -209,6 +209,8 @@ data class EquipmentDto(
     val isPrimary: Boolean,
     @SerializedName("equipmentCatalogId")
     val equipmentCatalogId: String? = null,
+    @SerializedName("catalogBrandId")
+    val catalogBrandId: String? = null,
     @SerializedName("parentEquipmentId")
     val parentEquipmentId: String? = null,
     @SerializedName("order")
@@ -255,4 +257,23 @@ data class SettingsDto(
     val allowCreateIntervention: Boolean = false,
     @SerializedName("allowProposal")
     val allowProposal: Boolean = true
+)
+
+data class MobilePendingInterventionRequestDto(
+    @SerializedName("localId") val localId: String,
+    @SerializedName("clientNameFree") val clientNameFree: String,
+    @SerializedName("addressFree") val addressFree: String,
+    @SerializedName("city") val city: String? = null,
+    @SerializedName("zipCode") val zipCode: String? = null,
+    @SerializedName("phone") val phone: String? = null,
+    @SerializedName("interventionType") val interventionType: String,
+    @SerializedName("scheduledAt") val scheduledAt: String,
+    @SerializedName("notes") val notes: String? = null,
+)
+
+data class MobilePendingInterventionResponseDto(
+    @SerializedName("localId") val localId: String,
+    @SerializedName("remoteId") val remoteId: String,
+    @SerializedName("clientId") val clientId: String,
+    @SerializedName("status") val status: String,
 )

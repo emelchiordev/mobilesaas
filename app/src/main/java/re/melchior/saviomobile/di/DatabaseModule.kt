@@ -48,7 +48,9 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_34_35
 import re.melchior.saviomobile.data.local.database.MIGRATION_35_36
 import re.melchior.saviomobile.data.local.database.MIGRATION_36_37
 import re.melchior.saviomobile.data.local.database.MIGRATION_37_38
+import re.melchior.saviomobile.data.local.database.MIGRATION_38_39
 import re.melchior.saviomobile.data.local.database.SavioDatabase
+import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
@@ -96,6 +98,7 @@ object DatabaseModule {
             MIGRATION_35_36,
             MIGRATION_36_37,
             MIGRATION_37_38,
+            MIGRATION_38_39,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -181,5 +184,9 @@ object DatabaseModule {
         db: SavioDatabase,
     ): AttestationVePointControleDao =
         db.attestationVePointControleDao()
+
+    @Provides
+    fun providePendingInterventionDao(db: SavioDatabase): PendingInterventionDao =
+        db.pendingInterventionDao()
 
 }

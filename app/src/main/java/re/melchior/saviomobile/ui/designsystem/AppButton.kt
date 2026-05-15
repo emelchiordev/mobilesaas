@@ -86,8 +86,8 @@ fun AppButton(
                 colors =
                     ButtonDefaults.buttonColors(
                         containerColor = bg,
-                        contentColor = SavioPalette.White,
-                        disabledContentColor = SavioPalette.White.copy(alpha = 0.75f),
+                        contentColor = SavioPalette.OnAccent,
+                        disabledContentColor = SavioPalette.OnAccent.copy(alpha = 0.55f),
                     ),
             ) {
                 LabelRow()
@@ -106,13 +106,13 @@ fun AppButton(
                 border =
                     BorderStroke(
                         SavioDimens.BorderMedium,
-                        SavioPalette.White.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        SavioPalette.Accent.copy(alpha = if (pressed && enabled) 0.85f else 1f),
                     ),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
-                        contentColor = SavioPalette.White.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        contentColor = SavioPalette.TextPrimary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
                         containerColor = Color.Transparent,
-                        disabledContentColor = SavioPalette.White.copy(alpha = 0.45f),
+                        disabledContentColor = SavioPalette.TextSecondary.copy(alpha = 0.45f),
                     ),
             ) {
                 LabelRow()
@@ -130,13 +130,13 @@ fun AppButton(
                 border =
                     BorderStroke(
                         SavioDimens.BorderMedium,
-                        SavioPalette.Primary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        SavioPalette.Accent.copy(alpha = if (pressed && enabled) 0.85f else 1f),
                     ),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
-                        contentColor = SavioPalette.Primary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
-                        containerColor = SavioPalette.White,
-                        disabledContainerColor = SavioPalette.TextHint.copy(alpha = 0.25f),
+                        contentColor = SavioPalette.TextPrimary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        containerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
                     ),
             ) {
                 LabelRow()
@@ -159,7 +159,7 @@ fun AppButton(
                 colors =
                     ButtonDefaults.outlinedButtonColors(
                         contentColor = SavioPalette.Error.copy(alpha = if (pressed && enabled) 0.85f else 1f),
-                        containerColor = SavioPalette.White,
+                        containerColor = Color.Transparent,
                     ),
             ) {
                 LabelRow()

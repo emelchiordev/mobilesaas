@@ -3,6 +3,7 @@ package re.melchior.saviomobile.data.local.database
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,6 +28,7 @@ class TokenDataStore @Inject constructor(
         private val KEY_USER_ID = stringPreferencesKey("user_id")
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         private val KEY_USER_FULLNAME = stringPreferencesKey("user_fullname")
+        private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
     val accessToken: Flow<String?> = context.dataStore.data
@@ -43,6 +45,11 @@ class TokenDataStore @Inject constructor(
             prefs[KEY_ACCESS_TOKEN] != null &&
                     !prefs[KEY_SOCIETE_SLUG].isNullOrBlank()
         }
+
+    /** Absent = utilisateurs existants (comportement legacy : considéré comme terminé). */
+    val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ONBOARDING_COMPLETED] ?: true
+    }
 
     suspend fun saveSession(
         accessToken: String,
@@ -70,8 +77,19 @@ class TokenDataStore @Inject constructor(
             prefs.remove(KEY_USER_ID)
             prefs.remove(KEY_USER_EMAIL)
             prefs.remove(KEY_USER_FULLNAME)
+            prefs.remove(KEY_ONBOARDING_COMPLETED)
         }
     }
+
+    suspend fun setOnboardingCompleted(value: Boolean) {
+        context.dataStore.edit { it[KEY_ONBOARDING_COMPLETED] = value }
+    }
+
+    suspend fun isOnboardingCompletedFirst(): Boolean =
+        context.dataStore.data.map { it[KEY_ONBOARDING_COMPLETED] ?: true }.first()
+
+    suspend fun getSocieteSlugStored(): String? =
+        context.dataStore.data.map { it[KEY_SOCIETE_SLUG] }.first()?.takeIf { it.isNotBlank() }
 
     suspend fun getAccessToken(): String? =
         context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }.first()
@@ -82,8 +100,6 @@ class TokenDataStore @Inject constructor(
     suspend fun saveTokenOnly(accessToken: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ACCESS_TOKEN] = accessToken
-            // On ne touche PAS KEY_SOCIETE_SLUG
-            // isLoggedIn = flow sur KEY_ACCESS_TOKEN → devient true ici !
         }
     }
     suspend fun getUserEmail(): String? =

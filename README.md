@@ -50,13 +50,21 @@ Les versions sont centralisées dans **`gradle/libs.versions.toml`**.
 
 ## Configuration backend
 
-L’URL de base de l’API est définie dans `app/build.gradle.kts` :
+**Variants :** **debug** (`applicationId` suffix `.debug`) pointe par défaut vers `http://10.0.2.2:3000/` (émulateur → localhost de la machine hôte). Pour une **tablette sur le même réseau**, ajoute dans **`local.properties`** (non versionné) :
 
-```kotlin
-buildConfigField("String", "API_BASE_URL", "\"…\"")
+```properties
+DEV_BASE_URL=http://192.168.1.XX:3000
 ```
 
-Exposée en **`BuildConfig.API_BASE_URL`** (module `NetworkModule` / Retrofit). **À adapter** par environnement (machine locale, staging, production). Pour plusieurs environnements, prévoir des **product flavors** ou une valeur dans `local.properties`.
+Optionnel pour le catalogue BAN local :
+
+```properties
+DEV_BAN_BASE_URL=http://192.168.1.XX:3001
+```
+
+**release** utilise `https://api.savio.re/` et `https://ban.melchior.re/` pour `BAN_API_BASE_URL` (adapter si besoin).
+
+L’URL principale Retrofit est **`BuildConfig.BASE_URL`** (voir `NetworkModule`). Changement d’environnement : **Build > Select Build Variant** (debug vs release).
 
 ---
 

@@ -8,8 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.colorResource
-import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @Composable
 fun TourneeSidebar(
@@ -21,7 +20,7 @@ fun TourneeSidebar(
     LazyColumn(
         modifier
             .fillMaxHeight()
-            .background(colorResource(R.color.card_bg))
+            .background(SavioPalette.SurfaceCard)
             .fillMaxWidth()
     ) {
         items(

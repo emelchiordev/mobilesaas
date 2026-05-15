@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 data class HybrideGroup(
     val chaudiere: EquipmentEntity,
@@ -79,7 +80,7 @@ fun HybrideGroupCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = SavioPalette.SurfaceCard,
         ),
         border = BorderStroke(
             width = 1.5.dp,

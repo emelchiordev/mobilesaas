@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.remote.dto.PrestationDto
 
@@ -550,7 +551,7 @@ fun InvoiceLineCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = SavioPalette.SurfaceCard
         ),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {

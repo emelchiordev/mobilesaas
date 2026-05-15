@@ -8,7 +8,9 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import re.melchior.saviomobile.BuildConfig
 import re.melchior.saviomobile.data.remote.api.AuthApi
+import re.melchior.saviomobile.data.remote.api.BanAddressSearchApi
 import re.melchior.saviomobile.data.remote.api.BanCatalogApi
+import re.melchior.saviomobile.data.remote.api.ClientApi
 import re.melchior.saviomobile.data.remote.interceptor.AuthInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -24,10 +26,12 @@ object NetworkModule {
     @Singleton
     fun provideLoggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG)
-                HttpLoggingInterceptor.Level.BODY
-            else
-                HttpLoggingInterceptor.Level.NONE
+            level =
+                if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
         }
 
     @Provides
@@ -36,6 +40,13 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("User-Agent", "SavioMobile/1.0 (Android)")
+                    .build(),
+            )
+        }
         .addInterceptor(authInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -47,7 +58,7 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit =
         Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL)
+            .baseUrl(BuildConfig.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -60,7 +71,9 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("ban")
-    fun provideBanOkHttpClient(): OkHttpClient =
+    fun provideBanOkHttpClient(
+        loggingInterceptor: HttpLoggingInterceptor,
+    ): OkHttpClient =
         OkHttpClient.Builder()
             .addInterceptor { chain ->
                 val req = chain.request().newBuilder()
@@ -68,6 +81,7 @@ object NetworkModule {
                     .build()
                 chain.proceed(req)
             }
+            .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -76,10 +90,22 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideBanCatalogApi(@Named("ban") client: OkHttpClient): BanCatalogApi =
+        banRetrofit(client).create(BanCatalogApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBanAddressSearchApi(retrofit: Retrofit): BanAddressSearchApi =
+        retrofit.create(BanAddressSearchApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideClientApi(retrofit: Retrofit): ClientApi =
+        retrofit.create(ClientApi::class.java)
+
+    private fun banRetrofit(client: OkHttpClient): Retrofit =
         Retrofit.Builder()
             .baseUrl(BuildConfig.BAN_API_BASE_URL)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-            .create(BanCatalogApi::class.java)
 }

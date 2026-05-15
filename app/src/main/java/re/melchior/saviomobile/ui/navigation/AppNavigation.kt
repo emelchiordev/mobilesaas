@@ -1,15 +1,10 @@
 package re.melchior.saviomobile.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
+import android.content.Intent
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -17,12 +12,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import re.melchior.saviomobile.ActivationDeepLink
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.interceptor.AuthEvent
 import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
+import re.melchior.saviomobile.ui.screen.auth.ActivationScreen
 import re.melchior.saviomobile.ui.screen.auth.AuthViewModel
 import re.melchior.saviomobile.ui.screen.auth.LoginScreen
+import re.melchior.saviomobile.ui.screen.auth.OnboardingScreen
+import re.melchior.saviomobile.ui.screen.auth.RegisterScreen
 import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
+import re.melchior.saviomobile.ui.screen.auth.SplashScreen
+import re.melchior.saviomobile.ui.screen.auth.WelcomeScreen
+import re.melchior.saviomobile.ui.screen.client.CreateClientScreen
+import re.melchior.saviomobile.ui.screen.intervention.offline.CreateOfflineInterventionScreen
+import re.melchior.saviomobile.ui.screen.intervention.offline.PendingOfflineInterventionsScreen
 import re.melchior.saviomobile.ui.screen.intervention.CameraScreen
 import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipementDetailScreen
@@ -34,7 +38,6 @@ import re.melchior.saviomobile.ui.screen.intervention.EquipmentFormScreen
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationVeScreen
 import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureScreen
 import re.melchior.saviomobile.ui.screen.intervention.pacmeasure.PacMeasureScreen
-import re.melchior.saviomobile.ui.screen.intervention.pacfiche.PacFichePdfScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
 import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
@@ -53,44 +56,245 @@ fun AppNavigation(
     tokenDataStore: TokenDataStore,
     authEventBus: AuthEventBus,
     windowSizeClass: WindowSizeClass,
+    deepLinkIntent: Intent?,
+    onConsumeDeepLinkIntent: () -> Unit,
 ) {
     val navController = rememberNavController()
-    val isLoggedIn by tokenDataStore.isLoggedIn.collectAsStateWithLifecycle(null)
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val authUiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
+    val logoutAndGoWelcome: () -> Unit = {
+        authViewModel.logout {
+            navController.navigate(Screen.Welcome.route) {
+                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
-    // Écoute les événements 401 → redirige vers Login
     LaunchedEffect(Unit) {
         authEventBus.events.collect { event ->
             when (event) {
                 is AuthEvent.Unauthorized -> {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             }
         }
     }
-    // 2. Tant qu'on ne sait pas si l'utilisateur est connecté, on n'affiche pas le NavHost
-    if (isLoggedIn == null) {
-        // Optionnel : un simple Box vide ou un indicateur de chargement
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            // CircularProgressIndicator()
+
+    LaunchedEffect(deepLinkIntent?.dataString) {
+        val token = ActivationDeepLink.extractToken(deepLinkIntent) ?: return@LaunchedEffect
+        navController.navigate(Screen.Activation.createRoute(token)) {
+            popUpTo(Screen.Splash.route) { inclusive = true }
+            launchSingleTop = true
         }
-        return
+        onConsumeDeepLinkIntent()
     }
-
-    // 3. Maintenant isLoggedIn est soit true soit false, et restera stable durant la rotation
-    val startDestination = remember {
-        if (isLoggedIn == true) Screen.Tournee.route else Screen.Login.route
-    }
-
-    val authViewModel: AuthViewModel = hiltViewModel()
-    val authUiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = Screen.Splash.route,
     ) {
+
+        composable(Screen.Splash.route) {
+            SplashScreen(
+                tokenDataStore = tokenDataStore,
+                onNavigate = { route ->
+                    navController.navigate(route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Screen.Activation.route,
+            arguments =
+                listOf(
+                    navArgument("token") {
+                        type = NavType.StringType
+                    },
+                ),
+        ) {
+            ActivationScreen(
+                authViewModel = authViewModel,
+                onActivationAuthenticated = {
+                    navController.navigate(Screen.Tournee.route) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onActivationChooseSociete = {
+                    navController.navigate(Screen.SelectSociete.createRoute(false)) {
+                        popUpTo(Screen.Activation.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onResendEmail = {
+                    navController.navigate(Screen.Register.route) {
+                        popUpTo(Screen.Activation.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onLoginClick = {
+                    navController.navigate(Screen.Login.route)
+                },
+                onRegisterClick = {
+                    navController.navigate(Screen.Register.route)
+                },
+            )
+        }
+
+        composable(Screen.Register.route) {
+            RegisterScreen(
+                onBack = { navController.popBackStack() },
+                authViewModel = authViewModel,
+                onNavigateOnboarding = {
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(Screen.Register.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateSelectSociete = {
+                    navController.navigate(Screen.SelectSociete.createRoute(true))
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Register.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(
+                onFinished = {
+                    navController.navigate(Screen.Tournee.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(Screen.Login.route) {
+            LoginScreen(
+                onLoginSuccess = {
+                    navController.navigate(Screen.Tournee.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onChooseSociete = {
+                    navController.navigate(Screen.SelectSociete.createRoute(false))
+                },
+                onBack = { navController.popBackStack() },
+                onNavigateRegister = {
+                    navController.navigate(Screen.Register.route)
+                },
+                viewModel = authViewModel,
+            )
+        }
+
+        composable(
+            route = Screen.SelectSociete.route,
+            arguments =
+                listOf(
+                    navArgument("registerFlow") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
+                ),
+        ) { entry ->
+            val registerFlow = entry.arguments?.getBoolean("registerFlow") ?: false
+            SelectSocieteScreen(
+                societes = authUiState.societesToChoose,
+                isRegistrationFlow = registerFlow,
+                onSocieteSelected = {
+                    if (registerFlow) {
+                        navController.navigate(Screen.Onboarding.route) {
+                            popUpTo(Screen.Register.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    } else {
+                        navController.navigate(Screen.Tournee.route) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                viewModel = authViewModel,
+            )
+        }
+
+        composable(Screen.Tournee.route) { backStackEntry ->
+            val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
+            val tourneeViewModel: TourneeViewModel = hiltViewModel(backStackEntry)
+
+            if (savioWindowSize == SavioWindowSize.EXPANDED) {
+                TourneeTabletScreen(
+                    parentNavController = navController,
+                    onResumeIntervention = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionActive.createRoute(interventionId),
+                        )
+                    },
+                    onLogout = logoutAndGoWelcome,
+                    onCreateClient = { navController.navigate(Screen.CreateClient.route) },
+                    onOfflineIntervention = {
+                        navController.navigate(Screen.CreateOfflineIntervention.route)
+                    },
+                    onPendingOfflineList = {
+                        navController.navigate(Screen.PendingOfflineInterventions.route)
+                    },
+                    viewModel = tourneeViewModel,
+                )
+            } else {
+                TourneeScreen(
+                    onInterventionClick = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionDetail.createRoute(interventionId),
+                        )
+                    },
+                    onResumeIntervention = { interventionId ->
+                        navController.navigate(
+                            Screen.InterventionActive.createRoute(interventionId),
+                        )
+                    },
+                    onLogout = logoutAndGoWelcome,
+                    onCreateClient = { navController.navigate(Screen.CreateClient.route) },
+                    onOfflineIntervention = {
+                        navController.navigate(Screen.CreateOfflineIntervention.route)
+                    },
+                    onPendingOfflineList = {
+                        navController.navigate(Screen.PendingOfflineInterventions.route)
+                    },
+                    viewModel = tourneeViewModel,
+                )
+            }
+        }
+
+        composable(Screen.CreateClient.route) {
+            CreateClientScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.CreateOfflineIntervention.route) {
+            CreateOfflineInterventionScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.PendingOfflineInterventions.route) {
+            PendingOfflineInterventionsScreen(onBack = { navController.popBackStack() })
+        }
 
         composable(
             route = Screen.ClotureSignature.route,
@@ -99,8 +303,8 @@ fun AppNavigation(
                 navArgument("preselectedActualTypeKeys") {
                     type = NavType.StringType
                     defaultValue = "_"
-                }
-            )
+                },
+            ),
         ) {
             ClotureSignatureScreen(
                 onBack = { navController.popBackStack() },
@@ -108,77 +312,19 @@ fun AppNavigation(
                     navController.navigate(Screen.Tournee.route) {
                         popUpTo(Screen.Tournee.route) { inclusive = true }
                     }
-                }
+                },
             )
         }
+
         composable(Screen.ClotureRapport.route) {
             ClotureRapportScreen(
                 onBack = { navController.popBackStack() },
                 onNext = { interventionId, preselectedActualTypeKeys ->
                     navController.navigate(
-                        Screen.ClotureSignature.createRoute(interventionId, preselectedActualTypeKeys)
+                        Screen.ClotureSignature.createRoute(interventionId, preselectedActualTypeKeys),
                     )
-                }
-            )
-        }
-
-
-        composable(Screen.Login.route) {
-            LoginScreen(
-                onLoginSuccess = {
-                    navController.navigate(Screen.Tournee.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
                 },
-                onChooseSociete = {
-                    navController.navigate(Screen.SelectSociete.route)
-                },
-                viewModel = authViewModel
             )
-        }
-
-        composable(Screen.SelectSociete.route) {
-            SelectSocieteScreen(
-                societes = authUiState.societesToChoose,
-                onSocieteSelected = {
-                    navController.navigate(Screen.Tournee.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
-                },
-                viewModel = authViewModel
-            )
-        }
-
-        composable(Screen.Tournee.route) { backStackEntry ->
-            val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
-            // Un seul ViewModel partagé pour les deux écrans
-            val tourneeViewModel: TourneeViewModel = hiltViewModel(backStackEntry)
-
-            if (savioWindowSize == SavioWindowSize.EXPANDED) {
-                TourneeTabletScreen(
-                    parentNavController = navController,
-                    onResumeIntervention = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionActive.createRoute(interventionId)
-                        )
-                    },
-                    viewModel = tourneeViewModel,
-                )
-            } else {
-                TourneeScreen(
-                    onInterventionClick = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionDetail.createRoute(interventionId)
-                        )
-                    },
-                    onResumeIntervention = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionActive.createRoute(interventionId)
-                        )
-                    },
-                    viewModel = tourneeViewModel,
-                )
-            }
         }
 
         composable(Screen.InterventionDetail.route) {
@@ -383,18 +529,6 @@ fun AppNavigation(
         }
 
         composable(
-            route = Screen.PacFichePdf.route,
-            arguments = listOf(
-                navArgument("interventionId") { type = NavType.StringType },
-                navArgument("equipmentOrder") { type = NavType.IntType },
-            ),
-        ) {
-            PacFichePdfScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
-
-        composable(
             route = Screen.AttestationVe.route,
             arguments = listOf(
                 navArgument("interventionId") { type = NavType.StringType },
@@ -450,11 +584,6 @@ fun AppNavigation(
                 onPacMeasureClick = { interventionId, order ->
                     navController.navigate(
                         Screen.PacMeasure.createRoute(interventionId, order),
-                    )
-                },
-                onPacFichePdfClick = { interventionId, order ->
-                    navController.navigate(
-                        Screen.PacFichePdf.createRoute(interventionId, order),
                     )
                 },
                 onReplaceClick = { interventionId, equipmentId ->

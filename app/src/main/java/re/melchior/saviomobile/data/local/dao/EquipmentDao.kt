@@ -122,6 +122,19 @@ interface EquipmentDao {
 
     @Query(
         """
+        SELECT * FROM equipments
+        WHERE interventionId = :interventionId
+        AND id = :equipmentId
+        LIMIT 1
+        """,
+    )
+    suspend fun getEquipmentByInterventionAndEquipmentId(
+        interventionId: String,
+        equipmentId: String,
+    ): EquipmentEntity?
+
+    @Query(
+        """
         DELETE FROM equipments
         WHERE interventionId = :interventionId
         AND `order` NOT IN (:keepOrders)

@@ -1,9 +1,14 @@
 package re.melchior.saviomobile.ui.screen.intervention.pacmeasure
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,14 +17,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
+import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.repository.PacMeasureRepository
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 import javax.inject.Inject
+
+data class PacMeasurePdfUi(
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+)
 
 @HiltViewModel
 class PacMeasureViewModel @Inject constructor(
     private val pacMeasureRepository: PacMeasureRepository,
+    private val interventionPdfApi: InterventionPdfApi,
+    private val equipmentDao: EquipmentDao,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -33,23 +50,29 @@ class PacMeasureViewModel @Inject constructor(
     )
     val state: StateFlow<PacMeasureEntity> = _state.asStateFlow()
 
+    private val _pdfUi = MutableStateFlow(PacMeasurePdfUi())
+    val pdfUi: StateFlow<PacMeasurePdfUi> = _pdfUi.asStateFlow()
+
     private var isDirty = false
     private var saveJob: Job? = null
 
     init {
-        load()
+        runBlocking(Dispatchers.IO) {
+            if (interventionId.isEmpty()) return@runBlocking
+            val ro = resolveUeOrder(interventionId, equipmentOrder)
+            val existing = pacMeasureRepository.getByInterventionAndOrder(interventionId, ro)
+            _state.value = existing
+                ?: PacMeasureEntity(interventionId = interventionId, equipmentOrder = ro)
+        }
     }
 
-    private fun load() {
-        viewModelScope.launch {
-            val existing = pacMeasureRepository.getByInterventionAndOrder(
-                interventionId,
-                equipmentOrder,
-            )
-            if (existing != null) {
-                _state.value = existing
-            }
-        }
+    private suspend fun resolveUeOrder(interventionId: String, order: Int): Int {
+        val eq = equipmentDao.getEquipmentByInterventionAndOrder(interventionId, order)
+            ?: return order
+        val parentId = eq.parentEquipmentId ?: return order
+        val parent = equipmentDao.getEquipmentByInterventionAndEquipmentId(interventionId, parentId)
+            ?: return order
+        return parent.order
     }
 
     fun updateField(key: String, value: String) {
@@ -126,6 +149,58 @@ class PacMeasureViewModel @Inject constructor(
         viewModelScope.launch {
             pacMeasureRepository.upsert(s)
             isDirty = false
+        }
+    }
+
+    fun generateAndOpenPdf(context: Context) {
+        if (interventionId.isEmpty() || _pdfUi.value.isLoading) return
+        viewModelScope.launch {
+            _pdfUi.value = PacMeasurePdfUi(isLoading = true, errorMessage = null)
+            try {
+                val body = withContext(Dispatchers.IO) {
+                    val order = _state.value.equipmentOrder
+                    interventionPdfApi.downloadPacMeasuresPdf(interventionId, order)
+                }
+                val outFile = withContext(Dispatchers.IO) {
+                    val order = _state.value.equipmentOrder
+                    val outDir = File(context.filesDir, "pac_fiches").apply { mkdirs() }
+                    val file = File(outDir, "fiche-pac-${interventionId}-${order}.pdf")
+                    body.use { responseBody ->
+                        FileOutputStream(file).use { fos ->
+                            responseBody.byteStream().use { it.copyTo(fos) }
+                        }
+                    }
+                    file
+                }
+                if (!outFile.exists() || outFile.length() == 0L) {
+                    _pdfUi.value = PacMeasurePdfUi(
+                        errorMessage = "Fichier PDF vide ou introuvable",
+                    )
+                    return@launch
+                }
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    outFile,
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    context.startActivity(intent)
+                    _pdfUi.value = PacMeasurePdfUi()
+                } catch (_: ActivityNotFoundException) {
+                    _pdfUi.value = PacMeasurePdfUi(
+                        errorMessage = "Aucun lecteur PDF installé",
+                    )
+                }
+            } catch (e: Exception) {
+                _pdfUi.value = PacMeasurePdfUi(
+                    errorMessage = e.message?.let { "Erreur génération PDF : $it" }
+                        ?: "Erreur génération PDF",
+                )
+            }
         }
     }
 

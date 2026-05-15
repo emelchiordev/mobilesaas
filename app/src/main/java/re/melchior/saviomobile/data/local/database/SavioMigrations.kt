@@ -706,6 +706,29 @@ val MIGRATION_37_38 = object : Migration(37, 38) {
     }
 }
 
+val MIGRATION_38_39 = object : Migration(38, 39) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS pending_interventions (
+                localId TEXT NOT NULL PRIMARY KEY,
+                clientNameFree TEXT NOT NULL,
+                addressFree TEXT NOT NULL,
+                city TEXT,
+                zipCode TEXT,
+                phone TEXT,
+                interventionType TEXT NOT NULL,
+                scheduledAt INTEGER NOT NULL,
+                notes TEXT,
+                syncStatus TEXT NOT NULL DEFAULT 'PENDING',
+                remoteId TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
 private fun createPendingOperationsTable(db: SupportSQLiteDatabase) {
     db.execSQL(
         """

@@ -17,16 +17,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioType
 
 /**
- * Header standard (fond Primary, texte blanc, hauteur 64dp).
- *
- * Variantes : principal (titre + sous-titre + actions), secondaire (retour + actions), planifié (+ badge).
+ * Header standard (fond page, texte blanc / secondaire gris, hauteur 64dp).
  */
 @Composable
 fun AppHeader(
@@ -42,7 +39,7 @@ fun AppHeader(
             modifier
                 .fillMaxWidth()
                 .height(SavioDimens.HeaderHeight),
-        color = SavioPalette.Primary,
+        color = SavioPalette.BackgroundPage,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
@@ -59,7 +56,7 @@ fun AppHeader(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Retour",
-                        tint = SavioPalette.White,
+                        tint = SavioPalette.TextPrimary,
                     )
                 }
             }
@@ -70,13 +67,13 @@ fun AppHeader(
                 Text(
                     text = title,
                     style = SavioType.H1,
-                    color = SavioPalette.White,
+                    color = SavioPalette.TextPrimary,
                 )
                 subtitle?.let { s ->
                     Text(
                         text = s,
                         style = SavioType.BodySmall,
-                        color = SavioPalette.White.copy(alpha = 0.85f),
+                        color = SavioPalette.TextSecondary,
                     )
                 }
             }

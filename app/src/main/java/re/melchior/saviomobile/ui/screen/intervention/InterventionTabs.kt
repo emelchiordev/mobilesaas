@@ -51,6 +51,7 @@ import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.ui.component.SavioEmptyState
 import re.melchior.saviomobile.ui.component.SavioPhotosTabSkeleton
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.utils.equipmentIcon
 
@@ -314,7 +315,7 @@ fun InterventionEquipementsTab(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            color = Color.White,
+            color = SavioPalette.SurfaceCard,
             border = BorderStroke(0.5.dp, EquipmentCardBorder),
             shadowElevation = 0.dp,
         ) {
@@ -353,7 +354,7 @@ fun InterventionEquipementsTab(
                                     text = uiState.equipments.size.toString(),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color.White,
+                                    color = SavioPalette.White,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                                 )
                             }
@@ -539,7 +540,7 @@ fun InterventionFactureTab(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            color = Color.White,
+            color = SavioPalette.SurfaceCard,
             border = BorderStroke(0.5.dp, EquipmentCardBorder),
             shadowElevation = 0.dp,
         ) {
@@ -769,10 +770,10 @@ internal fun EquipmentRowItem(
                 .width(if (isChild) 40.dp else 52.dp)
                 .height(if (isChild) 28.dp else 36.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color.White)
+                .background(SavioPalette.SurfaceCard)
                 .border(
                     width = 0.5.dp,
-                    color = Color(0xFFE8E8E8),
+                    color = SavioPalette.BorderDefault,
                     shape = RoundedCornerShape(6.dp),
                 ),
             contentAlignment = Alignment.Center,

@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
@@ -78,7 +77,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
 import re.melchior.saviomobile.ui.screen.intervention.attestation.attestationTypeLabel
@@ -101,14 +102,12 @@ fun EquipementDetailScreen(
     ) -> Unit = { _, _, _ -> },
     onMeasureClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
     onPacMeasureClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
-    onPacFichePdfClick: (interventionId: String, equipmentOrder: Int) -> Unit = { _, _ -> },
     onReplaceClick: (interventionId: String, equipmentId: String) -> Unit = { _, _ -> },
     viewModel: EquipementDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val catalogEquipment by viewModel.catalogEquipment.collectAsStateWithLifecycle()
     val interventionEquipments by viewModel.interventionEquipments.collectAsStateWithLifecycle()
-    val hasPacMeasureSaisie by viewModel.hasPacMeasureSaisieForThisEquipment.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -157,10 +156,10 @@ fun EquipementDetailScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioUi.Blue,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
                 title = {
                     Text(
@@ -169,7 +168,7 @@ fun EquipementDetailScreen(
                         } ?: "Équipement",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                 },
                 navigationIcon = {
@@ -177,7 +176,7 @@ fun EquipementDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },
@@ -187,7 +186,7 @@ fun EquipementDetailScreen(
                             Icon(
                                 imageVector = Icons.Filled.Delete,
                                 contentDescription = "Supprimer l'appareil",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }
@@ -219,15 +218,6 @@ fun EquipementDetailScreen(
                 var serialDraft by remember(equipment.id) { mutableStateOf(equipment.serialNumber.orEmpty()) }
                 LaunchedEffect(equipment.serialNumber) {
                     serialDraft = equipment.serialNumber.orEmpty()
-                }
-
-                val isCerfaEligible = remember(equipment.typeCode, equipment.energyCode) {
-                    equipment.typeCode in listOf(
-                        "PAC",
-                        "PAC A/E",
-                        "PAC A/A",
-                        "CLIMATISEUR",
-                    )
                 }
 
                 val typeCodeNorm = remember(equipment.typeCode) {
@@ -303,21 +293,20 @@ fun EquipementDetailScreen(
                     mutableStateOf(false)
                 }
 
-                val showMeasures = remember(equipment.typeCode, isBruleur) {
-                    equipment.typeCode in listOf(
-                        "CHAUDIERE",
-                        "PAC",
-                        "PAC A/E",
-                        "PAC A/A",
-                        "CLIMATISEUR",
-                        "FIOUL",
-                        "INCONNU",
-                    ) && !isBruleur
+                val isPacOrClim = remember(typeCodeNorm) {
+                    typeCodeNorm in setOf("PAC", "PAC A/E", "PAC A/A", "CLIMATISEUR")
                 }
 
-                val isPacOrClim = remember(equipment.typeCode) {
-                    listOf("PAC", "PAC A/E", "PAC A/A", "CLIMATISEUR").contains(
-                        equipment.typeCode?.trim()?.uppercase(Locale.ROOT),
+                val showMeasures = remember(equipment.typeCode) {
+                    listOf(
+                        "CHAUDIERE",
+                        "POELE",
+                        "INSERT",
+                        "CHAUDIERE_BOIS",
+                    ).contains(
+                        equipment.typeCode
+                            ?.trim()
+                            ?.uppercase(),
                     )
                 }
 
@@ -363,7 +352,7 @@ fun EquipementDetailScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = Color.White,
+                        color = SavioPalette.SurfaceCard,
                         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                         shadowElevation = 0.dp,
                     ) {
@@ -381,11 +370,21 @@ fun EquipementDetailScreen(
                                     color = SavioUi.ChipBackground,
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            equipmentIcon(equipment.typeCode),
-                                            contentDescription = null,
-                                            tint = SavioUi.Blue,
-                                            modifier = Modifier.size(22.dp),
+                                        BrandLogo(
+                                            brandId = equipment.catalogBrandId,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(4.dp),
+                                            fallback = {
+                                                Icon(
+                                                    equipmentIcon(equipment.typeCode),
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(8.dp),
+                                                )
+                                            },
                                         )
                                     }
                                 }
@@ -438,6 +437,33 @@ fun EquipementDetailScreen(
                                     ?.replace(',', '.')
                                     ?.toDoubleOrNull()
                                     ?.let { kw -> KwBadge(kw = kw) }
+                            }
+                            if (!isReplaced && !isBruleur && showHybrideStartBadge) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Bolt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text(
+                                            text = "Point de départ de l'attestation hybride",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -515,7 +541,7 @@ fun EquipementDetailScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = Color.White,
+                        color = SavioPalette.SurfaceCard,
                         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                         shadowElevation = 0.dp,
                     ) {
@@ -604,7 +630,7 @@ fun EquipementDetailScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
-                            color = Color.White,
+                            color = SavioPalette.SurfaceCard,
                             border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                             shadowElevation = 0.dp,
                         ) {
@@ -641,7 +667,10 @@ fun EquipementDetailScreen(
                     }
 
                     if (isPacOrClim && !isReplaced) {
-                        val pacMesuresSurface: @Composable (Modifier) -> Unit = { mod ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             Surface(
                                 onClick = {
                                     onPacMeasureClick(
@@ -649,107 +678,114 @@ fun EquipementDetailScreen(
                                         equipment.order ?: 0,
                                     )
                                 },
-                                modifier = mod,
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White,
+                                color = SavioPalette.SurfaceCard,
                                 border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                                 shadowElevation = 0.dp,
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    Icon(
-                                        Icons.Filled.AcUnit,
-                                        contentDescription = null,
-                                        tint = SavioUi.Blue,
-                                        modifier = Modifier.size(22.dp),
-                                    )
-                                    Text(
-                                        "Mesures froid",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                    Text(
-                                        "Saisie terrain",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                        if (hasPacMeasureSaisie) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                pacMesuresSurface(Modifier.weight(1f))
-                                Surface(
-                                    onClick = {
-                                        onPacFichePdfClick(
-                                            viewModel.currentInterventionId,
-                                            equipment.order ?: 0,
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = Color.White,
-                                    border = BorderStroke(0.5.dp, SavioUi.CardBorder),
-                                    shadowElevation = 0.dp,
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape),
+                                        contentAlignment = Alignment.Center,
                                     ) {
-                                        Icon(
-                                            Icons.Filled.PictureAsPdf,
-                                            contentDescription = null,
-                                            tint = SavioUi.Blue,
-                                            modifier = Modifier.size(22.dp),
-                                        )
+                                        Surface(
+                                            modifier = Modifier.fillMaxSize(),
+                                            shape = CircleShape,
+                                            color = SavioUi.ChipBackground,
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Filled.AcUnit,
+                                                    contentDescription = null,
+                                                    tint = SavioUi.Blue,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "Fiche PAC/CLIM",
-                                            fontSize = 13.sp,
+                                            "Mesures froid",
+                                            fontSize = 14.sp,
                                             fontWeight = FontWeight.Medium,
                                         )
                                         Text(
-                                            "Sign. clôture intervention",
-                                            fontSize = 11.sp,
+                                            "Saisie terrain",
+                                            fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
+                                    Icon(
+                                        Icons.Filled.ChevronRight,
+                                        contentDescription = null,
+                                        tint = SavioUi.Blue,
+                                    )
                                 }
                             }
-                        } else {
-                            pacMesuresSurface(Modifier.fillMaxWidth())
-                        }
-                    }
-
-                    // Hybride — badge chaudière (point de départ attestation)
-                    if (!isReplaced && !isBruleur && showHybrideStartBadge) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            Surface(
+                                onClick = {
+                                    onCerfaClick(
+                                        viewModel.currentInterventionId,
+                                        equipment.id,
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                color = SavioPalette.SurfaceCard,
+                                border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                                shadowElevation = 0.dp,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Bolt,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    text = "Point de départ de l'attestation hybride",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.fillMaxSize(),
+                                            shape = CircleShape,
+                                            color = SavioUi.ChipBackground,
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Filled.Description,
+                                                    contentDescription = null,
+                                                    tint = SavioUi.Blue,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "CERFA fluides frigorigènes",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            "Remplir ou consulter",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Filled.ChevronRight,
+                                        contentDescription = null,
+                                        tint = SavioUi.Blue,
+                                    )
+                                }
                             }
                         }
                     }
@@ -764,7 +800,7 @@ fun EquipementDetailScreen(
                             ).joinToString(" ")
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = SavioPalette.SurfaceCard,
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -802,7 +838,7 @@ fun EquipementDetailScreen(
                                 onClick = { showAttestationPicker = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                color = Color.White,
+                                color = SavioPalette.SurfaceCard,
                                 border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                                 shadowElevation = 0.dp,
                             ) {
@@ -854,8 +890,8 @@ fun EquipementDetailScreen(
                                 modifier = Modifier.weight(1f),
                                 border = BorderStroke(0.5.dp, SavioUi.Blue),
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = SavioUi.Blue,
-                                    containerColor = Color.White,
+                                    contentColor = SavioPalette.TextPrimary,
+                                    containerColor = Color.Transparent,
                                 ),
                             ) {
                                 Icon(
@@ -877,7 +913,7 @@ fun EquipementDetailScreen(
                                     modifier = Modifier.weight(1f),
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = SavioUi.DestructiveRed,
-                                        containerColor = Color.White,
+                                        containerColor = Color.Transparent,
                                     ),
                                     border = BorderStroke(
                                         0.5.dp,
@@ -998,68 +1034,6 @@ fun EquipementDetailScreen(
                         }
                     }
 
-                    // SECTION 5 — CERFA fluides (PAC / clim)
-                    if (isCerfaEligible) {
-                        Surface(
-                            onClick = {
-                                onCerfaClick(
-                                    viewModel.currentInterventionId,
-                                    equipment.id,
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color.White,
-                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
-                            shadowElevation = 0.dp,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxSize(),
-                                        shape = CircleShape,
-                                        color = SavioUi.ChipBackground,
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Filled.Description,
-                                                contentDescription = null,
-                                                tint = SavioUi.Blue,
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "CERFA fluides frigorigènes",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                    Text(
-                                        "Remplir ou consulter",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Icon(
-                                    Icons.Filled.ChevronRight,
-                                    contentDescription = null,
-                                    tint = SavioUi.Blue,
-                                )
-                            }
-                        }
-                    }
-
                     if (showAttestationPicker && !isBruleur) {
                         AttestationTypePickerSheet(
                             suggestedType = suggestedAttestationType,
@@ -1106,7 +1080,7 @@ private fun PompeFioulInstallTab(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = SavioPalette.SurfaceCard,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -1181,7 +1155,7 @@ private fun GicleurFioulInstallTab(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = SavioPalette.SurfaceCard,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {

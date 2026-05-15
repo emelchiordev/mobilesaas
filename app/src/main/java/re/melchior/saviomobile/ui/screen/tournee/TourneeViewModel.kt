@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.repository.CatalogSyncRepository
 import re.melchior.saviomobile.data.repository.InvoiceRepository
+import re.melchior.saviomobile.data.repository.PendingInterventionRepository
 import re.melchior.saviomobile.data.repository.PhotoSyncRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.data.repository.SyncResult
@@ -37,6 +38,7 @@ class TourneeViewModel @Inject constructor(
     private val catalogSyncRepository: CatalogSyncRepository,
     private val invoiceRepository: InvoiceRepository,
     private val photoSyncRepository: PhotoSyncRepository,
+    private val pendingInterventionRepository: PendingInterventionRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TourneeUiState())
@@ -64,6 +66,14 @@ class TourneeViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 0
+        )
+
+    val pendingOfflineInterventionCount: StateFlow<Int> = pendingInterventionRepository
+        .countPending()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0,
         )
 
     init {

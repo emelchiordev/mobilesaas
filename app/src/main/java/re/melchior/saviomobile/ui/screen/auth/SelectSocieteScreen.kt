@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,17 +37,24 @@ import re.melchior.saviomobile.data.remote.dto.SocieteDto
 @Composable
 fun SelectSocieteScreen(
     societes: List<SocieteDto>,
+    isRegistrationFlow: Boolean = false,
     onSocieteSelected: () -> Unit,
-    viewModel: AuthViewModel = hiltViewModel()
+    viewModel: AuthViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Choisir une société") }
+                title = { Text("Choisir une société") },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
             )
-        }
+        },
     ) { padding ->
         if (uiState.isLoading) {
             Column(
@@ -80,10 +88,13 @@ fun SelectSocieteScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
-                            .clickable {
-                                viewModel.selectSociete(societe)
-                                onSocieteSelected()
-                            }
+                            .clickable(enabled = !uiState.isLoading) {
+                                viewModel.selectSociete(
+                                    societe,
+                                    isRegistrationFlow = isRegistrationFlow,
+                                    onCompleted = onSocieteSelected,
+                                )
+                            },
                     ) {
                         Row(
                             modifier = Modifier

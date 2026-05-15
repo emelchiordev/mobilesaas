@@ -69,7 +69,7 @@ class SyncRepository @Inject constructor(
         if (existing > 0) return
 
         val intervention = interventionDao.getInterventionByIdOnce(interventionId) ?: return
-        val equipments = equipmentDao.getEquipmentsByUnitId(intervention.unitId)
+        val equipments = equipmentDao.getEquipmentsByInterventionOnce(interventionId)
         if (equipments.isEmpty()) return
 
         val snapshots = equipments.map { eq ->
@@ -298,9 +298,10 @@ class SyncRepository @Inject constructor(
                     // Aligné sur deleteEquipmentsNotInList : seul IN_PROGRESS / PENDING bloque le serveur
                     if (!blockLocalSync) {
                         intervention.equipment.forEachIndexed { index, eq ->
-                            val catalogBrandId = eq.equipmentCatalogId?.let { cid ->
-                                catalogEquipmentDao.getBrandIdForCatalogEquipment(cid)
-                            }
+                            val catalogBrandId = eq.catalogBrandId?.takeIf { it.isNotBlank() }
+                                ?: eq.equipmentCatalogId?.let { cid ->
+                                    catalogEquipmentDao.getBrandIdForCatalogEquipment(cid)
+                                }
                             val ord = eq.order ?: (index + 1)
                             val mapKey = "${intervention.id}_$ord"
                             equipmentMap[mapKey] = EquipmentEntity(
@@ -461,7 +462,7 @@ class SyncRepository @Inject constructor(
         val intervention = interventionDao.getInterventionByIdOnce(interventionId)
         if (intervention != null) {
             val toDelete = equipmentDao
-                .getEquipmentsByUnitId(intervention.unitId)
+                .getEquipmentsByInterventionOnce(interventionId)
                 .filter { it.order >= 101 }
             toDelete.forEach { eq ->
                 equipmentDao.deleteByInterventionAndOrder(eq.interventionId, eq.order)

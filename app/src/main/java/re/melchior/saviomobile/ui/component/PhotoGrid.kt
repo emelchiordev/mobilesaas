@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import java.io.File
 
 @Composable
@@ -153,7 +154,7 @@ private fun AddPhotoButton(onClick: () -> Unit) {
             .clickable { onClick() },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = SavioPalette.SurfaceCard
         )
     ) {
         Box(

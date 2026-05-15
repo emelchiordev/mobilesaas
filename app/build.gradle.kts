@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,31 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.android)
 }
+
+/** HTTP(S) de base pour Retrofit — ajoute « / » final si absent. */
+fun urlWithTrailingSlash(raw: String): String {
+    val t = raw.trim().trimEnd('/')
+    return "$t/"
+}
+
+val localProperties =
+    Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) }
+    }
+
+/** Surcharge locale : `DEV_BASE_URL=http://192.168.1.XX:3000` dans local.properties (gitignored). */
+val debugBaseUrl =
+    urlWithTrailingSlash(
+        localProperties.getProperty("DEV_BASE_URL")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "http://192.168.1.69:3000",
+    )
+
+/** Optionnel : `DEV_BAN_BASE_URL=http://192.168.1.XX:3001` — défaut émulateur :3001 */
+val debugBanBaseUrl =
+    urlWithTrailingSlash(
+        localProperties.getProperty("DEV_BAN_BASE_URL")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "http://192.168.1.69:3001",
+    )
 
 android {
     namespace = "re.melchior.saviomobile"
@@ -18,24 +45,33 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
-        buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.69:3000/\"")
-        buildConfigField("String", "BAN_API_BASE_URL", "\"http://192.168.1.69:3001/\"")
-        // 10.0.2.2 = localhost depuis l'émulateur Android
+
         buildConfigField(
             "String",
             "BAN_API_KEY",
-            "\"change-me-with-a-strong-random-key\""
+            "\"change-me-with-a-strong-random-key\"",
         )
     }
 
     buildTypes {
-        release {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             isMinifyEnabled = false
+            // Émulateur : 10.0.2.2 — tablette LAN : surcharger via local.properties (DEV_BASE_URL)
+            buildConfigField("String", "BASE_URL", "\"$debugBaseUrl\"")
+            buildConfigField("String", "BAN_API_BASE_URL", "\"$debugBanBaseUrl\"")
+        }
+        release {
+            isMinifyEnabled = true
+            buildConfigField("String", "BASE_URL", "\"https://api.savio.re/\"")
+            // Aligné front prod (ban.*) — ajuster si votre API catalogue est ailleurs
+            buildConfigField("String", "BAN_API_BASE_URL", "\"https://ban.melchior.re/\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -45,6 +81,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // Workaround crash lint AGP + Kotlin UAST (NonNullableMutableLiveDataDetector)
+        disable += "NullSafeMutableLiveData"
     }
 }
 

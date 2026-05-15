@@ -1,8 +1,12 @@
 package re.melchior.saviomobile.data.remote.api
 
+import re.melchior.saviomobile.data.remote.dto.MobilePendingInterventionRequestDto
+import re.melchior.saviomobile.data.remote.dto.MobilePendingInterventionResponseDto
 import re.melchior.saviomobile.data.remote.dto.PullResponseDto
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 interface SyncApi {
@@ -12,4 +16,9 @@ interface SyncApi {
         @Query("date") date: String,
         @Header("If-Modified-Since") ifModifiedSince: String? = null
     ): PullResponseDto
+
+    @POST("api/mobile/interventions/pending")
+    suspend fun postPendingIntervention(
+        @Body body: MobilePendingInterventionRequestDto,
+    ): MobilePendingInterventionResponseDto
 }

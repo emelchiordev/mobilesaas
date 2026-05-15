@@ -1,5 +1,6 @@
 package re.melchior.saviomobile.ui
 
+import android.content.Intent
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import re.melchior.saviomobile.data.local.database.TokenDataStore
@@ -12,12 +13,16 @@ fun SavioApp(
     windowSizeClass: WindowSizeClass,
     tokenDataStore: TokenDataStore,
     authEventBus: AuthEventBus,
+    deepLinkIntent: Intent?,
+    onConsumeDeepLinkIntent: () -> Unit,
 ) {
     SavioTheme {
         AppNavigation(
             tokenDataStore = tokenDataStore,
             authEventBus = authEventBus,
             windowSizeClass = windowSizeClass,
+            deepLinkIntent = deepLinkIntent,
+            onConsumeDeepLinkIntent = onConsumeDeepLinkIntent,
         )
     }
 }

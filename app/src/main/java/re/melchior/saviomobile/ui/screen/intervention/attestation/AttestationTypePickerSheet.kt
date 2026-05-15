@@ -19,10 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 fun attestationTypeLabel(type: String): String =
     when (type) {
@@ -53,7 +53,7 @@ fun AttestationTypePickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = SavioPalette.SurfaceCard,
     ) {
         Column(
             modifier = Modifier
@@ -79,16 +79,18 @@ fun AttestationTypePickerSheet(
                     onClick = { onSelect(type) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isSuggested) {
-                        Color(0xFF185FA5).copy(alpha = 0.1f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerLow
-                    },
-                    border = if (isSuggested) {
-                        BorderStroke(1.5.dp, Color(0xFF185FA5))
-                    } else {
-                        null
-                    },
+                    color =
+                        if (isSuggested) {
+                            SavioPalette.Accent.copy(alpha = 0.12f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        },
+                    border =
+                        if (isSuggested) {
+                            BorderStroke(1.5.dp, SavioPalette.Accent)
+                        } else {
+                            null
+                        },
                 ) {
                     Row(
                         modifier = Modifier.padding(
@@ -113,7 +115,7 @@ fun AttestationTypePickerSheet(
                                 Text(
                                     text = "Suggestion basée sur l'équipement",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF185FA5),
+                                    color = SavioPalette.Accent,
                                 )
                             }
                         }
@@ -121,7 +123,7 @@ fun AttestationTypePickerSheet(
                             Icon(
                                 Icons.Filled.Star,
                                 contentDescription = null,
-                                tint = Color(0xFF185FA5),
+                                tint = SavioPalette.Accent,
                                 modifier = Modifier.size(16.dp),
                             )
                         }

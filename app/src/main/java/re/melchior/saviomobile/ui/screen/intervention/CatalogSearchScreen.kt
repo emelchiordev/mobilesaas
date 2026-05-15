@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,6 +92,7 @@ fun CatalogSearchScreen(
     val selectedTypeLabel = equipmentTypes.find { it.id == selectedTypeId }?.label ?: "Tous les types"
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Choisir un appareil") },
@@ -99,10 +101,12 @@ fun CatalogSearchScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
             )
         },
     ) { padding ->
@@ -315,10 +319,10 @@ private fun CatalogEquipmentRow(
                         .width(52.dp)
                         .height(34.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color.White)
+                        .background(SavioPalette.SurfaceCard)
                         .border(
                             width = 0.5.dp,
-                            color = Color(0xFFE8E8E8),
+                            color = SavioPalette.BorderDefault,
                             shape = RoundedCornerShape(6.dp),
                         ),
                     contentAlignment = Alignment.Center,

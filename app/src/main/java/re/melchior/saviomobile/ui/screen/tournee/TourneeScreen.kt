@@ -19,13 +19,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,32 +53,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import re.melchior.saviomobile.R
 import re.melchior.saviomobile.ui.component.SavioEmptyState
 import re.melchior.saviomobile.ui.component.SavioNetworkErrorState
 import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,15 +87,22 @@ import androidx.compose.runtime.setValue
 fun TourneeScreen(
     onInterventionClick: (String) -> Unit,
     onResumeIntervention: (String) -> Unit = {},
-    viewModel: TourneeViewModel = hiltViewModel()
+    onLogout: () -> Unit = {},
+    onCreateClient: () -> Unit = {},
+    onOfflineIntervention: () -> Unit = {},
+    onPendingOfflineList: () -> Unit = {},
+    viewModel: TourneeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val interventions by viewModel.interventions.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
+    val pendingOfflineInterventionCount by viewModel.pendingOfflineInterventionCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
     val isOnline = rememberIsNetworkOnline()
+    var fabMenuExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.errorMessage, interventions.isNotEmpty()) {
         uiState.errorMessage?.let { msg ->
@@ -116,17 +129,43 @@ fun TourneeScreen(
                 title = {
                     Text(
                         "Ma tournée",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Medium,
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioUi.Blue,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
                 actions = {
+                    IconButton(
+                        onClick = onLogout,
+                        enabled = !uiState.isSyncing && !uiState.isCatalogSyncing,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Se déconnecter",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    if (pendingOfflineInterventionCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = SavioPalette.Accent,
+                                    contentColor = SavioPalette.OnAccent,
+                                ) { Text(pendingOfflineInterventionCount.toString()) }
+                            },
+                        ) {
+                            IconButton(onClick = onPendingOfflineList) {
+                                Text("☁️", fontSize = 20.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     // Badge interventions en attente de sync
                     if (pendingSyncCount > 0) {
                         BadgedBox(
@@ -140,7 +179,7 @@ fun TourneeScreen(
                             Icon(
                                 imageVector = Icons.Filled.Sync,
                                 contentDescription = "Sync en attente",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -153,13 +192,13 @@ fun TourneeScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.LibraryBooks,
                                 contentDescription = "Synchroniser le catalogue",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }
@@ -172,19 +211,71 @@ fun TourneeScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
                                 contentDescription = "Rafraîchir",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }
                 }
             )
-        }
+        },
+        floatingActionButton = {
+            Box {
+                BadgedBox(
+                    badge = {
+                        if (pendingOfflineInterventionCount > 0) {
+                            Badge(
+                                containerColor = SavioPalette.Accent,
+                                contentColor = SavioPalette.OnAccent,
+                            ) {
+                                Text(pendingOfflineInterventionCount.toString())
+                            }
+                        }
+                    },
+                ) {
+                    FloatingActionButton(
+                        onClick = { fabMenuExpanded = true },
+                        containerColor = SavioPalette.Accent,
+                        contentColor = SavioPalette.OnAccent,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Actions")
+                    }
+                }
+                DropdownMenu(
+                    expanded = fabMenuExpanded,
+                    onDismissRequest = { fabMenuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Nouveau client") },
+                        onClick = {
+                            fabMenuExpanded = false
+                            onCreateClient()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Nouvelle intervention") },
+                        onClick = {
+                            fabMenuExpanded = false
+                            if (isOnline) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        "Création connectée : prochainement",
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            } else {
+                                onOfflineIntervention()
+                            }
+                        },
+                    )
+                }
+            }
+        },
     )  { padding ->
         val pullRefreshState = rememberPullToRefreshState()
 
@@ -350,7 +441,7 @@ private fun DateSelector(
                 text = selectedDate.format(formatter).replaceFirstChar { it.uppercase() },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
@@ -375,13 +466,13 @@ private fun InterventionCard(
         intervention.syncStatus == "CONFLICT" ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-            colorResource(R.color.badge_done_bg) to colorResource(R.color.badge_done_text)
+            SavioPalette.SuccessDark to SavioPalette.Success
         intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-            colorResource(R.color.badge_inprog_bg) to colorResource(R.color.badge_inprog_text)
+            SavioPalette.WarningTintBg to SavioPalette.Accent
         intervention.syncStatus == "COMPLETED" ->
-            colorResource(R.color.badge_inprog_bg) to colorResource(R.color.badge_inprog_text)
+            SavioPalette.WarningTintBg to SavioPalette.Accent
         else ->
-            colorResource(R.color.badge_neutral_bg) to colorResource(R.color.badge_neutral_text)
+            SavioPalette.SurfaceElevated to SavioPalette.TextSecondary
     }
 
     val statusText = when {
@@ -399,7 +490,7 @@ private fun InterventionCard(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = SavioPalette.SurfaceCard,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -490,7 +581,7 @@ private fun InterventionCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 

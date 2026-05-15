@@ -13,10 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @Composable
 fun EmptyDetailPane(modifier: Modifier) {
@@ -25,13 +24,13 @@ fun EmptyDetailPane(modifier: Modifier) {
             Icon(
                 imageVector = Icons.Outlined.TouchApp,
                 contentDescription = null,
-                tint = colorResource(R.color.accent_todo),
+                tint = SavioPalette.TextHint,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 text = "Sélectionnez une intervention",
-                color = colorResource(R.color.badge_neutral_text).copy(alpha = 0.75f),
+                color = SavioPalette.TextSecondary.copy(alpha = 0.75f),
                 fontSize = 14.sp
             )
         }

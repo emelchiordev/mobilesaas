@@ -64,6 +64,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.AttestationVeControlPoints
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -107,6 +108,7 @@ fun AttestationVeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Attestation $typeLabel") },
@@ -115,13 +117,15 @@ fun AttestationVeScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF185FA5),
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
                 actions = {
                     if (nonValidatedCount > 0) {
@@ -780,13 +784,13 @@ fun AttestationPointsControleTab(
                             text = point.description,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF185FA5),
+                            color = SavioPalette.Accent,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
                         )
                         HorizontalDivider(
-                            color = Color(0xFF185FA5),
+                            color = SavioPalette.Accent,
                             thickness = 1.dp,
                         )
                     }
@@ -797,7 +801,7 @@ fun AttestationPointsControleTab(
                         text = point.description,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(
@@ -944,7 +948,7 @@ fun AttestationSectionTitle(
         text = title,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF185FA5),
+        color = SavioPalette.Accent,
         modifier = modifier.padding(vertical = 4.dp),
     )
 }

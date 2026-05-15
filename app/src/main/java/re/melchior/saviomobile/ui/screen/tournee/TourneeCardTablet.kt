@@ -20,12 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import re.melchior.saviomobile.R
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @Composable
 fun TourneeCardTablet(
@@ -33,48 +32,49 @@ fun TourneeCardTablet(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val accentColor = when (intervention.status) {
-        "completed" -> colorResource(R.color.accent_done)
-        "in_progress" -> colorResource(R.color.accent_inprog)
-        else -> colorResource(R.color.accent_todo)
-    }
+    val accentColor =
+        when (intervention.status) {
+            "completed" -> SavioPalette.Success
+            "in_progress" -> SavioPalette.Accent
+            else -> SavioPalette.TextHint
+        }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (isSelected) colorResource(R.color.savio_primary_light)
-                else colorResource(R.color.card_bg)
-            )
-            .clickable(onClick = onClick)
-            .alpha(if (intervention.isCompleted) 0.5f else 1f),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    if (isSelected) SavioPalette.PrimaryLight else SavioPalette.SurfaceCard,
+                )
+                .clickable(onClick = onClick)
+                .alpha(if (intervention.isCompleted) 0.5f else 1f),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
                 .width(3.dp)
                 .height(64.dp)
-                .background(accentColor)
+                .background(accentColor),
         )
         Column(
             Modifier
                 .padding(horizontal = 12.dp, vertical = 10.dp)
-                .weight(1f)
+                .weight(1f),
         ) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = intervention.time,
                     fontSize = 11.sp,
-                    color = colorResource(R.color.badge_neutral_text).copy(alpha = 0.65f)
+                    color = SavioPalette.TextSecondary.copy(alpha = 0.65f),
                 )
                 if (intervention.status == "in_progress" && intervention.elapsedTime.isNotBlank()) {
                     Text(
                         text = intervention.elapsedTime,
                         fontSize = 10.sp,
-                        color = colorResource(R.color.badge_inprog_text),
-                        fontWeight = FontWeight.Medium
+                        color = SavioPalette.Accent,
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             }
@@ -82,27 +82,27 @@ fun TourneeCardTablet(
                 text = intervention.clientName,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = colorResource(R.color.badge_neutral_text)
+                color = SavioPalette.TextPrimary,
             )
             Text(
                 text = intervention.address,
                 fontSize = 11.sp,
-                color = colorResource(R.color.badge_neutral_text).copy(alpha = 0.55f),
+                color = SavioPalette.TextSecondary.copy(alpha = 0.55f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (isSelected) {
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = colorResource(R.color.savio_primary),
-                modifier = Modifier.padding(end = 8.dp).size(16.dp)
+                tint = SavioPalette.Accent,
+                modifier = Modifier.padding(end = 8.dp).size(16.dp),
             )
         }
     }
     HorizontalDivider(
         thickness = 0.5.dp,
-        color = colorResource(R.color.badge_neutral_bg)
+        color = SavioPalette.BorderDefault,
     )
 }
