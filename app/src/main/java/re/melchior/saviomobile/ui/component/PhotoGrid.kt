@@ -154,7 +154,7 @@ private fun AddPhotoButton(onClick: () -> Unit) {
             .clickable { onClick() },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = SavioPalette.SurfaceCard
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Box(

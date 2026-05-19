@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,11 +72,7 @@ fun EquipmentFormScreen(
                     }
                 },
                 colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
+                    savioTopAppBarColors(),
             )
         },
     ) { padding ->

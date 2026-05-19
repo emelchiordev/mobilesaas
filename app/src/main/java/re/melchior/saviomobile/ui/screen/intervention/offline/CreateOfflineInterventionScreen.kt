@@ -51,7 +51,10 @@ import androidx.compose.material3.SnackbarDuration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.material3.MaterialTheme
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.savioFieldColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 private data class InterventionTypeOption(val label: String, val code: String)
 
@@ -124,27 +127,17 @@ fun CreateOfflineInterventionScreen(
         ).show()
     }
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = SavioPalette.TextPrimary,
-        unfocusedTextColor = SavioPalette.TextPrimary,
-        focusedContainerColor = SavioPalette.SurfaceCard,
-        unfocusedContainerColor = SavioPalette.SurfaceCard,
-        focusedBorderColor = SavioPalette.Accent,
-        unfocusedBorderColor = SavioPalette.BorderFieldPro,
-        cursorColor = SavioPalette.Accent,
-        focusedLabelColor = SavioPalette.TextSecondary,
-        unfocusedLabelColor = SavioPalette.TextSecondary,
-    )
+    val fieldColors = savioFieldColors()
 
     Scaffold(
-        containerColor = SavioPalette.BackgroundPage,
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "Intervention terrain",
-                        color = SavioPalette.TextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -153,13 +146,11 @@ fun CreateOfflineInterventionScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = SavioPalette.TextPrimary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioPalette.BackgroundPage,
-                ),
+                colors = savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -239,7 +230,7 @@ fun CreateOfflineInterventionScreen(
 
             Text(
                 "Type d'intervention",
-                color = SavioPalette.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
             )
@@ -256,8 +247,8 @@ fun CreateOfflineInterventionScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = SavioPalette.Accent.copy(alpha = 0.35f),
                             selectedLabelColor = SavioPalette.Accent,
-                            containerColor = SavioPalette.SurfaceCard,
-                            labelColor = SavioPalette.TextPrimary,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
                         ),
                     )
                 }
@@ -279,7 +270,7 @@ fun CreateOfflineInterventionScreen(
             Text(
                 text = "Appuyez pour modifier la date et l'heure",
                 fontSize = 11.sp,
-                color = SavioPalette.TextHint,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedTextField(
@@ -310,10 +301,10 @@ fun CreateOfflineInterventionScreen(
                 enabled = canSave,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SavioPalette.Accent,
-                    contentColor = SavioPalette.OnAccent,
-                    disabledContainerColor = SavioPalette.SurfaceElevated,
-                    disabledContentColor = SavioPalette.TextHint,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {

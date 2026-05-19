@@ -16,18 +16,23 @@ class ColdMeasureRepository @Inject constructor(
     ): Boolean =
         dao.getByInterventionAndEquipment(interventionId, equipmentId) != null
 
-    suspend fun getOrCreate(
+    suspend fun get(
         interventionId: String,
         equipmentId: String,
-    ): ColdMeasureEntity {
-        return dao.getByInterventionAndEquipment(interventionId, equipmentId)
-            ?: ColdMeasureEntity(
-                id = java.util.UUID.randomUUID().toString(),
-                interventionId = interventionId,
-                equipmentId = equipmentId,
-                updatedAt = java.time.Instant.now().toString(),
-            )
-    }
+    ): ColdMeasureEntity? =
+        dao.getByInterventionAndEquipment(interventionId, equipmentId)
+
+    fun newDraft(
+        interventionId: String,
+        equipmentId: String,
+    ): ColdMeasureEntity =
+        ColdMeasureEntity(
+            id = java.util.UUID.randomUUID().toString(),
+            interventionId = interventionId,
+            equipmentId = equipmentId,
+            isDirty = false,
+            updatedAt = "",
+        )
 
     suspend fun save(entity: ColdMeasureEntity) {
         dao.upsert(

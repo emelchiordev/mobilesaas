@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,11 +53,7 @@ fun CerfaScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -70,7 +67,7 @@ fun CerfaScreen(
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = SavioUi.Blue,
+                        color = SavioUi.BusinessAccent,
                         strokeWidth = 2.dp,
                     )
                 }
@@ -115,7 +112,7 @@ fun CerfaScreen(
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = SavioUi.Blue,
+                        color = SavioUi.BusinessAccent,
                         strokeWidth = 2.dp,
                     )
                 }

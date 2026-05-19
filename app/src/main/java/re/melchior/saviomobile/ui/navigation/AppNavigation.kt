@@ -25,7 +25,10 @@ import re.melchior.saviomobile.ui.screen.auth.SelectSocieteScreen
 import re.melchior.saviomobile.ui.screen.auth.SplashScreen
 import re.melchior.saviomobile.ui.screen.auth.WelcomeScreen
 import re.melchior.saviomobile.ui.screen.client.CreateClientScreen
+import re.melchior.saviomobile.ui.screen.intervention.create.CreateInterventionScreen
 import re.melchior.saviomobile.ui.screen.intervention.offline.CreateOfflineInterventionScreen
+import re.melchior.saviomobile.ui.utils.NetworkUtils
+import androidx.compose.ui.platform.LocalContext
 import re.melchior.saviomobile.ui.screen.intervention.offline.PendingOfflineInterventionsScreen
 import re.melchior.saviomobile.ui.screen.intervention.CameraScreen
 import re.melchior.saviomobile.ui.screen.intervention.ClientDetailScreen
@@ -40,6 +43,7 @@ import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureScreen
 import re.melchior.saviomobile.ui.screen.intervention.pacmeasure.PacMeasureScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionActiveScreen
 import re.melchior.saviomobile.ui.screen.intervention.InterventionDetailScreen
+import re.melchior.saviomobile.ui.screen.invoice.DevisSignatureScreen
 import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
 import re.melchior.saviomobile.ui.screen.intervention.PhotosScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
@@ -240,6 +244,24 @@ fun AppNavigation(
         composable(Screen.Tournee.route) { backStackEntry ->
             val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
             val tourneeViewModel: TourneeViewModel = hiltViewModel(backStackEntry)
+            val context = LocalContext.current
+            val pendingSnackbar =
+                backStackEntry.savedStateHandle.get<String>("pending_snackbar")
+            val pendingFocusDateMillis =
+                backStackEntry.savedStateHandle.get<Long>("pending_focus_date_millis")
+            val onConsumePendingSnackbar: () -> Unit = {
+                backStackEntry.savedStateHandle.remove<String>("pending_snackbar")
+            }
+            val onConsumePendingFocusDate: () -> Unit = {
+                backStackEntry.savedStateHandle.remove<Long>("pending_focus_date_millis")
+            }
+            val onNewIntervention: () -> Unit = {
+                if (NetworkUtils.isOnline(context)) {
+                    navController.navigate(Screen.CreateIntervention.createRoute())
+                } else {
+                    navController.navigate(Screen.CreateOfflineIntervention.route)
+                }
+            }
 
             if (savioWindowSize == SavioWindowSize.EXPANDED) {
                 TourneeTabletScreen(
@@ -251,12 +273,17 @@ fun AppNavigation(
                     },
                     onLogout = logoutAndGoWelcome,
                     onCreateClient = { navController.navigate(Screen.CreateClient.route) },
+                    onNewIntervention = onNewIntervention,
                     onOfflineIntervention = {
                         navController.navigate(Screen.CreateOfflineIntervention.route)
                     },
                     onPendingOfflineList = {
                         navController.navigate(Screen.PendingOfflineInterventions.route)
                     },
+                    pendingSnackbar = pendingSnackbar,
+                    onConsumePendingSnackbar = onConsumePendingSnackbar,
+                    pendingFocusDateMillis = pendingFocusDateMillis,
+                    onConsumePendingFocusDate = onConsumePendingFocusDate,
                     viewModel = tourneeViewModel,
                 )
             } else {
@@ -273,19 +300,76 @@ fun AppNavigation(
                     },
                     onLogout = logoutAndGoWelcome,
                     onCreateClient = { navController.navigate(Screen.CreateClient.route) },
+                    onNewIntervention = onNewIntervention,
                     onOfflineIntervention = {
                         navController.navigate(Screen.CreateOfflineIntervention.route)
                     },
                     onPendingOfflineList = {
                         navController.navigate(Screen.PendingOfflineInterventions.route)
                     },
+                    pendingSnackbar = pendingSnackbar,
+                    onConsumePendingSnackbar = onConsumePendingSnackbar,
+                    pendingFocusDateMillis = pendingFocusDateMillis,
+                    onConsumePendingFocusDate = onConsumePendingFocusDate,
                     viewModel = tourneeViewModel,
                 )
             }
         }
 
         composable(Screen.CreateClient.route) {
-            CreateClientScreen(onBack = { navController.popBackStack() })
+            CreateClientScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToCreateIntervention = { customerId, unitId, displayName, addressLine ->
+                    navController.navigate(
+                        Screen.CreateIntervention.createRoute(
+                            unitId = unitId,
+                            customerId = customerId,
+                            displayName = displayName,
+                            addressLine = addressLine,
+                        ),
+                    ) {
+                        popUpTo(Screen.CreateClient.route) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Screen.CreateIntervention.route,
+            arguments = listOf(
+                navArgument("unitId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("customerId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("displayName") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("addressLine") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) {
+            CreateInterventionScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { scheduledAtMillis ->
+                    navController.getBackStackEntry(Screen.Tournee.route).savedStateHandle.apply {
+                        set("pending_snackbar", "Intervention créée ✅")
+                        set("pending_focus_date_millis", scheduledAtMillis)
+                    }
+                    navController.popBackStack()
+                },
+                onNavigateOffline = {
+                    navController.navigate(Screen.CreateOfflineIntervention.route) {
+                        popUpTo(Screen.CreateIntervention.route) { inclusive = true }
+                    }
+                },
+            )
         }
 
         composable(Screen.CreateOfflineIntervention.route) {
@@ -351,7 +435,29 @@ fun AppNavigation(
                 ?: return@composable
             InvoiceScreen(
                 interventionId = interventionId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToDevisSignature = {
+                    navController.navigate(Screen.DevisSignature.createRoute(interventionId))
+                },
+            )
+        }
+
+        composable(
+            route = Screen.DevisSignature.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val interventionId = backStackEntry.arguments?.getString("interventionId")
+                ?: return@composable
+            DevisSignatureScreen(
+                onBack = { navController.popBackStack() },
+                onCompleted = {
+                    navController.popBackStack(
+                        Screen.Invoice.createRoute(interventionId),
+                        inclusive = false,
+                    )
+                },
             )
         }
 

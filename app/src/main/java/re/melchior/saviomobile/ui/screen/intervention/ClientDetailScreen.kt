@@ -63,6 +63,7 @@ import re.melchior.saviomobile.ui.component.SavioClientDetailSkeleton
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -112,12 +113,7 @@ fun ClientDetailScreen(
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
                 title = {
                     Column {
                         Text(
@@ -130,7 +126,7 @@ fun ClientDetailScreen(
                             Text(
                                 text = "Modifications soumises à validation",
                                 fontSize = 11.sp,
-                                color = SavioPalette.TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -196,7 +192,7 @@ fun ClientDetailScreen(
                                 Icon(
                                     Icons.Filled.Info,
                                     contentDescription = null,
-                                    tint = SavioPalette.Accent,
+                                    tint = SavioUi.BusinessAccent,
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Text(
@@ -288,7 +284,7 @@ fun ClientDetailScreen(
                             ClientDataRow(
                                 label = "Téléphone",
                                 rawValue = uiState.phone,
-                                linkColor = SavioPalette.Accent,
+                                linkColor = MaterialTheme.colorScheme.primary,
                                 onValueClick = uiState.phone.takeIf { it.isNotBlank() }?.let { phone ->
                                     { uriHandler.openUri("tel:${phone.trim()}") }
                                 },
@@ -297,7 +293,7 @@ fun ClientDetailScreen(
                             ClientDataRow(
                                 label = "Email",
                                 rawValue = uiState.email,
-                                linkColor = SavioPalette.Accent,
+                                linkColor = MaterialTheme.colorScheme.primary,
                                 onValueClick = uiState.email.takeIf { it.isNotBlank() }?.let { email ->
                                     { uriHandler.openUri("mailto:${email.trim()}") }
                                 },
@@ -380,8 +376,8 @@ fun ClientDetailScreen(
                                 .height(52.dp),
                             enabled = !uiState.isSaving,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = SavioPalette.Accent,
-                                contentColor = SavioPalette.OnAccent,
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
                             ),
                             shape = RoundedCornerShape(20.dp),
                         ) {
@@ -409,7 +405,7 @@ fun ClientDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = SavioPalette.TextPrimary,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
                             ),
                             border = BorderStroke(1.dp, SavioPalette.Accent),
                         ) {
@@ -429,7 +425,7 @@ private fun ClientSectionCard(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = SavioPalette.SurfaceCard,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -451,7 +447,7 @@ private fun ClientSectionTitle(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = SavioPalette.Accent,
+            tint = SavioUi.BusinessAccent,
             modifier = Modifier.size(20.dp),
         )
         Text(
@@ -511,7 +507,7 @@ private fun ClientDataRow(
             modifier = valueModifier,
             fontSize = 14.sp,
             color = when {
-                isPlaceholder -> SavioPalette.TextHint
+                isPlaceholder -> MaterialTheme.colorScheme.onSurfaceVariant
                 linkColor != null && onValueClick != null -> linkColor
                 else -> MaterialTheme.colorScheme.onSurface
             },

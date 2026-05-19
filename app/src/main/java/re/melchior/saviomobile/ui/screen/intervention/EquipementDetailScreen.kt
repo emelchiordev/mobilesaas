@@ -78,7 +78,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
@@ -155,12 +160,7 @@ fun EquipementDetailScreen(
         containerColor = SavioUi.PageBackground,
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
                 title = {
                     Text(
                         text = uiState.equipment?.let {
@@ -352,7 +352,7 @@ fun EquipementDetailScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = SavioPalette.SurfaceCard,
+                        color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                         shadowElevation = 0.dp,
                     ) {
@@ -488,11 +488,18 @@ fun EquipementDetailScreen(
                     }
                     var chTabIdx by remember(equipment.id) { mutableIntStateOf(0) }
                     if (tabLabelsCh.size > 1 && !isReplaced) {
-                        TabRow(selectedTabIndex = chTabIdx) {
+                        TabRow(
+                            selectedTabIndex = chTabIdx,
+                            containerColor = MaterialTheme.colorScheme.background,
+                            contentColor = savioTabUnselectedColor(),
+                            indicator = { positions -> SavioInterventionTabIndicator(positions, chTabIdx) },
+                        ) {
                             tabLabelsCh.forEachIndexed { i, title ->
                                 Tab(
                                     selected = chTabIdx == i,
                                     onClick = { chTabIdx = i },
+                                    selectedContentColor = savioTabSelectedColor(),
+                                    unselectedContentColor = savioTabUnselectedColor(),
                                     text = { Text(title, style = MaterialTheme.typography.labelMedium) },
                                 )
                             }
@@ -541,7 +548,7 @@ fun EquipementDetailScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = SavioPalette.SurfaceCard,
+                        color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                         shadowElevation = 0.dp,
                     ) {
@@ -552,7 +559,7 @@ fun EquipementDetailScreen(
                                         Icons.Filled.Edit,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                     )
                                 },
                                 label = "N° série",
@@ -579,7 +586,7 @@ fun EquipementDetailScreen(
                                         Icons.Filled.CalendarToday,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                     )
                                 },
                                 label = "Mise en service",
@@ -630,7 +637,7 @@ fun EquipementDetailScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
-                            color = SavioPalette.SurfaceCard,
+                            color = MaterialTheme.colorScheme.surface,
                             border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                             shadowElevation = 0.dp,
                         ) {
@@ -642,7 +649,7 @@ fun EquipementDetailScreen(
                                 Icon(
                                     Icons.Filled.Analytics,
                                     contentDescription = null,
-                                    tint = SavioUi.Blue,
+                                    tint = SavioUi.BusinessAccent,
                                     modifier = Modifier.size(24.dp),
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
@@ -660,7 +667,7 @@ fun EquipementDetailScreen(
                                 Icon(
                                     Icons.Filled.ChevronRight,
                                     contentDescription = null,
-                                    tint = SavioUi.Blue,
+                                    tint = SavioUi.BusinessAccent,
                                 )
                             }
                         }
@@ -680,7 +687,7 @@ fun EquipementDetailScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                color = SavioPalette.SurfaceCard,
+                                color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                                 shadowElevation = 0.dp,
                             ) {
@@ -704,7 +711,7 @@ fun EquipementDetailScreen(
                                                 Icon(
                                                     Icons.Filled.AcUnit,
                                                     contentDescription = null,
-                                                    tint = SavioUi.Blue,
+                                                    tint = SavioUi.BusinessAccent,
                                                     modifier = Modifier.size(20.dp),
                                                 )
                                             }
@@ -725,7 +732,7 @@ fun EquipementDetailScreen(
                                     Icon(
                                         Icons.Filled.ChevronRight,
                                         contentDescription = null,
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                     )
                                 }
                             }
@@ -738,7 +745,7 @@ fun EquipementDetailScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                color = SavioPalette.SurfaceCard,
+                                color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                                 shadowElevation = 0.dp,
                             ) {
@@ -762,7 +769,7 @@ fun EquipementDetailScreen(
                                                 Icon(
                                                     Icons.Filled.Description,
                                                     contentDescription = null,
-                                                    tint = SavioUi.Blue,
+                                                    tint = SavioUi.BusinessAccent,
                                                     modifier = Modifier.size(20.dp),
                                                 )
                                             }
@@ -783,7 +790,7 @@ fun EquipementDetailScreen(
                                     Icon(
                                         Icons.Filled.ChevronRight,
                                         contentDescription = null,
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                     )
                                 }
                             }
@@ -800,7 +807,7 @@ fun EquipementDetailScreen(
                             ).joinToString(" ")
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = SavioPalette.SurfaceCard,
+                                    containerColor = MaterialTheme.colorScheme.surface,
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -838,7 +845,7 @@ fun EquipementDetailScreen(
                                 onClick = { showAttestationPicker = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                color = SavioPalette.SurfaceCard,
+                                color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(0.5.dp, SavioUi.CardBorder),
                                 shadowElevation = 0.dp,
                             ) {
@@ -850,7 +857,7 @@ fun EquipementDetailScreen(
                                     Icon(
                                         Icons.Filled.Assignment,
                                         contentDescription = null,
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                         modifier = Modifier.size(24.dp),
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
@@ -872,7 +879,7 @@ fun EquipementDetailScreen(
                                     Icon(
                                         Icons.Filled.ChevronRight,
                                         contentDescription = null,
-                                        tint = SavioUi.Blue,
+                                        tint = SavioUi.BusinessAccent,
                                     )
                                 }
                             }
@@ -888,9 +895,9 @@ fun EquipementDetailScreen(
                             OutlinedButton(
                                 onClick = { viewModel.setChangeMode(true) },
                                 modifier = Modifier.weight(1f),
-                                border = BorderStroke(0.5.dp, SavioUi.Blue),
+                                border = BorderStroke(0.5.dp, SavioUi.BusinessAccent),
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = SavioPalette.TextPrimary,
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
                                     containerColor = Color.Transparent,
                                 ),
                             ) {
@@ -1080,7 +1087,7 @@ private fun PompeFioulInstallTab(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = SavioPalette.SurfaceCard,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -1155,7 +1162,7 @@ private fun GicleurFioulInstallTab(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = SavioPalette.SurfaceCard,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -1251,10 +1258,16 @@ private fun formatCommissioningDate(installDate: String?): String {
 @Suppress("UNUSED_PARAMETER")
 @Composable
 private fun TypeEnergyBadge(text: String, isType: Boolean = false) {
+    val label =
+        if (isType) {
+            formatEquipmentTypeLabel(text).ifBlank { text.uppercase(Locale.FRANCE) }
+        } else {
+            text.uppercase(Locale.FRANCE)
+        }
     BadgeChip(
         background = SavioUi.ChipBackground,
-        content = SavioUi.Blue,
-        label = text.uppercase(Locale.FRANCE),
+        content = SavioUi.BusinessAccent,
+        label = label,
     )
 }
 
@@ -1262,7 +1275,7 @@ private fun TypeEnergyBadge(text: String, isType: Boolean = false) {
 private fun KwBadge(kw: Double) {
     BadgeChip(
         background = SavioUi.ChipBackground,
-        content = SavioUi.Blue,
+        content = SavioUi.BusinessAccent,
         label = "${if (kw % 1.0 == 0.0) kw.toInt() else kw} kW",
     )
 }
@@ -1332,7 +1345,7 @@ private fun FieldTerrainRow(
                             trailingSquareIcon,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = SavioUi.Blue,
+                            tint = SavioUi.BusinessAccent,
                         )
                     }
                 }

@@ -1,0 +1,108 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:3584493599816616465",
+      "lastPropertyId": "15:2089306422082299865",
+      "name": "TenantArticleBox",
+      "properties": [
+        {
+          "id": "1:6331294597603887408",
+          "name": "boxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7936984182653210736",
+          "name": "id",
+          "indexId": "1:8429236544042525508",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:5110586587572733658",
+          "name": "reference",
+          "indexId": "2:5206811269322379575",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:8342901014700154523",
+          "name": "referenceInterne",
+          "type": 9
+        },
+        {
+          "id": "5:4567952558498080118",
+          "name": "codeBarre",
+          "type": 9
+        },
+        {
+          "id": "6:1830585884441047134",
+          "name": "designation",
+          "type": 9
+        },
+        {
+          "id": "7:6409482792998528585",
+          "name": "designationPersonnalisee",
+          "type": 9
+        },
+        {
+          "id": "8:6877759045303784592",
+          "name": "marque",
+          "indexId": "3:5051988257340780946",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "9:7031921438427958227",
+          "name": "famille",
+          "type": 9
+        },
+        {
+          "id": "10:5911002834547299236",
+          "name": "prixHt",
+          "type": 8
+        },
+        {
+          "id": "11:6659515627898391101",
+          "name": "remise",
+          "type": 8
+        },
+        {
+          "id": "12:2466640307805885341",
+          "name": "prixNet",
+          "type": 8
+        },
+        {
+          "id": "13:7593111040662502653",
+          "name": "unite",
+          "type": 9
+        },
+        {
+          "id": "14:1648715976593290292",
+          "name": "actif",
+          "type": 1
+        },
+        {
+          "id": "15:2089306422082299865",
+          "name": "updatedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "1:3584493599816616465",
+  "lastIndexId": "3:5051988257340780946",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

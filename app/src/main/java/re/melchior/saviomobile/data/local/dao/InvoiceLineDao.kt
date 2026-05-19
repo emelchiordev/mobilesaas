@@ -17,6 +17,9 @@ interface InvoiceLineDao {
     @Query("SELECT * FROM invoice_lines WHERE invoiceId = :invoiceId ORDER BY `order` ASC")
     suspend fun getByInvoiceIdOnce(invoiceId: String): List<InvoiceLineEntity>
 
+    @Query("SELECT * FROM invoice_lines WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): InvoiceLineEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(line: InvoiceLineEntity)
 

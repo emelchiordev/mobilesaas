@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -47,10 +49,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.collect
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
-import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
 import re.melchior.saviomobile.ui.theme.SavioUi
-private val InterventionPageBackground = SavioUi.PageBackground
-
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3AdaptiveNavigationSuiteApi::class,
@@ -98,11 +100,11 @@ fun InterventionActiveScreen(
 
     NavigationSuiteScaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = SavioPalette.BackgroundPage,
+        containerColor = MaterialTheme.colorScheme.background,
         navigationSuiteColors =
             NavigationSuiteDefaults.colors(
-                navigationBarContainerColor = SavioPalette.BackgroundPage,
-                navigationBarContentColor = SavioPalette.TextSecondary,
+                navigationBarContainerColor = MaterialTheme.colorScheme.background,
+                navigationBarContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         navigationSuiteItems = {
             InterventionTab.entries.forEach { tab ->
@@ -114,9 +116,9 @@ fun InterventionActiveScreen(
                             contentDescription = tab.label,
                             tint =
                                 if (selectedTab == tab) {
-                                    SavioPalette.Accent
+                                    savioTabSelectedColor()
                                 } else {
-                                    SavioPalette.TextSecondary
+                                    savioTabUnselectedColor()
                                 },
                             modifier = Modifier.size(24.dp),
                         )
@@ -129,9 +131,9 @@ fun InterventionActiveScreen(
                                 if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
                             color =
                                 if (selectedTab == tab) {
-                                    SavioPalette.Accent
+                                    savioTabSelectedColor()
                                 } else {
-                                    SavioPalette.TextSecondary
+                                    savioTabUnselectedColor()
                                 },
                         )
                     },
@@ -158,7 +160,7 @@ fun InterventionActiveScreen(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .background(SavioPalette.Accent)
+                        .background(MaterialTheme.colorScheme.primary)
                         .padding(16.dp),
                 )
             }
@@ -167,7 +169,7 @@ fun InterventionActiveScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(InterventionPageBackground),
+                    .background(MaterialTheme.colorScheme.background),
             ) {
                 when (selectedTab) {
                     InterventionTab.DETAIL ->
@@ -213,9 +215,10 @@ private fun InterventionActiveTopBar(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(SavioPalette.Accent)
+            .background(MaterialTheme.colorScheme.primary)
             .windowInsetsPadding(WindowInsets.statusBars),
     ) {
+        val onBar = MaterialTheme.colorScheme.onPrimary
         Row(
             Modifier
                 .fillMaxWidth()
@@ -225,14 +228,14 @@ private fun InterventionActiveTopBar(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Dépannage",
-                    color = Color.White,
+                    text = intervention.displayTypeLabel(),
+                    color = onBar,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = "Début $startTimeLabel · $elapsedLabel",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = onBar.copy(alpha = 0.65f),
                     fontSize = 11.sp,
                 )
             }
@@ -240,15 +243,16 @@ private fun InterventionActiveTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TextButton(
+                Button(
                     onClick = onClotureClick,
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = Color.White,
-                        contentColor = SavioPalette.Accent,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onPrimary,
+                        contentColor = MaterialTheme.colorScheme.primary,
                     ),
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .padding(end = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                 ) {
                     Text(
                         "Clôturer",
@@ -260,7 +264,7 @@ private fun InterventionActiveTopBar(
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = "Quitter l'intervention",
-                        tint = Color.White.copy(alpha = 0.6f),
+                        tint = onBar.copy(alpha = 0.6f),
                         modifier = Modifier.size(20.dp),
                     )
                 }

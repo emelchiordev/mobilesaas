@@ -2,6 +2,7 @@ package re.melchior.saviomobile.ui.screen.client
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -47,52 +50,105 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.repository.BanAddressPick
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.savioFieldColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateClientScreen(
     onBack: () -> Unit,
+    onNavigateToCreateIntervention: (
+        customerId: String,
+        unitId: String,
+        displayName: String,
+        addressLine: String,
+    ) -> Unit,
     viewModel: CreateClientViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var createdClientSheet by remember { mutableStateOf<CreateClientEvent.Created?>(null) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { ev ->
             when (ev) {
-                CreateClientEvent.Created -> {
+                is CreateClientEvent.Created -> {
                     snackbarHostState.showSnackbar(
                         message = "Client créé ✅",
                         duration = SnackbarDuration.Short,
                     )
+                    createdClientSheet = ev
+                }
+
+                CreateClientEvent.SavedOffline -> {
+                    snackbarHostState.showSnackbar(
+                        message = "Client sauvegardé ☁️",
+                        duration = SnackbarDuration.Short,
+                    )
+                    viewModel.resetForm()
                     onBack()
                 }
             }
         }
     }
 
+    createdClientSheet?.let { created ->
+        ClientCreatedBottomSheet(
+            displayName = created.displayName,
+            onCreateIntervention = {
+                createdClientSheet = null
+                viewModel.resetForm()
+                onNavigateToCreateIntervention(
+                    created.customerId,
+                    created.unitId,
+                    created.displayName,
+                    created.addressLine,
+                )
+            },
+            onDismiss = {
+                createdClientSheet = null
+                viewModel.resetForm()
+                onBack()
+            },
+        )
+    }
+
     Scaffold(
-        containerColor = SavioPalette.BackgroundPage,
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "Nouveau client",
-                        color = SavioPalette.TextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -101,16 +157,12 @@ fun CreateClientScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = SavioPalette.TextPrimary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
                 colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = SavioPalette.BackgroundPage,
-                        titleContentColor = SavioPalette.TextPrimary,
-                        navigationIconContentColor = SavioPalette.TextPrimary,
-                    ),
+                    savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -132,7 +184,7 @@ fun CreateClientScreen(
                 Card(
                     colors =
                         CardDefaults.cardColors(
-                            containerColor = SavioPalette.SurfaceCard,
+                            containerColor = MaterialTheme.colorScheme.surface,
                         ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -140,12 +192,12 @@ fun CreateClientScreen(
                         Text(
                             "Identité",
                             style = MaterialTheme.typography.titleSmall,
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             "Civilité",
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.bodySmall,
                         )
                         SingleChoiceSegmentedButtonRow {
@@ -163,9 +215,9 @@ fun CreateClientScreen(
                                         SegmentedButtonDefaults.colors(
                                             activeContainerColor = SavioPalette.Accent,
                                             activeContentColor = SavioPalette.OnAccent,
-                                            inactiveContainerColor = SavioPalette.SurfaceElevated,
-                                            inactiveBorderColor = SavioPalette.BorderFieldPro,
-                                            inactiveContentColor = SavioPalette.TextPrimary,
+                                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            inactiveBorderColor = MaterialTheme.colorScheme.outline,
+                                            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
                                         ),
                                 ) {
                                     Text(c.label, fontWeight = FontWeight.Medium)
@@ -175,90 +227,104 @@ fun CreateClientScreen(
                         OutlinedTextField(
                             value = uiState.firstName,
                             onValueChange = viewModel::onFirstNameChange,
-                            label = { Text("Prénom *", color = SavioPalette.TextPrimary) },
+                            label = { Text("Prénom *", color = MaterialTheme.colorScheme.onSurface) },
                             singleLine = true,
                             isError = uiState.fieldErrors.containsKey("firstName"),
                             supportingText = { uiState.fieldErrors["firstName"]?.let { Text(it) } },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isSubmitting,
-                            colors = createClientFieldColors(),
+                            colors = savioFieldColors(),
                         )
                         OutlinedTextField(
                             value = uiState.lastName,
                             onValueChange = viewModel::onLastNameChange,
-                            label = { Text("Nom *", color = SavioPalette.TextPrimary) },
+                            label = { Text("Nom *", color = MaterialTheme.colorScheme.onSurface) },
                             singleLine = true,
                             isError = uiState.fieldErrors.containsKey("lastName"),
                             supportingText = { uiState.fieldErrors["lastName"]?.let { Text(it) } },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isSubmitting,
-                            colors = createClientFieldColors(),
+                            colors = savioFieldColors(),
                         )
                         OutlinedTextField(
                             value = uiState.phone,
                             onValueChange = viewModel::onPhoneChange,
-                            label = { Text("Téléphone", color = SavioPalette.TextPrimary) },
+                            label = { Text("Téléphone", color = MaterialTheme.colorScheme.onSurface) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isSubmitting,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            colors = createClientFieldColors(),
+                            colors = savioFieldColors(),
                         )
                         OutlinedTextField(
                             value = uiState.email,
                             onValueChange = viewModel::onEmailChange,
-                            label = { Text("Email", color = SavioPalette.TextPrimary) },
+                            label = { Text("Email", color = MaterialTheme.colorScheme.onSurface) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isSubmitting,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            colors = createClientFieldColors(),
+                            colors = savioFieldColors(),
                         )
                     }
                 }
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = SavioPalette.SurfaceCard),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             "Adresse",
                             style = MaterialTheme.typography.titleSmall,
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                         )
                         when (uiState.addressEntryMode) {
                             ClientAddressEntryMode.BAN -> {
-                                OutlinedTextField(
-                                    value = uiState.addressSearchText,
-                                    onValueChange = viewModel::onAddressSearchTextChange,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Adresse * (BAN)", color = SavioPalette.TextPrimary) },
-                                    placeholder = {
-                                        Text(
-                                            "Tapez au moins 3 caractères…",
-                                            color = SavioPalette.TextHint,
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (uiState.banLoading) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(22.dp),
-                                                color = SavioPalette.Accent,
-                                                strokeWidth = 2.dp,
+                                var banFieldHeightPx by remember { mutableIntStateOf(0) }
+                                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = uiState.addressSearchText,
+                                        onValueChange = viewModel::onAddressSearchTextChange,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .onGloballyPositioned {
+                                                    banFieldHeightPx = it.size.height
+                                                },
+                                        label = { Text("Adresse * (BAN)", color = MaterialTheme.colorScheme.onSurface) },
+                                        placeholder = {
+                                            Text(
+                                                "Tapez au moins 3 caractères…",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
-                                        }
-                                    },
-                                    isError = uiState.fieldErrors.containsKey("address"),
-                                    supportingText = { uiState.fieldErrors["address"]?.let { Text(it) } },
-                                    enabled = !uiState.isSubmitting,
-                                    colors = createClientFieldColors(),
-                                )
-                                BanSuggestionsDropdown(
-                                    suggestions = uiState.banSuggestions,
-                                    onPick = viewModel::onSelectBanSuggestion,
-                                )
+                                        },
+                                        trailingIcon = {
+                                            if (uiState.banLoading) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(22.dp),
+                                                    color = SavioPalette.Accent,
+                                                    strokeWidth = 2.dp,
+                                                )
+                                            }
+                                        },
+                                        isError = uiState.fieldErrors.containsKey("address"),
+                                        supportingText = { uiState.fieldErrors["address"]?.let { Text(it) } },
+                                        enabled = !uiState.isSubmitting,
+                                        colors = savioFieldColors(),
+                                    )
+                                    BanSuggestionsPopupAboveField(
+                                        suggestions = uiState.banSuggestions,
+                                        onPick = { pick ->
+                                            keyboardController?.hide()
+                                            viewModel.onSelectBanSuggestion(pick)
+                                        },
+                                        popupYOffsetPx =
+                                            -banFieldHeightPx - with(density) { 8.dp.roundToPx() },
+                                        suggestionWidth = maxWidth,
+                                    )
+                                }
                                 val showManualLink =
                                     uiState.addressSearchText.trim().length >= 3 &&
                                         !uiState.banLoading &&
@@ -267,7 +333,7 @@ fun CreateClientScreen(
                                     Text(
                                         text = "Saisir l'adresse manuellement",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = SavioPalette.TextHint,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textDecoration = TextDecoration.Underline,
                                         modifier =
                                             Modifier
@@ -282,38 +348,38 @@ fun CreateClientScreen(
                                 Text(
                                     "Saisie manuelle (sans géolocalisation)",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = SavioPalette.TextSecondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 OutlinedTextField(
                                     value = uiState.streetResolved,
                                     onValueChange = viewModel::onManualStreetChange,
-                                    label = { Text("Numéro et voie *", color = SavioPalette.TextPrimary) },
+                                    label = { Text("Numéro et voie *", color = MaterialTheme.colorScheme.onSurface) },
                                     singleLine = false,
                                     maxLines = 2,
                                     modifier = Modifier.fillMaxWidth(),
                                     isError = uiState.fieldErrors.containsKey("address"),
                                     supportingText = { uiState.fieldErrors["address"]?.let { Text(it) } },
                                     enabled = !uiState.isSubmitting,
-                                    colors = createClientFieldColors(),
+                                    colors = savioFieldColors(),
                                 )
                                 OutlinedTextField(
                                     value = uiState.postalCode,
                                     onValueChange = viewModel::onManualPostalChange,
-                                    label = { Text("Code postal *", color = SavioPalette.TextPrimary) },
+                                    label = { Text("Code postal *", color = MaterialTheme.colorScheme.onSurface) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                                     enabled = !uiState.isSubmitting,
-                                    colors = createClientFieldColors(),
+                                    colors = savioFieldColors(),
                                 )
                                 OutlinedTextField(
                                     value = uiState.city,
                                     onValueChange = viewModel::onManualCityChange,
-                                    label = { Text("Ville *", color = SavioPalette.TextPrimary) },
+                                    label = { Text("Ville *", color = MaterialTheme.colorScheme.onSurface) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !uiState.isSubmitting,
-                                    colors = createClientFieldColors(),
+                                    colors = savioFieldColors(),
                                 )
                                 TextButton(
                                     onClick = viewModel::returnToBanSearchMode,
@@ -331,30 +397,30 @@ fun CreateClientScreen(
                         OutlinedTextField(
                             value = uiState.addressComplement,
                             onValueChange = viewModel::onAddressComplementChange,
-                            label = { Text("Complément d'adresse", color = SavioPalette.TextPrimary) },
+                            label = { Text("Complément d'adresse", color = MaterialTheme.colorScheme.onSurface) },
                             singleLine = false,
                             maxLines = 3,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !uiState.isSubmitting,
-                            colors = createClientFieldColors(),
+                            colors = savioFieldColors(),
                         )
                     }
                 }
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = SavioPalette.SurfaceCard),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             "Logement",
                             style = MaterialTheme.typography.titleSmall,
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             "Type de logement",
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.bodySmall,
                         )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,8 +434,8 @@ fun CreateClientScreen(
                                         FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = SavioPalette.Accent,
                                             selectedLabelColor = SavioPalette.OnAccent,
-                                            containerColor = SavioPalette.SurfaceElevated,
-                                            labelColor = SavioPalette.TextPrimary,
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            labelColor = MaterialTheme.colorScheme.onSurface,
                                         ),
                                 )
                             }
@@ -378,18 +444,18 @@ fun CreateClientScreen(
                             OutlinedTextField(
                                 value = uiState.floor,
                                 onValueChange = viewModel::onFloorChange,
-                                label = { Text("Étage", color = SavioPalette.TextPrimary) },
+                                label = { Text("Étage", color = MaterialTheme.colorScheme.onSurface) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !uiState.isSubmitting,
-                                colors = createClientFieldColors(),
+                                colors = savioFieldColors(),
                             )
                         }
                     }
                 }
 
                 uiState.submitError?.let { err ->
-                    Text(err, color = SavioPalette.Error, style = MaterialTheme.typography.bodyMedium)
+                    Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -397,7 +463,7 @@ fun CreateClientScreen(
 
             Button(
                 onClick = viewModel::submit,
-                enabled = !uiState.isSubmitting,
+                enabled = !uiState.isSubmitting && createdClientSheet == null,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -406,7 +472,7 @@ fun CreateClientScreen(
                     ButtonDefaults.buttonColors(
                         containerColor = SavioPalette.Accent,
                         contentColor = SavioPalette.OnAccent,
-                        disabledContainerColor = SavioPalette.SurfaceElevated,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     ),
                 contentPadding = PaddingValues(vertical = 14.dp),
             ) {
@@ -425,49 +491,48 @@ fun CreateClientScreen(
 }
 
 @Composable
-private fun BanSuggestionsDropdown(
+private fun BanSuggestionsPopupAboveField(
     suggestions: List<BanAddressPick>,
     onPick: (BanAddressPick) -> Unit,
+    popupYOffsetPx: Int,
+    suggestionWidth: Dp,
 ) {
     if (suggestions.isEmpty()) return
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .border(1.dp, SavioPalette.BorderFieldPro, RoundedCornerShape(8.dp))
-                .background(SavioPalette.SurfaceCard, RoundedCornerShape(8.dp)),
+    val scrollState = rememberScrollState()
+    Popup(
+        alignment = Alignment.BottomStart,
+        offset = IntOffset(0, popupYOffsetPx),
+        properties =
+            PopupProperties(
+                focusable = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false,
+            ),
     ) {
-        suggestions.take(10).forEach { pick ->
-            Surface(
-                onClick = { onPick(pick) },
-                color = SavioPalette.SurfaceCard,
-            ) {
-                Text(
-                    text = pick.label,
-                    color = SavioPalette.TextPrimary,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        Column(
+            modifier =
+                Modifier
+                    .width(suggestionWidth)
+                    .heightIn(max = 240.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                    .verticalScroll(scrollState),
+        ) {
+            suggestions.take(10).forEach { pick ->
+                Surface(
+                    onClick = { onPick(pick) },
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Text(
+                        text = pick.label,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
-
-@Composable
-private fun createClientFieldColors() =
-    OutlinedTextFieldDefaults.colors(
-        focusedTextColor = SavioPalette.TextPrimary,
-        unfocusedTextColor = SavioPalette.TextPrimary,
-        focusedLabelColor = SavioPalette.TextPrimary,
-        unfocusedLabelColor = SavioPalette.TextPrimary,
-        focusedBorderColor = SavioPalette.Accent,
-        unfocusedBorderColor = SavioPalette.BorderFieldPro,
-        cursorColor = SavioPalette.Accent,
-        focusedContainerColor = SavioPalette.SurfaceCard,
-        unfocusedContainerColor = SavioPalette.SurfaceCard,
-        errorBorderColor = SavioPalette.Error,
-        errorLabelColor = SavioPalette.Error,
-        errorSupportingTextColor = SavioPalette.Error,
-    )

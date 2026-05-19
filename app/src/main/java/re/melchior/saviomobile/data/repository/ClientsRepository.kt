@@ -3,12 +3,13 @@ package re.melchior.saviomobile.data.repository
 import com.google.gson.JsonParser
 import re.melchior.saviomobile.data.remote.api.ClientApi
 import re.melchior.saviomobile.data.remote.dto.CreateTenantClientRequestDto
+import re.melchior.saviomobile.data.remote.dto.CreateTenantClientResponseDto
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class CreateClientResult {
-    data object Success : CreateClientResult()
+    data class Success(val response: CreateTenantClientResponseDto) : CreateClientResult()
 
     data class Error(val message: String) : CreateClientResult()
 }
@@ -19,8 +20,8 @@ class ClientsRepository @Inject constructor(
 ) {
     suspend fun createClient(body: CreateTenantClientRequestDto): CreateClientResult {
         return try {
-            clientApi.createClient(body)
-            CreateClientResult.Success
+            val response = clientApi.createClient(body)
+            CreateClientResult.Success(response)
         } catch (e: Exception) {
             CreateClientResult.Error(humanReadableApiError(e))
         }

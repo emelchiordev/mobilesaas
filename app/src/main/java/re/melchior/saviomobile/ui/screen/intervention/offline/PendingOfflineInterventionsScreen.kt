@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -43,13 +44,13 @@ fun PendingOfflineInterventionsScreen(
     val formatter = rememberFormatter()
 
     Scaffold(
-        containerColor = SavioPalette.BackgroundPage,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "Interventions en attente ☁️",
-                        color = SavioPalette.TextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -58,13 +59,11 @@ fun PendingOfflineInterventionsScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = SavioPalette.TextPrimary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioPalette.BackgroundPage,
-                ),
+                colors = savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -78,7 +77,7 @@ fun PendingOfflineInterventionsScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
             items(items, key = { it.localId }) { row ->
                 Surface(
-                    color = SavioPalette.SurfaceCard,
+                    color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
                 ) {
@@ -90,18 +89,18 @@ fun PendingOfflineInterventionsScreen(
                         Text(
                             row.clientNameFree,
                             style = MaterialTheme.typography.titleSmall,
-                            color = SavioPalette.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
                         )
                         Text(
                             "Statut : ${row.syncStatus}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = SavioPalette.TextSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             formatter.format(Instant.ofEpochMilli(row.scheduledAt).atZone(ZoneId.systemDefault())),
                             style = MaterialTheme.typography.bodySmall,
-                            color = SavioPalette.TextHint,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         row.remoteId?.let {
                             Text(

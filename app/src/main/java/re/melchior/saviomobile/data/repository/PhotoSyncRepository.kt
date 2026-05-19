@@ -1,9 +1,12 @@
 package re.melchior.saviomobile.data.repository
 
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -26,8 +29,31 @@ class PhotoSyncRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val httpClient = OkHttpClient()
+    private val uploadMutex = Mutex()
 
-    suspend fun uploadPendingPhotos(): Boolean {
+    @Volatile
+    private var uploadOwner: String? = null
+
+    suspend fun uploadPendingPhotos(caller: String = "orchestrateur"): Boolean {
+        if (uploadMutex.isLocked) {
+            Log.d(
+                "PhotoSync",
+                "Upload photos déjà en cours (${uploadOwner ?: "autre"}) → skip $caller " +
+                    "(les fichiers restent PENDING pour le prochain cycle)",
+            )
+            return true
+        }
+        return uploadMutex.withLock {
+            uploadOwner = caller
+            try {
+                uploadPendingPhotosLocked()
+            } finally {
+                uploadOwner = null
+            }
+        }
+    }
+
+    private suspend fun uploadPendingPhotosLocked(): Boolean {
         val pending = photoDao.getPendingUploadPhotos()
         if (pending.isEmpty()) return true
 
@@ -35,17 +61,58 @@ class PhotoSyncRepository @Inject constructor(
 
         for (photo in pending) {
             try {
-                val file = File(photo.localPath)
-                if (!file.exists()) {
-                    photoDao.hardDelete(photo.id)
+                Log.d(
+                    "PhotoSync",
+                    "Photo à uploader: id=${photo.id} " +
+                        "localPath=${photo.localPath} " +
+                        "interventionId=${photo.interventionId} " +
+                        "customerId=${photo.customerId} " +
+                        "unitId=${photo.unitId}",
+                )
+
+                if (photo.localPath.isBlank()) {
+                    Log.e(
+                        "PhotoSync",
+                        "localPath NULL/vide pour ${photo.id} → markAsError",
+                    )
+                    photoDao.markAsError(photo.id, "localPath null ou vide")
+                    allSuccess = false
                     continue
                 }
+
+                val file = File(photo.localPath)
+                if (!file.exists()) {
+                    Log.e(
+                        "PhotoSync",
+                        "Fichier introuvable: ${photo.localPath} → markAsError",
+                    )
+                    photoDao.markAsError(photo.id, "Fichier introuvable")
+                    allSuccess = false
+                    continue
+                }
+
+                Log.d(
+                    "PhotoSync",
+                    "Fichier OK: ${photo.localPath} taille=${file.length()}b",
+                )
+
+                if (!isServerUuid(photo.interventionId)) {
+                    Log.w(
+                        "PhotoSync",
+                        "Photo ${photo.id} reportée — intervention pas encore synchronisée",
+                    )
+                    allSuccess = false
+                    continue
+                }
+
+                val customerQuery =
+                    photo.customerId.takeIf { isServerUuid(it) } ?: ""
 
                 // 1. Demande URL signée
                 val uploadUrlResponse = documentApi.getUploadUrl(
                     interventionId = photo.interventionId,
                     unitId = photo.unitId,
-                    customerId = photo.customerId, // ← ajoute
+                    customerId = customerQuery,
                     fileName = "${photo.id}.jpg",
                     contentType = "image/jpeg"
                 )
@@ -57,7 +124,9 @@ class PhotoSyncRepository @Inject constructor(
                     .put(file.asRequestBody("image/jpeg".toMediaType()))
                     .build()
 
-                val uploadResponse = httpClient.newCall(uploadRequest).execute()
+                val uploadResponse = withContext(Dispatchers.IO) {
+                    httpClient.newCall(uploadRequest).execute()
+                }
                 if (!uploadResponse.isSuccessful) {
                     photoDao.markAsError(photo.id, "Upload S3 échoué: ${uploadResponse.code}")
                     allSuccess = false
@@ -72,8 +141,8 @@ class PhotoSyncRepository @Inject constructor(
                         type = "photo",
                         interventionId = photo.interventionId,
                         unitId = photo.unitId,
-                        customerId = photo.customerId
-                    )
+                        customerId = photo.customerId.takeIf { isServerUuid(it) },
+                    ),
                 )
 
                 // 4. Marque synced
@@ -83,12 +152,12 @@ class PhotoSyncRepository @Inject constructor(
                     remoteUrl = null
                 )
 
-                android.util.Log.d("PhotoSync", "Photo ${photo.id} uploadée ✓")
+                Log.d("PhotoSync", "Photo ${photo.id} uploadée ✓")
 
             } catch (e: Exception) {
                 photoDao.markAsError(photo.id, e.message ?: "Erreur inconnue")
                 allSuccess = false
-                android.util.Log.e("PhotoSync", "Erreur upload ${photo.id}: ${e.message}")
+                Log.e("PhotoSync", "Erreur upload ${photo.id}", e)
             }
         }
         return allSuccess
@@ -97,7 +166,26 @@ class PhotoSyncRepository @Inject constructor(
     /**
      * Upload signatures PENDING vers Scaleway
      */
-    suspend fun uploadPendingSignatures(): Boolean {
+    suspend fun uploadPendingSignatures(caller: String = "orchestrateur"): Boolean {
+        if (uploadMutex.isLocked) {
+            Log.d(
+                "PhotoSync",
+                "Upload signatures déjà en cours (${uploadOwner ?: "autre"}) → skip $caller " +
+                    "(réessayé au prochain cycle)",
+            )
+            return true
+        }
+        return uploadMutex.withLock {
+            uploadOwner = caller
+            try {
+                uploadPendingSignaturesLocked()
+            } finally {
+                uploadOwner = null
+            }
+        }
+    }
+
+    private suspend fun uploadPendingSignaturesLocked(): Boolean {
         val interventions = interventionDao.getInterventionsWithLocalSignatures()
         android.util.Log.d("PhotoSync", "Signatures à uploader: ${interventions.size}")
         interventions.forEach {
@@ -108,15 +196,23 @@ class PhotoSyncRepository @Inject constructor(
 
         for (intervention in interventions) {
             // Signature client
+            if (!isServerUuid(intervention.customerId)) {
+                android.util.Log.w(
+                    "PhotoSync",
+                    "Signature client ignorée ${intervention.id} — customerId pas encore synchronisé",
+                )
+            }
             intervention.signaturePath?.let { path ->
                 if (path.startsWith("/data")) {
                     val file = File(path)
                     if (file.exists()) {
                         try {
+                            val customerId = intervention.customerId
+                            if (!isServerUuid(customerId)) return@let
                             val uploadUrl = documentApi.getUploadUrl(
                                 interventionId = intervention.id,
                                 unitId = intervention.unitId,
-                                customerId = intervention.customerId ?: return@let,
+                                customerId = customerId!!,
                                 fileName = "sig_client_${intervention.id}.png",
                                 contentType = "image/png"
                             )
@@ -135,8 +231,8 @@ class PhotoSyncRepository @Inject constructor(
                                         type = "signature_client",
                                         interventionId = intervention.id,
                                         unitId = intervention.unitId,
-                                        customerId = intervention.customerId ?: ""
-                                    )
+                                        customerId = customerId,
+                                    ),
                                 )
                                 // Met à jour le chemin avec la clé remote
                                 interventionDao.updateSignaturePath(
@@ -161,10 +257,12 @@ class PhotoSyncRepository @Inject constructor(
                     val file = File(path)
                     if (file.exists()) {
                         try {
+                            val customerId = intervention.customerId
+                            if (!isServerUuid(customerId)) return@let
                             val uploadUrl = documentApi.getUploadUrl(
                                 interventionId = intervention.id,
                                 unitId = intervention.unitId,
-                                customerId = intervention.customerId ?: return@let,
+                                customerId = customerId!!,
                                 fileName = "sig_tech_${intervention.id}.png",
                                 contentType = "image/png",
                                 context = "signatures"
@@ -184,8 +282,8 @@ class PhotoSyncRepository @Inject constructor(
                                         type = "signature_tech",
                                         interventionId = intervention.id,
                                         unitId = intervention.unitId,
-                                        customerId = intervention.customerId ?: ""
-                                    )
+                                        customerId = customerId,
+                                    ),
                                 )
                                 interventionDao.updateTechSignaturePath(
                                     id = intervention.id,
@@ -202,6 +300,16 @@ class PhotoSyncRepository @Inject constructor(
             }
         }
         return allSuccess
+    }
+
+    private fun isServerUuid(value: String?): Boolean {
+        if (value.isNullOrBlank()) return false
+        return UUID_REGEX.matches(value)
+    }
+
+    private companion object {
+        private val UUID_REGEX =
+            Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     }
 
     suspend fun deletePendingPhotos() {

@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.repository.MeasureRepository
 import javax.inject.Inject
@@ -100,6 +99,7 @@ class MeasureViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MeasureUiState())
     val uiState: StateFlow<MeasureUiState> = _uiState.asStateFlow()
 
+    private var initialState: MeasureUiState? = null
     private var saveJob: Job? = null
 
     init {
@@ -114,8 +114,7 @@ class MeasureViewModel @Inject constructor(
                 equipmentOrder,
             )
             if (measure != null) {
-                _uiState.update {
-                    MeasureUiState(
+                val loaded = MeasureUiState(
                         interventionId = interventionId,
                         equipmentOrder = equipmentOrder,
                         co = measure.co?.toString() ?: "",
@@ -175,18 +174,33 @@ class MeasureViewModel @Inject constructor(
                         isLoading = false,
                         isDirty = false,
                     )
-                }
+                _uiState.value = loaded
+                initialState = loaded.copy(isDirty = false)
             } else {
-                _uiState.update {
-                    it.copy(
-                        interventionId = interventionId,
-                        equipmentOrder = equipmentOrder,
-                        isLoading = false,
-                    )
-                }
+                val empty = MeasureUiState(
+                    interventionId = interventionId,
+                    equipmentOrder = equipmentOrder,
+                    isLoading = false,
+                    isDirty = false,
+                )
+                _uiState.value = empty
+                initialState = empty
             }
         }
     }
+
+    fun hasChanges(): Boolean {
+        val initial = initialState ?: return false
+        return _uiState.value.toComparableSnapshot() != initial.toComparableSnapshot()
+    }
+
+    fun saveIfChanged() {
+        if (!hasChanges()) return
+        save()
+    }
+
+    private fun MeasureUiState.toComparableSnapshot(): MeasureUiState =
+        copy(isLoading = false, isDirty = false)
 
     fun updateField(key: String, value: String) {
         _uiState.update { state ->
@@ -256,18 +270,30 @@ class MeasureViewModel @Inject constructor(
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(500)
-            save()
+            saveIfChanged()
         }
     }
 
     fun save() {
         val state = _uiState.value
-        if (!state.isDirty) return
+        if (!hasChanges() && !state.hasAnyFieldFilled()) return
         viewModelScope.launch {
             measureRepository.saveMeasure(state.toEntity())
-            _uiState.update { it.copy(isDirty = false) }
+            val saved = state.copy(isDirty = false)
+            _uiState.value = saved
+            initialState = saved.toComparableSnapshot()
         }
     }
+
+    private fun MeasureUiState.hasAnyFieldFilled(): Boolean =
+        listOf(
+            co, coamb, co2, o2, tair, temfu, rend, nox, eta, thpa, no, no2, o2ven,
+            condilu, tgaz, ta, pregas, prega, pregn, pregm, puisgaz, debga, temec,
+            temef, delta, debio, debfuel, prefp, puisfuel, pulve, spot, testdsc,
+            remplacond, templagigleur, remplapoly, etaventil, ctranode, ctrextvmc,
+            suie1, suie2, suie3, residhuil, opaci, ionis, pgevg, pgepg, depre, depr2,
+            gican, gicle, pabs, perte, ppm, obser,
+        ).any { it.isNotBlank() }
 
     private fun MeasureUiState.toEntity(): MeasureEntity =
         MeasureEntity(
@@ -343,12 +369,6 @@ class MeasureViewModel @Inject constructor(
 
     override fun onCleared() {
         saveJob?.cancel()
-        val state = _uiState.value
-        if (state.isDirty && state.interventionId.isNotEmpty()) {
-            runBlocking {
-                measureRepository.saveMeasure(state.toEntity())
-            }
-        }
         super.onCleared()
     }
 }

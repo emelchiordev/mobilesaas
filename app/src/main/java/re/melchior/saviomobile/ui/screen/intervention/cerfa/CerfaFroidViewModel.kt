@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.ColdMeasureEntity
 import re.melchior.saviomobile.data.repository.ColdMeasureRepository
+import re.melchior.saviomobile.ui.util.contentFingerprint
+import re.melchior.saviomobile.ui.util.hasMeaningfulCerfaData
 
 val FLUIDES_FRIGORIGENES = listOf(
     "R32", "R410A", "R134a", "R22", "R407C", "R404A",
@@ -43,19 +45,30 @@ class CerfaFroidViewModel @Inject constructor(
     private val _hasPersistedData = MutableStateFlow(false)
     val hasPersistedData: StateFlow<Boolean> = _hasPersistedData.asStateFlow()
 
+    private var initialState: ColdMeasureEntity? = null
+
     init {
         loadExisting()
     }
 
     private fun loadExisting() {
         viewModelScope.launch {
-            _hasPersistedData.value = repository.existsPersisted(
-                interventionId,
-                equipmentId,
-            )
-            val existing = repository.getOrCreate(interventionId, equipmentId)
-            _state.value = existing
+            val existing = repository.get(interventionId, equipmentId)
+            _hasPersistedData.value = existing != null
+            val loaded = existing ?: repository.newDraft(interventionId, equipmentId)
+            _state.value = loaded
+            initialState = loaded.contentFingerprint()
         }
+    }
+
+    fun hasChanges(): Boolean {
+        val initial = initialState ?: return false
+        return _state.value.contentFingerprint() != initial
+    }
+
+    fun saveIfChanged() {
+        if (!hasChanges()) return
+        persist()
     }
 
     fun update(key: String, value: String) {
@@ -170,16 +183,19 @@ class CerfaFroidViewModel @Inject constructor(
     }
 
     fun saveLocally() {
+        val current = _state.value
+        if (!hasChanges() && !current.hasMeaningfulCerfaData()) return
+        persist()
+    }
+
+    private fun persist() {
         viewModelScope.launch {
             _isSaving.value = true
-            repository.save(_state.value)
+            val saved = _state.value
+            repository.save(saved)
+            initialState = saved.contentFingerprint()
             _hasPersistedData.value = true
             _isSaving.value = false
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        viewModelScope.launch { repository.save(_state.value) }
     }
 }

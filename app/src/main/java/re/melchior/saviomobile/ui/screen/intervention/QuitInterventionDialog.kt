@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.screen.intervention
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -22,13 +24,13 @@ fun QuitInterventionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(12.dp),
-        containerColor = SavioPalette.SurfaceCard,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
                 text = "Quitter l'intervention ?",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = SavioPalette.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         },
         text = {
@@ -36,7 +38,7 @@ fun QuitInterventionDialog(
                 text =
                     "Toute saisie en cours sera perdue. L'intervention repassera en \"À venir\".",
                 fontSize = 14.sp,
-                color = SavioPalette.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 20.sp,
             )
         },
@@ -58,7 +60,7 @@ fun QuitInterventionDialog(
                 border = BorderStroke(1.dp, SavioPalette.Accent),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                Text("Rester", color = SavioPalette.TextPrimary, fontSize = 13.sp)
+                Text("Rester", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
             }
         },
     )

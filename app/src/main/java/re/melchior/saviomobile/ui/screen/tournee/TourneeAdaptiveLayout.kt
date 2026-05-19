@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
 import re.melchior.saviomobile.ui.navigation.Screen
 
@@ -25,6 +26,8 @@ import re.melchior.saviomobile.ui.navigation.Screen
 fun TourneeAdaptiveLayout(
     modifier: Modifier = Modifier.fillMaxSize(),
     interventions: List<InterventionItem>,
+    pendingCreating: List<PendingInterventionEntity> = emptyList(),
+    onPendingCreatingClick: () -> Unit = {},
     detailNavController: NavHostController,
     onStartIntervention: (String) -> Unit,
     onClientClick: (String) -> Unit = {},
@@ -73,12 +76,14 @@ fun TourneeAdaptiveLayout(
                     .width(280.dp)
                     .fillMaxHeight(),
                 interventions = interventions,
+                pendingCreating = pendingCreating,
                 selectedId = selectedId,
                 onSelect = { id ->
                     detailNavController.navigate(Screen.InterventionDetail.createRoute(id)) {
                         launchSingleTop = true
                     }
-                }
+                },
+                onPendingCreatingClick = onPendingCreatingClick,
             )
             HorizontalDivider(
                 modifier = Modifier

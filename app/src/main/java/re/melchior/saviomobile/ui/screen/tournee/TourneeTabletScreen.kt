@@ -1,19 +1,12 @@
 package re.melchior.saviomobile.ui.screen.tournee
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -45,11 +38,13 @@ import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
 import re.melchior.saviomobile.ui.navigation.Screen
-import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import android.util.Log
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,12 +54,18 @@ fun TourneeTabletScreen(
     onResumeIntervention: (String) -> Unit = {},
     onLogout: () -> Unit = {},
     onCreateClient: () -> Unit = {},
+    onNewIntervention: () -> Unit = {},
     onOfflineIntervention: () -> Unit = {},
     onPendingOfflineList: () -> Unit = {},
+    pendingSnackbar: String? = null,
+    onConsumePendingSnackbar: () -> Unit = {},
+    pendingFocusDateMillis: Long? = null,
+    onConsumePendingFocusDate: () -> Unit = {},
     viewModel: TourneeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val interventions by viewModel.interventions.collectAsStateWithLifecycle()
+    val pendingCreating by viewModel.pendingCreatingForDate.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -73,7 +74,26 @@ fun TourneeTabletScreen(
     val isOnline = rememberIsNetworkOnline()
     val pendingOfflineInterventionCount by viewModel.pendingOfflineInterventionCount.collectAsStateWithLifecycle()
     var fabMenuExpanded by remember { mutableStateOf(false) }
+    var showPendingCreationSheet by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(pendingSnackbar, pendingFocusDateMillis) {
+        var focusedDate = false
+        pendingFocusDateMillis?.let { millis ->
+            val date =
+                Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+            viewModel.selectDate(date)
+            onConsumePendingFocusDate()
+            focusedDate = true
+        }
+        pendingSnackbar?.let { msg ->
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+            onConsumePendingSnackbar()
+            if (!focusedDate) {
+                viewModel.pull(force = true)
+            }
+        }
+    }
 
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH)
@@ -90,20 +110,19 @@ fun TourneeTabletScreen(
     }
 
     val items = interventions.map { it.toInterventionItem() }
+    val hasListContent = items.isNotEmpty() || pendingCreating.isNotEmpty()
 
-    LaunchedEffect(uiState.errorMessage, items.isNotEmpty()) {
+    LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { msg ->
-            if (items.isNotEmpty()) {
-                val result =
-                    snackbarHostState.showSnackbar(
-                        message = msg,
-                        actionLabel = "Réessayer",
-                        duration = SnackbarDuration.Short,
-                    )
-                viewModel.dismissError()
-                if (result == SnackbarResult.ActionPerformed) {
-                    viewModel.pull(force = true)
-                }
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = msg,
+                    actionLabel = "Réessayer",
+                    duration = SnackbarDuration.Short,
+                )
+            viewModel.dismissError()
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.pull(force = true)
             }
         }
     }
@@ -112,67 +131,21 @@ fun TourneeTabletScreen(
         containerColor = SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            Box {
-                BadgedBox(
-                    badge = {
-                        if (pendingOfflineInterventionCount > 0) {
-                            Badge(
-                                containerColor = SavioPalette.Accent,
-                                contentColor = SavioPalette.OnAccent,
-                            ) {
-                                Text(pendingOfflineInterventionCount.toString())
-                            }
-                        }
-                    },
-                ) {
-                    FloatingActionButton(
-                        onClick = { fabMenuExpanded = true },
-                        containerColor = SavioPalette.Accent,
-                        contentColor = SavioPalette.OnAccent,
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Actions")
-                    }
-                }
-                DropdownMenu(
-                    expanded = fabMenuExpanded,
-                    onDismissRequest = { fabMenuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Nouveau client") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            onCreateClient()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Nouvelle intervention") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            if (isOnline) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        "Création connectée : prochainement",
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
-                            } else {
-                                onOfflineIntervention()
-                            }
-                        },
-                    )
-                }
-            }
+            TourneeFieldProFab(
+                expanded = fabMenuExpanded,
+                onExpandedChange = { fabMenuExpanded = it },
+                pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+            )
         },
     ) { padding ->
         val pullRefreshState = rememberPullToRefreshState()
-        PullToRefreshBox(
-            isRefreshing = uiState.isSyncing,
-            onRefresh = { viewModel.pull(force = true) },
-            state = pullRefreshState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            PullToRefreshBox(
+                isRefreshing = uiState.isSyncing,
+                onRefresh = { viewModel.pull(force = true) },
+                state = pullRefreshState,
+                modifier = Modifier.fillMaxSize(),
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -196,7 +169,7 @@ fun TourneeTabletScreen(
                         )
                     }
             ) {
-                if (!isOnline && items.isEmpty()) {
+                if (!isOnline && !hasListContent) {
                     SavioOfflineBannerSurface()
                 }
                 resumeCandidate?.let { entity ->
@@ -206,7 +179,7 @@ fun TourneeTabletScreen(
                         onDismiss = { viewModel.ignoreResumeCandidate() }
                     )
                 }
-                if (items.isEmpty()) {
+                if (!hasListContent) {
                     Column(Modifier.weight(1f).fillMaxWidth()) {
                         SavioTabletTopBar(
                             selectedIntervention = null,
@@ -264,6 +237,8 @@ fun TourneeTabletScreen(
                             .weight(1f)
                             .fillMaxWidth(),
                         interventions = items,
+                        pendingCreating = pendingCreating,
+                        onPendingCreatingClick = { showPendingCreationSheet = true },
                         detailNavController = detailNavController,
                         onStartIntervention = { interventionId ->
                             parentNavController.navigate(
@@ -288,6 +263,23 @@ fun TourneeTabletScreen(
                     )
                 }
             }
+        }
+            if (showPendingCreationSheet) {
+                PendingCreationInfoSheet(onDismiss = { showPendingCreationSheet = false })
+            }
+            TourneeFieldProFabMenuOverlay(
+                expanded = fabMenuExpanded,
+                onDismiss = { fabMenuExpanded = false },
+                onCreateClient = {
+                    fabMenuExpanded = false
+                    Log.d("FAB", "Nouveau client cliqué")
+                    onCreateClient()
+                },
+                onNewIntervention = {
+                    fabMenuExpanded = false
+                    onNewIntervention()
+                },
+            )
         }
     }
 }

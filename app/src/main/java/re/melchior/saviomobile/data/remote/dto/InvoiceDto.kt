@@ -16,7 +16,13 @@ data class InvoiceDto(
     @SerializedName("notes") val notes: String?,
     @SerializedName("lines") val lines: List<InvoiceLineDto>?,
     @SerializedName("createdAt") val createdAt: String,
-    @SerializedName("updatedAt") val updatedAt: String
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("acceptedAt") val acceptedAt: String? = null,
+    @SerializedName("invoicedAt") val invoicedAt: String? = null,
+    @SerializedName("paidAt") val paidAt: String? = null,
+    @SerializedName("devisSignatureUrl") val devisSignatureUrl: String? = null,
+    @SerializedName("hamonSignatureUrl") val hamonSignatureUrl: String? = null,
+    @SerializedName("hamonRequested") val hamonRequested: Boolean = false,
 )
 
 data class InvoiceLineDto(
@@ -40,10 +46,14 @@ data class PrestationDto(
     @SerializedName("reference") val reference: String,
     @SerializedName("label") val label: String,
     @SerializedName("vatRate") val vatRate: Double,
-    @SerializedName("unitPriceHt") val unitPriceHt: Double?
+    @SerializedName("unitPriceHt") val unitPriceHt: Double?,
+    @SerializedName("referenceInterne") val referenceInterne: String? = null,
+    @SerializedName("marque") val marque: String? = null,
+    @SerializedName("famille") val famille: String? = null,
 )
 
 data class SearchRefResponseDto(
     @SerializedName("prestations") val prestations: List<PrestationDto>,
-    @SerializedName("pieces") val pieces: List<PrestationDto>
+    @SerializedName("pieces") val pieces: List<PrestationDto>,
+    @SerializedName("articles") val articles: List<PrestationDto> = emptyList(),
 )

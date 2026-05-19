@@ -49,6 +49,12 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_35_36
 import re.melchior.saviomobile.data.local.database.MIGRATION_36_37
 import re.melchior.saviomobile.data.local.database.MIGRATION_37_38
 import re.melchior.saviomobile.data.local.database.MIGRATION_38_39
+import re.melchior.saviomobile.data.local.database.MIGRATION_39_40
+import re.melchior.saviomobile.data.local.database.MIGRATION_40_41
+import re.melchior.saviomobile.data.local.database.MIGRATION_41_42
+import re.melchior.saviomobile.data.local.database.MIGRATION_42_43
+import re.melchior.saviomobile.data.local.database.MIGRATION_43_44
+import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
@@ -99,6 +105,11 @@ object DatabaseModule {
             MIGRATION_36_37,
             MIGRATION_37_38,
             MIGRATION_38_39,
+            MIGRATION_39_40,
+            MIGRATION_40_41,
+            MIGRATION_41_42,
+            MIGRATION_42_43,
+            MIGRATION_43_44,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -189,4 +200,7 @@ object DatabaseModule {
     fun providePendingInterventionDao(db: SavioDatabase): PendingInterventionDao =
         db.pendingInterventionDao()
 
+    @Provides
+    fun providePendingClientDao(db: SavioDatabase): PendingClientDao =
+        db.pendingClientDao()
 }

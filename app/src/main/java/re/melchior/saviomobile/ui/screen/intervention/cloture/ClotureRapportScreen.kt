@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -72,6 +73,7 @@ fun ClotureRapportScreen(
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = savioTopAppBarColors(),
                 title = {
                     Column {
                         Text(
@@ -244,7 +246,8 @@ fun ClotureRapportScreen(
                         .height(52.dp),
                     enabled = uiState.canProceed && !uiState.isLoading,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     )
                 ) {
                     if (uiState.isLoading) {

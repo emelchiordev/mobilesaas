@@ -7,6 +7,8 @@ import re.melchior.saviomobile.data.remote.dto.MobilePendingInterventionRequestD
 import kotlinx.coroutines.flow.Flow
 import retrofit2.HttpException
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +22,16 @@ class PendingInterventionRepository @Inject constructor(
     fun countPending(): Flow<Int> = dao.countPending()
 
     fun observeAll(): Flow<List<PendingInterventionEntity>> = dao.getPending()
+
+    fun observePendingForDate(date: LocalDate): Flow<List<PendingInterventionEntity>> {
+        val (dayStart, dayEnd) = date.dayRangeMillis()
+        return dao.getPendingForDate(dayStart, dayEnd)
+    }
+
+    suspend fun hasVisiblePendingForDate(date: LocalDate): Boolean {
+        val (dayStart, dayEnd) = date.dayRangeMillis()
+        return dao.countPendingForDate(dayStart, dayEnd) > 0
+    }
 
     suspend fun insert(entity: PendingInterventionEntity) {
         dao.insert(entity)
@@ -52,5 +64,11 @@ class PendingInterventionRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun LocalDate.dayRangeMillis(zone: ZoneId = ZoneId.systemDefault()): Pair<Long, Long> {
+        val dayStart = atStartOfDay(zone).toInstant().toEpochMilli()
+        val dayEnd = plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return dayStart to dayEnd
     }
 }

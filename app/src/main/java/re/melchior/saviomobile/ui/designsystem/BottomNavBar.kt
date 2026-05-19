@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.designsystem
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,14 +38,14 @@ fun BottomNavBar(
     Column(modifier = modifier.fillMaxWidth()) {
         HorizontalDivider(
             thickness = SavioDimens.BorderThin,
-            color = SavioPalette.BorderDefault,
+            color = MaterialTheme.colorScheme.outline,
         )
         Surface(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .height(SavioDimens.BottomNavHeight),
-            color = SavioPalette.BackgroundPage,
+            color = MaterialTheme.colorScheme.background,
             shadowElevation = 0.dp,
             tonalElevation = 0.dp,
         ) {
@@ -69,7 +71,7 @@ fun BottomNavBar(
                                 if (selected) {
                                     SavioPalette.Accent
                                 } else {
-                                    SavioPalette.TextSecondary
+                                    MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                             modifier = Modifier.size(24.dp),
                         )
@@ -80,7 +82,7 @@ fun BottomNavBar(
                                 if (selected) {
                                     SavioPalette.Accent
                                 } else {
-                                    SavioPalette.TextSecondary
+                                    MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                         )
                     }

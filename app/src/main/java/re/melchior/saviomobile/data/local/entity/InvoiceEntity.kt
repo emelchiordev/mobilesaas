@@ -18,5 +18,11 @@ data class InvoiceEntity(
     val notes: String?,
     val syncStatus: String = "synced",
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val acceptedAt: String? = null,
+    val invoicedAt: String? = null,
+    val paidAt: String? = null,
+    val devisSignatureUrl: String? = null,
+    val hamonSignatureUrl: String? = null,
+    val hamonRequested: Boolean = false,
 )

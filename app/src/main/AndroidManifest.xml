@@ -17,6 +17,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Saviomobilite">
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
         <!-- SHA-256 du certificat release / debug : voir public/.well-known/ASSETLINKS_INSTRUCTIONS.txt (front web) -->
         <activity
             android:name=".MainActivity"

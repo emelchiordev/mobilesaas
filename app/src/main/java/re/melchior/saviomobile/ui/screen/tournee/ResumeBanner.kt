@@ -18,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioUi
 
 @Composable
 fun ResumeBanner(
@@ -29,7 +31,7 @@ fun ResumeBanner(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(SavioPalette.WarningTintBg)
+            .background(SavioUi.StatusTintBg)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -39,7 +41,7 @@ fun ResumeBanner(
                 text = "Intervention interrompue",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = SavioPalette.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = intervention.clientName,
@@ -49,7 +51,7 @@ fun ResumeBanner(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onDismiss) {
-                Text("Ignorer", color = SavioPalette.TextSecondary, fontSize = 12.sp)
+                Text("Ignorer", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
             Button(
                 onClick = onResume,

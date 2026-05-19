@@ -9,7 +9,11 @@ data class InterventionEntity(
     val id: String,
     val scheduledAt: String,
     val status: String,
-    val syncStatus: String = "SYNCED", // SYNCED, PENDING, IN_PROGRESS, COMPLETED, CONFLICT
+    val syncStatus: String = "SYNCED", // SYNCED, PENDING, IN_PROGRESS, COMPLETED, CONFLICT_*
+    /** Modifications locales non encore alignées serveur — protège du pull. */
+    val hasLocalChanges: Boolean = false,
+    /** Tentatives de résolution auto après conflit push (pull forcé). */
+    val conflictResolveAttempts: Int = 0,
     val typeCode: String,
     val typeLabel: String,
     val typeColor: String?,
@@ -51,4 +55,6 @@ data class InterventionEntity(
     /** Chantier : pas de reset auto in_progress, pas de timeout 48h. */
     val isChantier: Boolean = false,
     val updatedAt: String? = null,
+    /** Version serveur (pull) pour détection de conflit push. */
+    val version: Int = 1,
 )

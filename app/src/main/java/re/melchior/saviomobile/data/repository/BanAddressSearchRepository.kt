@@ -1,9 +1,12 @@
 package re.melchior.saviomobile.data.repository
 
+import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
 import re.melchior.saviomobile.data.remote.api.BanAddressSearchApi
+import re.melchior.saviomobile.data.remote.dto.BanAddressSuggestionDto
+import re.melchior.saviomobile.data.remote.dto.toBanAddressPick
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +23,7 @@ data class BanAddressPick(
 class BanAddressSearchRepository @Inject constructor(
     private val api: BanAddressSearchApi,
 ) {
+    private val gson = Gson()
     suspend fun search(q: String): List<BanAddressPick> {
         val trimmed = q.trim()
         if (trimmed.length < 2) return emptyList()
@@ -54,40 +58,26 @@ class BanAddressSearchRepository @Inject constructor(
 
     private fun parseBanItem(el: JsonElement): BanAddressPick? {
         if (!el.isJsonObject) return null
+        runCatching {
+            gson.fromJson(el, BanAddressSuggestionDto::class.java)?.toBanAddressPick()
+        }.getOrNull()?.let { return it }
         val o = el.asJsonObject
-        parseSavioAddressSuggestion(o)?.let { return it }
         if (o.has("properties") && o.has("geometry")) {
-            return parseGeoJsonFeature(o)
+            parseGeoJsonFeature(o)?.let { return it }
         }
         return parseFlatAddress(o)
     }
 
-    /**
-     * Format renvoyé par `GET /api/addresses/autocomplete` (Nest [AddressSuggestion]).
-     */
-    private fun parseSavioAddressSuggestion(o: JsonObject): BanAddressPick? {
-        val nomVoie = stringProp(o, "nomVoie", "nom_voie")
-        val codePostal = stringProp(o, "codePostal", "code_postal")
-        val commune = stringProp(o, "nomCommune", "nom_commune")
-        val numero = stringProp(o, "numero", "numéro") ?: ""
-        if (nomVoie == null && codePostal == null && commune == null) return null
-        val street = listOf(numero, nomVoie ?: "").filter { it.isNotBlank() }.joinToString(" ").trim()
-        val label =
-            listOf(
-                street.ifEmpty { null },
-                listOfNotNull(codePostal, commune).joinToString(" ").trim().ifEmpty { null },
-            ).filterNotNull().joinToString(", ")
-                .ifEmpty { return null }
-        val lat = doubleProp(o, "latitude", "lat", "y")
-        val lng = doubleProp(o, "longitude", "lon", "lng", "x")
-        return BanAddressPick(
-            label = label,
-            street = street.ifEmpty { nomVoie ?: label },
-            postalCode = (codePostal ?: "").trim(),
-            city = (commune ?: "").trim().ifEmpty { "—" },
-            latitude = lat,
-            longitude = lng,
-        )
+    /** GeoJSON Point : `coordinates[0]` = longitude, `coordinates[1]` = latitude. */
+    private fun latLngFromGeometry(o: JsonObject): Pair<Double, Double>? {
+        val geom = o.getAsJsonObject("geometry") ?: return null
+        val coords = geom.get("coordinates")?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
+        if (coords.size() < 2) return null
+        return runCatching {
+            val lng = coords[0].asDouble
+            val lat = coords[1].asDouble
+            Pair(lat, lng)
+        }.getOrNull()
     }
 
     private fun parseGeoJsonFeature(feature: JsonObject): BanAddressPick? {
@@ -100,9 +90,10 @@ class BanAddressSearchRepository @Inject constructor(
         val lat = coords[1].asDouble
         val street =
             stringProp(props, "street", "name", "label")?.ifBlank { label } ?: label
-        val city = stringProp(props, "city", "commune", "nom_commune", "town") ?: ""
+        val city =
+            stringProp(props, "ville", "city", "commune", "nom_commune", "nomCommune", "town") ?: ""
         val postal =
-            stringProp(props, "postcode", "postalCode", "zipcode", "postal_code", "citycode")
+            stringProp(props, "codePostal", "code_postal", "postcode", "postalCode", "zipcode", "cp")
                 ?: ""
         return BanAddressPick(
             label = label,
@@ -130,12 +121,14 @@ class BanAddressSearchRepository @Inject constructor(
             stringProp(o, "street", "rue", "voie", "address", "streetLine", "street_line", "name")
                 ?: label
         val city =
-            stringProp(o, "city", "ville", "commune", "town", "nom_commune", "locality") ?: ""
-        val postal =
-            stringProp(o, "postcode", "postalCode", "zipCode", "zipcode", "codePostal", "cp")
+            stringProp(o, "ville", "city", "commune", "town", "nom_commune", "nomCommune", "locality")
                 ?: ""
-        val lat = doubleProp(o, "latitude", "lat", "y")
-        val lng = doubleProp(o, "longitude", "lon", "lng", "x")
+        val postal =
+            stringProp(o, "codePostal", "code_postal", "postcode", "postalCode", "zipCode", "zipcode", "cp")
+                ?: ""
+        val geomLatLng = latLngFromGeometry(o)
+        val lat = doubleProp(o, "latitude", "lat", "y") ?: geomLatLng?.first
+        val lng = doubleProp(o, "longitude", "lon", "lng", "x") ?: geomLatLng?.second
         return BanAddressPick(
             label = label,
             street = street.trim().ifEmpty { label },

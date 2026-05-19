@@ -80,7 +80,7 @@ fun HybrideGroupCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = SavioPalette.SurfaceCard,
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
         border = BorderStroke(
             width = 1.5.dp,

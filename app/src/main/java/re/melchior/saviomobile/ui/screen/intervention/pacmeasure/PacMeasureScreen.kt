@@ -29,8 +29,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +43,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureDropdownField
 import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureNumericField
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 private val onOffOptions = listOf("", "O", "N")
 
@@ -57,35 +61,28 @@ fun PacMeasureScreen(
     val context = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
 
-    DisposableEffect(Unit) {
-        onDispose { viewModel.save() }
+    fun leave() {
+        viewModel.saveIfChanged()
+        onBack()
     }
 
+    BackHandler { leave() }
+
     Scaffold(
-        containerColor = SavioPalette.BackgroundPage,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Mesures froid") },
                 navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            viewModel.save()
-                            onBack()
-                        },
-                    ) {
+                    IconButton(onClick = ::leave) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = SavioPalette.TextPrimary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SavioPalette.BackgroundPage,
-                    titleContentColor = SavioPalette.TextPrimary,
-                    navigationIconContentColor = SavioPalette.TextPrimary,
-                    actionIconContentColor = SavioPalette.TextPrimary,
-                ),
+                colors = savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -94,7 +91,12 @@ fun PacMeasureScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(selectedTabIndex = tab) {
+            TabRow(
+                selectedTabIndex = tab,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = savioTabUnselectedColor(),
+                indicator = { positions -> SavioInterventionTabIndicator(positions, tab) },
+            ) {
                 listOf(
                     "Extérieur",
                     "Électrique",
@@ -105,6 +107,8 @@ fun PacMeasureScreen(
                     Tab(
                         selected = tab == index,
                         onClick = { tab = index },
+                        selectedContentColor = savioTabSelectedColor(),
+                        unselectedContentColor = savioTabUnselectedColor(),
                         text = { Text(label, style = MaterialTheme.typography.labelMedium) },
                     )
                 }

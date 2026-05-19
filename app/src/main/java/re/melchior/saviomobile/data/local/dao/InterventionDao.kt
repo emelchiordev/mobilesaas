@@ -45,6 +45,12 @@ abstract class InterventionDao {
     @Query("SELECT * FROM interventions WHERE customerId = :customerId LIMIT 1")
     abstract fun getInterventionByCustomerId(customerId: String): Flow<InterventionEntity?>
 
+    @Query("UPDATE interventions SET customerId = :remoteId WHERE customerId = :localId")
+    abstract suspend fun remapCustomerId(localId: String, remoteId: String)
+
+    @Query("UPDATE interventions SET unitId = :remoteUnitId WHERE unitId = :localId")
+    abstract suspend fun remapUnitId(localId: String, remoteUnitId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insertOrReplace(intervention: InterventionEntity)
 
@@ -53,6 +59,9 @@ abstract class InterventionDao {
 
     @Query("SELECT * FROM interventions WHERE scheduledAt LIKE :date || '%' ORDER BY scheduledAt ASC")
     abstract fun getInterventionsByDate(date: String): Flow<List<InterventionEntity>>
+
+    @Query("SELECT COUNT(*) FROM interventions WHERE scheduledAt LIKE :date || '%'")
+    abstract suspend fun countInterventionsByDate(date: String): Int
 
     @Query("SELECT * FROM interventions WHERE id = :id")
     abstract fun getInterventionById(id: String): Flow<InterventionEntity?>
@@ -72,7 +81,14 @@ abstract class InterventionDao {
     @Query("UPDATE interventions SET status = :status, syncStatus = :syncStatus WHERE id = :id")
     abstract suspend fun updateStatus(id: String, status: String, syncStatus: String)
 
-    @Query("UPDATE interventions SET status = 'in_progress', syncStatus = 'IN_PROGRESS', startedAt = :startedAt WHERE id = :id")
+    @Query(
+        """
+        UPDATE interventions
+        SET status = 'in_progress', syncStatus = 'IN_PROGRESS',
+            startedAt = :startedAt, hasLocalChanges = 1
+        WHERE id = :id
+        """,
+    )
     abstract suspend fun markAsInProgress(id: String, startedAt: String)
 
     @Query(
@@ -107,7 +123,8 @@ abstract class InterventionDao {
             techSignaturePath = :techSignaturePath,
             actualTypeId = :actualTypeId,
             actualTypeCode = :actualTypeCode,
-            actualTypeLabel = :actualTypeLabel
+            actualTypeLabel = :actualTypeLabel,
+            hasLocalChanges = 1
         WHERE id = :id
     """)
     abstract suspend fun completeIntervention(
@@ -128,6 +145,24 @@ abstract class InterventionDao {
 
     @Query("UPDATE interventions SET syncStatus = 'CONFLICT' WHERE id = :id")
     abstract suspend fun markAsConflict(id: String)
+
+    @Query("UPDATE interventions SET syncStatus = :syncStatus WHERE id = :id")
+    abstract suspend fun setSyncStatus(id: String, syncStatus: String)
+
+    @Query("UPDATE interventions SET hasLocalChanges = :hasLocalChanges WHERE id = :id")
+    abstract suspend fun markLocalChanges(id: String, hasLocalChanges: Boolean)
+
+    @Query(
+        """
+        UPDATE interventions
+        SET conflictResolveAttempts = conflictResolveAttempts + 1
+        WHERE id = :id
+        """,
+    )
+    abstract suspend fun incrementConflictResolveAttempts(id: String)
+
+    @Query("UPDATE interventions SET conflictResolveAttempts = 0 WHERE id = :id")
+    abstract suspend fun resetConflictResolveAttempts(id: String)
 
     @Query(
         """

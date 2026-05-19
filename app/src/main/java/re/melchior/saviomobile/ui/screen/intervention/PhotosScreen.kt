@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,11 +39,7 @@ fun PhotosScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
                 title = {
                     Column {
                         Text(

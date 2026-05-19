@@ -89,4 +89,10 @@ interface PhotoDao {
     // Une photo par son id
     @Query("SELECT * FROM photos WHERE id = :id")
     suspend fun getPhotoById(id: String): PhotoEntity?
+
+    @Query("UPDATE photos SET customerId = :remoteId WHERE customerId = :localId")
+    suspend fun remapCustomerId(localId: String, remoteId: String)
+
+    @Query("UPDATE photos SET unitId = :remoteUnitId WHERE unitId = :localId")
+    suspend fun remapUnitId(localId: String, remoteUnitId: String)
 }

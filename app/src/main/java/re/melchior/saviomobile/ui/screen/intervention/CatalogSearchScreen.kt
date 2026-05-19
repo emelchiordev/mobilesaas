@@ -42,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -102,11 +103,7 @@ fun CatalogSearchScreen(
                     }
                 },
                 colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
+                    savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -319,10 +316,10 @@ private fun CatalogEquipmentRow(
                         .width(52.dp)
                         .height(34.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(SavioPalette.SurfaceCard)
+                        .background(MaterialTheme.colorScheme.surface)
                         .border(
                             width = 0.5.dp,
-                            color = SavioPalette.BorderDefault,
+                            color = MaterialTheme.colorScheme.outline,
                             shape = RoundedCornerShape(6.dp),
                         ),
                     contentAlignment = Alignment.Center,

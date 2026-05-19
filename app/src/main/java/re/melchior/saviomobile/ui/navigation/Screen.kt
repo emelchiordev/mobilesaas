@@ -21,6 +21,24 @@ sealed class Screen(val route: String) {
 
     object CreateClient : Screen("create_client")
 
+    object CreateIntervention :
+        Screen(
+            "create_intervention?unitId={unitId}&customerId={customerId}" +
+                "&displayName={displayName}&addressLine={addressLine}",
+        ) {
+        fun createRoute(
+            unitId: String = "",
+            customerId: String = "",
+            displayName: String = "",
+            addressLine: String = "",
+        ): String =
+            "create_intervention?" +
+                "unitId=${Uri.encode(unitId)}&" +
+                "customerId=${Uri.encode(customerId)}&" +
+                "displayName=${Uri.encode(displayName)}&" +
+                "addressLine=${Uri.encode(addressLine)}"
+    }
+
     object CreateOfflineIntervention : Screen("create_offline_intervention")
 
     object PendingOfflineInterventions : Screen("pending_offline_interventions")
@@ -31,6 +49,10 @@ sealed class Screen(val route: String) {
 
     object Invoice : Screen("invoice/{interventionId}") {
         fun createRoute(interventionId: String) = "invoice/$interventionId"
+    }
+
+    object DevisSignature : Screen("invoice/{interventionId}/devis-signature") {
+        fun createRoute(interventionId: String) = "invoice/$interventionId/devis-signature"
     }
 
     object ClotureRapport : Screen("intervention/{interventionId}/cloture/rapport") {

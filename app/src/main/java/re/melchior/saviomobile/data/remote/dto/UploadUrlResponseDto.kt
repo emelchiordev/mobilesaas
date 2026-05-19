@@ -13,7 +13,7 @@ data class CreateDocumentRequestDto(
     @SerializedName("type") val type: String,
     @SerializedName("interventionId") val interventionId: String,
     @SerializedName("unitId") val unitId: String,
-    @SerializedName("customerId") val customerId: String
+    @SerializedName("customerId") val customerId: String? = null,
 )
 
 data class CreateDocumentResponseDto(

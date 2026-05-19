@@ -12,9 +12,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -94,16 +92,6 @@ class MainActivity : ComponentActivity() {
 
     /** Un passage sync (push + photos) dès que le réseau est dispo, sans attendre la période 30 min. */
     private fun enqueueOneTimeSyncWhenOnline() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val once = OneTimeWorkRequestBuilder<SyncWorker>()
-            .setConstraints(constraints)
-            .build()
-        workManager.enqueueUniqueWork(
-            "SavioSyncOneTime",
-            ExistingWorkPolicy.KEEP,
-            once,
-        )
+        SyncWorker.enqueueNow(workManager)
     }
 }

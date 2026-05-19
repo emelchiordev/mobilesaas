@@ -156,12 +156,26 @@ class SyncRepository @Inject constructor(
                     android.util.Log.d("InsertAllSafe", "→ skip closed local ${entity.id}")
                 }
 
+                existing != null && existing.syncStatus in CONFLICT_SYNC_STATUSES_FOR_PULL -> {
+                    android.util.Log.d(
+                        "InsertAllSafe",
+                        "→ overwrite conflict ${entity.id} (${existing.syncStatus})",
+                    )
+                    interventionDao.insertOrReplace(entity)
+                    interventionDao.markLocalChanges(entity.id, false)
+                    interventionDao.resetConflictResolveAttempts(entity.id)
+                }
+
                 existing == null -> {
                     interventionDao.insertOrReplace(entity)
                 }
 
-                existing.syncStatus in listOf("IN_PROGRESS", "PENDING") -> {
-                    android.util.Log.d("InsertAllSafe", "→ skip ${entity.id} (local=${existing.syncStatus})")
+                existing.syncStatus in PULL_PROTECTED_SYNC_STATUSES && existing.hasLocalChanges -> {
+                    android.util.Log.d(
+                        "InsertAllSafe",
+                        "→ skip ${entity.id} (local=${existing.syncStatus}, hasLocalChanges)",
+                    )
+                    re.melchior.saviomobile.observability.SavioSyncSentry.onPullProtected(entity.id)
                 }
 
                 else -> {
@@ -441,6 +455,11 @@ class SyncRepository @Inject constructor(
             date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         )
 
+    suspend fun hasCachedInterventionsForDate(date: LocalDate): Boolean =
+        interventionDao.countInterventionsByDate(
+            date.format(DateTimeFormatter.ISO_LOCAL_DATE),
+        ) > 0
+
     fun getInterventionById(id: String) =
         interventionDao.getInterventionById(id)
 
@@ -515,6 +534,18 @@ class SyncRepository @Inject constructor(
             INTERVENTION_STATUS_COMPLETED,
             "pending_validation",
         )
+
+        val CONFLICT_SYNC_STATUSES_FOR_PULL = setOf(
+            "CONFLICT_IMMUTABLE",
+            "CONFLICT_VERSION",
+            "CONFLICT",
+        )
+
+        val PULL_PROTECTED_SYNC_STATUSES = setOf(
+            "IN_PROGRESS",
+            "PENDING",
+            "COMPLETED",
+        )
     }
 }
 
@@ -559,4 +590,5 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     startedAt = startedAt,
     pulledAt = pulledAt,
     isChantier = isChantier == true,
+    version = version,
 )

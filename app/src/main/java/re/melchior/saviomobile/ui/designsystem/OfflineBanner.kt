@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,13 +46,13 @@ fun OfflineBanner(
             Icon(
                 imageVector = Icons.Outlined.WifiOff,
                 contentDescription = null,
-                tint = SavioPalette.Warning,
+                tint = SavioPalette.Accent,
                 modifier = Modifier.size(14.dp),
             )
             Text(
                 text = "Mode hors-ligne · Données non synchronisées",
                 style = SavioType.Label,
-                color = SavioPalette.Warning,
+                color = SavioPalette.Accent,
             )
         }
     }

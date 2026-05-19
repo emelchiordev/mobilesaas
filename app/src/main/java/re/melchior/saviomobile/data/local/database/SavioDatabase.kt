@@ -22,6 +22,7 @@ import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
 import re.melchior.saviomobile.data.local.dao.MeasureDao
 import re.melchior.saviomobile.data.local.dao.PacMeasureDao
+import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
@@ -41,6 +42,7 @@ import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.InvoicePaymentEntity
 import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
+import re.melchior.saviomobile.data.local.entity.PendingClientEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
 import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
@@ -72,8 +74,9 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         AttestationVeEntity::class,
         AttestationVePointControleEntity::class,
         PendingInterventionEntity::class,
+        PendingClientEntity::class,
     ],
-    version = 39,
+    version = 44,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {
@@ -116,4 +119,5 @@ abstract class SavioDatabase : RoomDatabase() {
 
     abstract fun pendingInterventionDao(): PendingInterventionDao
 
+    abstract fun pendingClientDao(): PendingClientDao
 }

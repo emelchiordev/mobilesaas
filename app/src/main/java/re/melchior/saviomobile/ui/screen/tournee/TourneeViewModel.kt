@@ -13,18 +13,22 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 import re.melchior.saviomobile.data.repository.CatalogSyncRepository
+import re.melchior.saviomobile.data.repository.TenantArticleSyncRepository
 import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.PendingInterventionRepository
-import re.melchior.saviomobile.data.repository.PhotoSyncRepository
+import re.melchior.saviomobile.data.repository.MobileSyncOrchestrator
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.data.repository.SyncResult
+import android.util.Log
 import java.time.LocalDate
 import javax.inject.Inject
 
 data class TourneeUiState(
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
+    val isDatePullRefreshing: Boolean = false,
     val isCatalogSyncing: Boolean = false,
     val errorMessage: String? = null,
     val selectedDate: LocalDate = LocalDate.now(),
@@ -36,8 +40,9 @@ data class TourneeUiState(
 class TourneeViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val catalogSyncRepository: CatalogSyncRepository,
+    private val tenantArticleSyncRepository: TenantArticleSyncRepository,
     private val invoiceRepository: InvoiceRepository,
-    private val photoSyncRepository: PhotoSyncRepository,
+    private val mobileSyncOrchestrator: MobileSyncOrchestrator,
     private val pendingInterventionRepository: PendingInterventionRepository,
 ) : ViewModel() {
 
@@ -46,6 +51,8 @@ class TourneeViewModel @Inject constructor(
 
     private val _resumeCandidate = MutableStateFlow<InterventionEntity?>(null)
     val resumeCandidate: StateFlow<InterventionEntity?> = _resumeCandidate.asStateFlow()
+
+    private val lastSeenSyncStatus = mutableMapOf<String, String>()
 
     // Flow réactif sur la date sélectionnée
     // flatMapLatest annule automatiquement le collect précédent
@@ -76,11 +83,46 @@ class TourneeViewModel @Inject constructor(
             initialValue = 0,
         )
 
+    val pendingCreatingForDate: StateFlow<List<PendingInterventionEntity>> = _uiState
+        .flatMapLatest { state ->
+            pendingInterventionRepository.observePendingForDate(state.selectedDate)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
+
     init {
         viewModelScope.launch {
             _resumeCandidate.value = syncRepository.getInProgressIntervention()
         }
+        viewModelScope.launch {
+            interventions.collect { list ->
+                list.forEach { entity ->
+                    val prev = lastSeenSyncStatus[entity.id]
+                    if (prev != entity.syncStatus) {
+                        if (entity.syncStatus in CONFLICT_SYNC_STATUSES) {
+                            logSyncConflictReplaced(entity)
+                        }
+                    }
+                    lastSeenSyncStatus[entity.id] = entity.syncStatus
+                }
+            }
+        }
         pull()
+    }
+
+    private fun logSyncConflictReplaced(entity: InterventionEntity) {
+        val timestamp =
+            entity.updatedAt?.takeIf { it.isNotBlank() }
+                ?: entity.startedAt?.takeIf { it.isNotBlank() }
+                ?: entity.completedAt?.takeIf { it.isNotBlank() }
+                ?: entity.scheduledAt
+        Log.w(
+            "SyncConflict",
+            "Intervention ${entity.id} : modifications du $timestamp remplacées par version serveur v${entity.version}",
+        )
     }
 
     fun ignoreResumeCandidate() {
@@ -102,45 +144,58 @@ class TourneeViewModel @Inject constructor(
         _resumeCandidate.value = syncRepository.getInProgressIntervention()
     }
 
-    fun pull(force: Boolean = false) {
+    fun pull(force: Boolean = false, fromDateChange: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSyncing = true, errorMessage = null) }
-
-            // Upload photos en attente immédiatement — fire and forget
-            launch {
-                try {
-                    photoSyncRepository.uploadPendingPhotos()
-                    photoSyncRepository.deletePendingPhotos()
-                    photoSyncRepository.uploadPendingSignatures()
-                    android.util.Log.d("TourneeVM", "Photos sync terminée")
-                } catch (e: Exception) {
-                    android.util.Log.w("TourneeVM", "Photos sync error: ${e.message}")
+            _uiState.update {
+                if (fromDateChange) {
+                    it.copy(isDatePullRefreshing = true, errorMessage = null)
+                } else {
+                    it.copy(isSyncing = true, errorMessage = null)
                 }
             }
 
-            // Pull interventions
-            when (val result = syncRepository.pull(_uiState.value.selectedDate, force)) {
-                is SyncResult.Success -> {
-                    _uiState.update { it.copy(isSyncing = false) }
+            val selectedDate = _uiState.value.selectedDate
+            val runResult =
+                mobileSyncOrchestrator.runFullSync(
+                    pullDate = selectedDate,
+                    pullForce = force || fromDateChange,
+                )
+
+            when (val result = runResult.pullResult) {
+                is SyncResult.Success, null -> {
+                    _uiState.update { it.copy(isSyncing = false, isDatePullRefreshing = false) }
                     refreshResumeCandidate()
                 }
 
                 is SyncResult.Error -> {
+                    val hasLocalData = hasLocalDataForDate(selectedDate)
                     _uiState.update {
-                        it.copy(isSyncing = false, errorMessage = result.message)
+                        it.copy(
+                            isSyncing = false,
+                            isDatePullRefreshing = false,
+                            errorMessage = if (hasLocalData) null else result.message,
+                        )
                     }
                 }
             }
         }
     }
 
+    private suspend fun hasLocalDataForDate(date: LocalDate): Boolean =
+        syncRepository.hasCachedInterventionsForDate(date) ||
+            pendingInterventionRepository.hasVisiblePendingForDate(date)
+
     fun selectDate(date: LocalDate) {
         _uiState.update { it.copy(selectedDate = date) }
-        pull()
+        pull(fromDateChange = true)
     }
 
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    private companion object {
+        val CONFLICT_SYNC_STATUSES = setOf("CONFLICT_IMMUTABLE", "CONFLICT_VERSION")
     }
 
     fun syncCatalog() {
@@ -149,6 +204,7 @@ class TourneeViewModel @Inject constructor(
             try {
                 android.util.Log.d("CatalogSync", "Démarrage sync catalogue...")
                 catalogSyncRepository.sync()
+                tenantArticleSyncRepository.sync(force = true)
                 android.util.Log.d("CatalogSync", "Sync catalogue terminée avec succès")
             } catch (e: Exception) {
                 android.util.Log.e("CatalogSync", "Erreur sync catalogue: ${e.message}", e)

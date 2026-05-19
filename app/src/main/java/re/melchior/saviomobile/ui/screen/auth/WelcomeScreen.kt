@@ -23,18 +23,21 @@ import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.ui.theme.SavioAuthTheme
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioWelcomeBackground
+import re.melchior.saviomobile.ui.theme.SavioWelcomeStatusBarEffect
 
 @Composable
 fun WelcomeScreen(
     onLoginClick: () -> Unit,
     onRegisterClick: () -> Unit,
 ) {
+    SavioWelcomeStatusBarEffect()
     SavioAuthTheme {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(SavioPalette.AuthBackground)
+                    .background(SavioWelcomeBackground)
                     .padding(horizontal = SavioDimens.SpaceXL),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,

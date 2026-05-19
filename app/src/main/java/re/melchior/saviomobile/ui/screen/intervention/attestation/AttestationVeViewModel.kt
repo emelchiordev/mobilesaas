@@ -5,10 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,16 +20,16 @@ import re.melchior.saviomobile.data.local.AttestationVeBruleurResolver
 import re.melchior.saviomobile.data.local.AttestationVeControlPoints
 import re.melchior.saviomobile.data.local.dao.CatalogEquipmentDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
-import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.repository.AttestationVeRepository
+import re.melchior.saviomobile.ui.util.contentFingerprint
+import re.melchior.saviomobile.ui.util.hasMeaningfulData
 
 @HiltViewModel
 class AttestationVeViewModel @Inject constructor(
     private val repository: AttestationVeRepository,
     private val equipmentDao: EquipmentDao,
     private val catalogEquipmentDao: CatalogEquipmentDao,
-    private val interventionDao: InterventionDao,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -70,63 +68,13 @@ class AttestationVeViewModel @Inject constructor(
     val linkedBruleur: StateFlow<AttestationVeBruleurLinked?> =
         _linkedBruleur.asStateFlow()
 
+    private var initialAttestation: AttestationVeEntity? = null
+    private var initialPoints: Map<String, String> = emptyMap()
+    private var persistedInRoom = false
+
     init {
         viewModelScope.launch {
-            val inProgress = interventionDao.findFirstInProgress()
-            android.util.Log.d(
-                "ATTEST_VM",
-                "current in_progress=${inProgress?.id} " +
-                    "my interventionId=$interventionId",
-            )
-        }
-
-        viewModelScope.launch {
-            var entity = repository.getOrCreate(
-                interventionId,
-                equipmentOrder,
-                type,
-            )
-
-            if (entity.isDirty && entity.bruleurMarque == null && entity.bruleurEquipmentOrder == null) {
-                val parentEquipment = equipmentDao.getEquipmentByInterventionAndOrder(
-                    interventionId,
-                    equipmentOrder,
-                )
-                val equipments =
-                    equipmentDao.getEquipmentsByInterventionOnce(interventionId)
-                val bruleur = equipments.find { eq ->
-                    eq.parentEquipmentId != null &&
-                        eq.typeCode?.uppercase() == "BRULEUR" &&
-                        parentEquipment?.id == eq.parentEquipmentId
-                }
-                if (bruleur != null) {
-                    val powerKw = bruleur.equipmentCatalogId?.let { cid ->
-                        catalogEquipmentDao.getById(cid)?.powerKw
-                    }
-                    entity = entity.copy(
-                        bruleurEquipmentOrder = bruleur.order,
-                        bruleurMarque = bruleur.brand,
-                        bruleurModele = bruleur.model,
-                        bruleurSerialNumber = bruleur.serialNumber,
-                        bruleurCommissioningDate = bruleur.installDate,
-                        bruleurPuissanceKw = powerKw,
-                        isDirty = true,
-                    )
-                    repository.save(entity)
-                }
-            }
-
-            _attestation.value = entity
-
-            repository.getFlow(
-                interventionId,
-                equipmentOrder,
-                type,
-            ).collect { updated ->
-                if (updated != null) {
-                    _attestation.value = updated
-                }
-            }
+            loadExisting()
         }
 
         viewModelScope.launch {
@@ -147,21 +95,82 @@ class AttestationVeViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            repository.getPointsFlow(
-                interventionId,
-                equipmentOrder,
-                type,
-            ).collect { list ->
-                _points.value = list.associate { it.cle to it.resultat }
-            }
-        }
-
-        viewModelScope.launch {
             equipmentDao.getEquipmentsByIntervention(interventionId).collect { list ->
                 _evacuationMode.value = list.find { it.order == equipmentOrder }
                     ?.evacuationMode
             }
         }
+    }
+
+    private suspend fun loadExisting() {
+        val existing = repository.get(interventionId, equipmentOrder, type)
+        persistedInRoom = existing != null
+
+        var entity = existing ?: repository.newDraft(interventionId, equipmentOrder, type)
+
+        if (entity.bruleurMarque == null && entity.bruleurEquipmentOrder == null) {
+            entity = prefillBruleurInMemory(entity)
+        }
+
+        val loadedPoints =
+            if (persistedInRoom) {
+                repository.getPointsOnce(interventionId, equipmentOrder, type)
+                    .associate { it.cle to it.resultat }
+            } else {
+                emptyMap()
+            }
+
+        _attestation.value = entity
+        _points.value = loadedPoints
+        initialAttestation = entity.contentFingerprint()
+        initialPoints = loadedPoints.toMap()
+
+        if (persistedInRoom) {
+            repository.getFlow(interventionId, equipmentOrder, type).collect { updated ->
+                if (updated != null && updated.contentFingerprint() == initialAttestation) {
+                    _attestation.value = updated
+                }
+            }
+        }
+    }
+
+    private suspend fun prefillBruleurInMemory(
+        entity: AttestationVeEntity,
+    ): AttestationVeEntity {
+        val parentEquipment = equipmentDao.getEquipmentByInterventionAndOrder(
+            interventionId,
+            equipmentOrder,
+        )
+        val equipments =
+            equipmentDao.getEquipmentsByInterventionOnce(interventionId)
+        val bruleur = equipments.find { eq ->
+            eq.parentEquipmentId != null &&
+                eq.typeCode?.uppercase() == "BRULEUR" &&
+                parentEquipment?.id == eq.parentEquipmentId
+        } ?: return entity
+        val powerKw = bruleur.equipmentCatalogId?.let { cid ->
+            catalogEquipmentDao.getById(cid)?.powerKw
+        }
+        return entity.copy(
+            bruleurEquipmentOrder = bruleur.order,
+            bruleurMarque = bruleur.brand,
+            bruleurModele = bruleur.model,
+            bruleurSerialNumber = bruleur.serialNumber,
+            bruleurCommissioningDate = bruleur.installDate,
+            bruleurPuissanceKw = powerKw,
+        )
+    }
+
+    fun hasChanges(): Boolean {
+        val current = _attestation.value ?: return false
+        val attestationChanged =
+            current.contentFingerprint() != initialAttestation?.contentFingerprint()
+        return attestationChanged || _points.value != initialPoints
+    }
+
+    fun saveIfChanged() {
+        if (!hasChanges()) return
+        viewModelScope.launch { persistToRoom() }
     }
 
     fun updateField(key: String, value: String) {
@@ -240,23 +249,42 @@ class AttestationVeViewModel @Inject constructor(
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(500)
-            save()
+            saveIfChanged()
         }
     }
 
+    /** Sauvegarde explicite (bouton ou action utilisateur). */
     fun save() {
         val current = _attestation.value ?: return
-        viewModelScope.launch {
-            repository.save(current)
+        if (!hasChanges() && !current.hasMeaningfulData(_points.value)) return
+        viewModelScope.launch { persistToRoom() }
+    }
+
+    private suspend fun persistToRoom() {
+        val current = _attestation.value ?: return
+        if (!current.hasMeaningfulData(_points.value) && !persistedInRoom) return
+
+        repository.save(current)
+        val attestationId = current.id
+        val allKeys = (initialPoints.keys + _points.value.keys).toSet()
+        for (cle in allKeys) {
+            repository.savePoint(
+                interventionId = interventionId,
+                equipmentOrder = equipmentOrder,
+                type = type,
+                attestationId = attestationId,
+                cle = cle,
+                resultat = _points.value[cle].orEmpty(),
+            )
         }
+        initialAttestation = current.contentFingerprint()
+        initialPoints = _points.value.toMap()
+        persistedInRoom = true
     }
 
     fun togglePoint(cle: String, resultat: String) {
-        val attestationId = _attestation.value?.id ?: return
         val current = _points.value[cle] ?: ""
-
         val newResultat = if (current == resultat) "" else resultat
-
         _points.value = _points.value.toMutableMap().apply {
             if (newResultat.isEmpty()) {
                 remove(cle)
@@ -264,27 +292,11 @@ class AttestationVeViewModel @Inject constructor(
                 put(cle, newResultat)
             }
         }
-
-        viewModelScope.launch {
-            repository.savePoint(
-                interventionId = interventionId,
-                equipmentOrder = equipmentOrder,
-                type = type,
-                attestationId = attestationId,
-                cle = cle,
-                resultat = newResultat,
-            )
-        }
+        scheduleAutoSave()
     }
 
     override fun onCleared() {
         saveJob?.cancel()
-        val current = _attestation.value
-        if (current != null) {
-            runBlocking(Dispatchers.IO) {
-                repository.save(current)
-            }
-        }
         super.onCleared()
     }
 }

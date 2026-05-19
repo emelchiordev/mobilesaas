@@ -30,4 +30,7 @@ interface PendingUpdateDao {
 
     @Query("DELETE FROM pending_updates WHERE targetId = :targetId")
     suspend fun deleteByTargetId(targetId: String)
+
+    @Query("UPDATE pending_updates SET targetId = :remoteId WHERE targetId = :localId")
+    suspend fun remapTargetId(localId: String, remoteId: String)
 }

@@ -6,7 +6,10 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.android)
+    id("org.jetbrains.kotlin.kapt")
 }
+
+apply(plugin = "io.objectbox")
 
 /** HTTP(S) de base pour Retrofit — ajoute « / » final si absent. */
 fun urlWithTrailingSlash(raw: String): String {
@@ -33,6 +36,9 @@ val debugBanBaseUrl =
             ?: "http://192.168.1.69:3001",
     )
 
+val sentryDsn =
+    localProperties.getProperty("SENTRY_DSN")?.trim()?.takeIf { it.isNotEmpty() } ?: ""
+
 android {
     namespace = "re.melchior.saviomobile"
     compileSdk = 36
@@ -51,6 +57,7 @@ android {
             "BAN_API_KEY",
             "\"change-me-with-a-strong-random-key\"",
         )
+        buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
     buildTypes {
@@ -158,6 +165,13 @@ dependencies {
     implementation(libs.coil.network)
 
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    implementation(libs.sentry.android)
+
+    implementation("io.objectbox:objectbox-android:3.8.0")
+    kapt("io.objectbox:objectbox-processor:3.8.0")
+
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 
     // Tests
     testImplementation(libs.junit)

@@ -36,6 +36,8 @@ data class InterventionDto(
     val scheduledAt: String,
     @SerializedName("status")
     val status: String,
+    @SerializedName("version")
+    val version: Int = 1,
     @SerializedName("number")
     val number: String? = null,
     @SerializedName("type")

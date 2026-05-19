@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.designsystem
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -70,7 +72,7 @@ fun AppButton(
         AppButtonStyle.Primary -> {
             val bg =
                 when {
-                    !enabled -> SavioPalette.TextHint.copy(alpha = 0.45f)
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                     pressed -> SavioPalette.PrimaryDark
                     else -> SavioPalette.Primary
                 }
@@ -110,9 +112,9 @@ fun AppButton(
                     ),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
-                        contentColor = SavioPalette.TextPrimary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (pressed && enabled) 0.85f else 1f),
                         containerColor = Color.Transparent,
-                        disabledContentColor = SavioPalette.TextSecondary.copy(alpha = 0.45f),
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
                     ),
             ) {
                 LabelRow()
@@ -134,7 +136,7 @@ fun AppButton(
                     ),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
-                        contentColor = SavioPalette.TextPrimary.copy(alpha = if (pressed && enabled) 0.85f else 1f),
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (pressed && enabled) 0.85f else 1f),
                         containerColor = Color.Transparent,
                         disabledContainerColor = Color.Transparent,
                     ),

@@ -37,7 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,13 +45,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.entity.ColdMeasureEntity
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 private val TAB_TITLES = listOf(
     "[3] Équipement",
@@ -76,27 +77,18 @@ fun CerfaFroidScreen(
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val hasPersistedCerfa by viewModel.hasPersistedData.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
     val columns = when (windowSizeClass.widthSizeClass) {
         WindowWidthSizeClass.Expanded -> 3
         WindowWidthSizeClass.Medium -> 2
         else -> 1
     }
 
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                viewModel.saveLocally()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
     fun leave() {
-        viewModel.saveLocally()
+        viewModel.saveIfChanged()
         onBack()
     }
+
+    BackHandler { leave() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -125,12 +117,7 @@ fun CerfaFroidScreen(
                     }
                 },
                 colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
+                    savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -139,11 +126,18 @@ fun CerfaFroidScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            ScrollableTabRow(selectedTabIndex = selectedTab) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = savioTabUnselectedColor(),
+                indicator = { positions -> SavioInterventionTabIndicator(positions, selectedTab) },
+            ) {
                 TAB_TITLES.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
+                        selectedContentColor = savioTabSelectedColor(),
+                        unselectedContentColor = savioTabUnselectedColor(),
                         text = { Text(title, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
                     )
                 }

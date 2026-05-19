@@ -26,4 +26,23 @@ interface PendingInterventionDao {
 
     @Query("SELECT * FROM pending_interventions WHERE syncStatus = 'PENDING' ORDER BY createdAt ASC")
     suspend fun listPendingToSync(): List<PendingInterventionEntity>
+
+    @Query(
+        """
+        SELECT * FROM pending_interventions
+        WHERE syncStatus != 'SYNCED'
+        AND scheduledAt >= :dayStartMillis AND scheduledAt < :dayEndMillis
+        ORDER BY scheduledAt ASC
+        """,
+    )
+    fun getPendingForDate(dayStartMillis: Long, dayEndMillis: Long): Flow<List<PendingInterventionEntity>>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM pending_interventions
+        WHERE syncStatus != 'SYNCED'
+        AND scheduledAt >= :dayStartMillis AND scheduledAt < :dayEndMillis
+        """,
+    )
+    suspend fun countPendingForDate(dayStartMillis: Long, dayEndMillis: Long): Int
 }

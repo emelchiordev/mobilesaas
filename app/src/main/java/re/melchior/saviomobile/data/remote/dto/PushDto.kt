@@ -19,7 +19,9 @@ data class PushOperationDto(
     @SerializedName("occurredAt")
     val occurredAt: String,
     @SerializedName("payload")
-    val payload: Map<String, Any?>
+    val payload: Map<String, Any?>,
+    @SerializedName("clientKnownVersion")
+    val clientKnownVersion: Int? = null,
 )
 
 data class PushResponseDto(
@@ -45,5 +47,9 @@ data class PushResultDto(
     @SerializedName("conflictType")
     val conflictType: String?,
     @SerializedName("serverData")
-    val serverData: Map<String, Any?>?
-)
+    val serverData: Map<String, Any?>?,
+    @SerializedName("data")
+    val data: Map<String, Any?>? = null,
+) {
+    fun resultPayload(): Map<String, Any?>? = serverData ?: data
+}

@@ -20,6 +20,8 @@ import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.worker.SyncWorker
+import androidx.work.WorkManager
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
@@ -67,9 +69,10 @@ data class ClotureSignatureUiState(
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val pushRepository: PushRepository,
+    private val workManager: WorkManager,
     private val tourneeApi: TourneeApi,
     private val settingsDao: SettingsDao,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val interventionId: String = checkNotNull(savedStateHandle["interventionId"])
@@ -242,14 +245,19 @@ class ClotureSignatureViewModel @Inject constructor(
                 android.util.Log.i(SAVIO_PUSH_LOG, "clôture: DB à jour → appel push()")
                 val pushResult = pushRepository.push()
                 android.util.Log.i(SAVIO_PUSH_LOG, "clôture: push() retourne $pushResult")
-                android.util.Log.d("ClotureVM", "Push result: $pushResult")
+
+                SyncWorker.enqueueNow(workManager)
+                android.util.Log.i(
+                    SAVIO_PUSH_LOG,
+                    "clôture: SyncWorker enqueued (upload photos/signatures hors ViewModel)",
+                )
 
                 val requiresValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isCompleted = true,
-                        isPendingValidation = requiresValidation
+                        isPendingValidation = requiresValidation,
                     )
                 }
             } catch (e: Exception) {

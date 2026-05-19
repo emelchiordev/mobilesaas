@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.designsystem
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +41,7 @@ fun AppHeader(
             modifier
                 .fillMaxWidth()
                 .height(SavioDimens.HeaderHeight),
-        color = SavioPalette.BackgroundPage,
+        color = MaterialTheme.colorScheme.background,
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
@@ -56,7 +58,7 @@ fun AppHeader(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Retour",
-                        tint = SavioPalette.TextPrimary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -67,13 +69,13 @@ fun AppHeader(
                 Text(
                     text = title,
                     style = SavioType.H1,
-                    color = SavioPalette.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 subtitle?.let { s ->
                     Text(
                         text = s,
                         style = SavioType.BodySmall,
-                        color = SavioPalette.TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

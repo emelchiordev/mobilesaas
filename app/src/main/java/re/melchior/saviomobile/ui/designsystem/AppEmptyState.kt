@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.designsystem
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,13 +44,13 @@ fun AppEmptyState(
         Text(
             text = title,
             style = SavioType.H3,
-            color = SavioPalette.TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
             text = subtitle,
             style = SavioType.BodySmall,
-            color = SavioPalette.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )

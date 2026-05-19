@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioAccent
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioType
 
@@ -35,8 +36,8 @@ fun SectionCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(SavioDimens.RadiusLG),
-        color = SavioPalette.BackgroundCard,
-        border = BorderStroke(SavioDimens.BorderThin, SavioPalette.BorderDefault),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(SavioDimens.BorderThin, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
@@ -52,7 +53,7 @@ fun SectionDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier.fillMaxWidth(),
         thickness = SavioDimens.BorderThin,
-        color = SavioPalette.BorderDefault,
+        color = MaterialTheme.colorScheme.outline,
     )
 }
 
@@ -85,19 +86,19 @@ fun SectionRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = SavioPalette.Primary,
+            tint = SavioAccent,
             modifier = Modifier.size(20.dp),
         )
         leading?.invoke(this)
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = SavioType.Label, color = SavioPalette.TextSecondary)
-            Text(text = value, style = SavioType.BodyLarge, color = SavioPalette.TextPrimary)
+            Text(text = label, style = SavioType.Label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = value, style = SavioType.BodyLarge, color = MaterialTheme.colorScheme.onSurface)
         }
         if (onClick != null) {
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = SavioPalette.Primary,
+                tint = SavioAccent,
                 modifier = Modifier.size(20.dp),
             )
         }

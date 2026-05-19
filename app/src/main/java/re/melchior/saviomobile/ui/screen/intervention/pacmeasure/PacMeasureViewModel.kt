@@ -22,6 +22,8 @@ import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.repository.PacMeasureRepository
+import re.melchior.saviomobile.ui.util.contentFingerprint
+import re.melchior.saviomobile.ui.util.hasMeaningfulPacData
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -53,7 +55,8 @@ class PacMeasureViewModel @Inject constructor(
     private val _pdfUi = MutableStateFlow(PacMeasurePdfUi())
     val pdfUi: StateFlow<PacMeasurePdfUi> = _pdfUi.asStateFlow()
 
-    private var isDirty = false
+    private var initialState: PacMeasureEntity? = null
+    private var persistedInRoom = false
     private var saveJob: Job? = null
 
     init {
@@ -61,9 +64,22 @@ class PacMeasureViewModel @Inject constructor(
             if (interventionId.isEmpty()) return@runBlocking
             val ro = resolveUeOrder(interventionId, equipmentOrder)
             val existing = pacMeasureRepository.getByInterventionAndOrder(interventionId, ro)
-            _state.value = existing
+            persistedInRoom = existing != null
+            val loaded = existing
                 ?: PacMeasureEntity(interventionId = interventionId, equipmentOrder = ro)
+            _state.value = loaded
+            initialState = loaded.contentFingerprint()
         }
+    }
+
+    fun hasChanges(): Boolean {
+        val initial = initialState ?: return false
+        return _state.value.contentFingerprint() != initial
+    }
+
+    fun saveIfChanged() {
+        if (!hasChanges()) return
+        save(force = false)
     }
 
     private suspend fun resolveUeOrder(interventionId: String, order: Int): Int {
@@ -131,7 +147,6 @@ class PacMeasureViewModel @Inject constructor(
             }
             next.copy(pacDeltaT = deltaT)
         }
-        isDirty = true
         scheduleSave()
     }
 
@@ -139,16 +154,18 @@ class PacMeasureViewModel @Inject constructor(
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(500)
-            save()
+            saveIfChanged()
         }
     }
 
-    fun save() {
-        if (!isDirty) return
+    fun save(force: Boolean = true) {
+        if (!force && !hasChanges()) return
         val s = _state.value
+        if (!force && !persistedInRoom && !s.hasMeaningfulPacData()) return
         viewModelScope.launch {
             pacMeasureRepository.upsert(s)
-            isDirty = false
+            initialState = s.contentFingerprint()
+            persistedInRoom = true
         }
     }
 
@@ -216,11 +233,6 @@ class PacMeasureViewModel @Inject constructor(
 
     override fun onCleared() {
         saveJob?.cancel()
-        if (isDirty && interventionId.isNotEmpty()) {
-            runBlocking {
-                pacMeasureRepository.upsert(_state.value)
-            }
-        }
         super.onCleared()
     }
 }

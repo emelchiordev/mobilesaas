@@ -57,7 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureSignatureScreen(
@@ -99,6 +99,7 @@ fun ClotureSignatureScreen(
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = savioTopAppBarColors(),
                 title = {
                     Column {
                         Text(
@@ -275,7 +276,8 @@ fun ClotureSignatureScreen(
                         .height(56.dp),
                     enabled = uiState.canComplete && !uiState.isLoading,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     )
                 ) {
                     if (uiState.isLoading) {
@@ -287,7 +289,8 @@ fun ClotureSignatureScreen(
                     } else {
                         Text(
                             text = "Clôturer et terminer l'intervention",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
                 }
@@ -307,15 +310,16 @@ private fun SignatureZone(
     onDrag: (Float, Float) -> Unit,
     onSizeChanged: (Int, Int) -> Unit
 ) {
+    val strokeColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(SavioPalette.SurfaceCard)
+            .background(MaterialTheme.colorScheme.surface)
             .border(
                 width = if (hasSignature) 2.dp else 1.dp,
-                color = if (hasSignature) SavioPalette.Accent else SavioPalette.TextHint,
+                color = if (hasSignature) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 shape = RoundedCornerShape(12.dp)
             )
             .onSizeChanged { size -> onSizeChanged(size.width, size.height) }
@@ -339,7 +343,7 @@ private fun SignatureZone(
             }
             drawPath(
                 path = path,
-                color = SavioPalette.TextPrimary,
+                color = strokeColor,
                 style = Stroke(
                     width = 4f,
                     cap = StrokeCap.Round,
@@ -356,7 +360,7 @@ private fun SignatureZone(
                 Text(
                     text = placeholder,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = SavioPalette.TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

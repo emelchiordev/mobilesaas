@@ -15,43 +15,37 @@ class AttestationVeRepository @Inject constructor(
     private val pointControleDao: AttestationVePointControleDao,
 ) {
 
-suspend fun getOrCreate(
-    interventionId: String,
-    equipmentOrder: Int,
-    type: String,
-): AttestationVeEntity {
-    android.util.Log.d("ATTEST_CREATE",
-        "getOrCreate interventionId=$interventionId " +
-        "equipmentOrder=$equipmentOrder type=$type"
-    )
-    
-    val existing = attestationVeDao.getByInterventionEquipmentType(
-        interventionId,
-        equipmentOrder,
-        type,
-    )
-    
-    android.util.Log.d("ATTEST_CREATE",
-        "existing=${existing?.interventionId} " +
-        "existingOrder=${existing?.equipmentOrder}"
-    )
-    
-    return existing ?: run {
-        val entity = AttestationVeEntity(
+    suspend fun get(
+        interventionId: String,
+        equipmentOrder: Int,
+        type: String,
+    ): AttestationVeEntity? =
+        attestationVeDao.getByInterventionEquipmentType(
+            interventionId,
+            equipmentOrder,
+            type,
+        )
+
+    fun newDraft(
+        interventionId: String,
+        equipmentOrder: Int,
+        type: String,
+    ): AttestationVeEntity =
+        AttestationVeEntity(
             interventionId = interventionId,
             equipmentOrder = equipmentOrder,
             id = java.util.UUID.randomUUID().toString(),
             type = type,
-            updatedAt = java.time.Instant.now().toString(),
-            isDirty = true,
+            isDirty = false,
+            updatedAt = "",
         )
-        android.util.Log.d("ATTEST_CREATE",
-            "creating new entity interventionId=${entity.interventionId}"
-        )
-        attestationVeDao.insert(entity)
-        entity
-    }
-}
+
+    suspend fun getPointsOnce(
+        interventionId: String,
+        equipmentOrder: Int,
+        type: String,
+    ): List<AttestationVePointControleEntity> =
+        pointControleDao.getByAttestationOnce(interventionId, equipmentOrder, type)
 
     suspend fun save(entity: AttestationVeEntity) {
         val updated = entity.copy(

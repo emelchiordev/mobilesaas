@@ -53,7 +53,7 @@ fun AttestationTypePickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = SavioPalette.SurfaceCard,
+        containerColor = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier

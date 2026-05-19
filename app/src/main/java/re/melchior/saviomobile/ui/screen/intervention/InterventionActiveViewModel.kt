@@ -36,7 +36,8 @@ data class InterventionActiveUiState(
     val startTimeLabel: String = "",
     val showQuitDialog: Boolean = false,
     val isLoading: Boolean = false,
-    val invoice: InvoiceEntity? = null
+    val invoice: InvoiceEntity? = null,
+    val invoiceLineCount: Int = 0,
 )
 
 @HiltViewModel
@@ -83,6 +84,25 @@ class InterventionActiveViewModel @Inject constructor(
     init {
         loadIntervention()
         loadEquipments()
+        observeBilling()
+    }
+
+    private fun observeBilling() {
+        viewModelScope.launch {
+            invoiceRepository
+                .observeBillingForIntervention(interventionId)
+                .collect { summary ->
+                    _uiState.update {
+                        it.copy(
+                            invoice = summary.invoice,
+                            invoiceLineCount = summary.lineCount,
+                        )
+                    }
+                }
+        }
+        viewModelScope.launch {
+            invoiceRepository.refreshInvoiceFromServer(interventionId)
+        }
     }
 
     private fun loadIntervention() {
@@ -96,11 +116,9 @@ class InterventionActiveViewModel @Inject constructor(
                         it.startedAt?.let { startedAt ->
                             startChrono(startedAt)
                         }
-                        viewModelScope.launch {
-                            val invoice = invoiceRepository.getInvoiceForIntervention(it.id)
-                            _uiState.update { state -> state.copy(invoice = invoice) }
-                        }
-                    } ?: _uiState.update { it.copy(intervention = null, invoice = null) }
+                    } ?: _uiState.update {
+                        it.copy(intervention = null, invoice = null, invoiceLineCount = 0)
+                    }
                 }
         }
     }

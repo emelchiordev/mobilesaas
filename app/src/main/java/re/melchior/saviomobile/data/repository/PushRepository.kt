@@ -17,6 +17,7 @@ import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.remote.api.PushApi
 import re.melchior.saviomobile.data.remote.dto.PushOperationDto
 import re.melchior.saviomobile.data.remote.dto.PushRequestDto
+import re.melchior.saviomobile.data.remote.dto.PushResultDto
 import retrofit2.HttpException
 import java.time.Instant
 import javax.inject.Inject
@@ -28,7 +29,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 sealed class PushResult {
-    object Success : PushResult()
+    data class Success(
+        val conflictInterventionIds: Set<String> = emptySet(),
+    ) : PushResult()
+
     object NothingToPush : PushResult()
     data class Error(val message: String) : PushResult()
 }
@@ -64,6 +68,50 @@ class PushRepository @Inject constructor(
 
     companion object {
         private const val LOG_TAG = "SavioPush"
+        private val VERSIONED_PUSH_TYPES = setOf(
+            "START_INTERVENTION",
+            "COMPLETE_INTERVENTION",
+            "UPDATE_INTERVENTION",
+            "ADD_SIGNATURE",
+        )
+
+        /** Ordre d’application serveur : clôture et facturation en fin de batch. */
+        private val PUSH_OPERATION_SORT_ORDER = listOf(
+            "START_INTERVENTION",
+            "CREATE_INTERVENTION",
+            "UPDATE_EQUIPMENT",
+            "CREATE_EQUIPMENT",
+            "REPLACE_EQUIPMENT",
+            "DELETE_EQUIPMENT",
+            "UPDATE_CUSTOMER",
+            "UPDATE_UNIT_ACCESS",
+            "SAVE_MEASURE",
+            "SAVE_PAC_MEASURE",
+            "SAVE_COLD_MEASURE",
+            "SAVE_ATTESTATION_VE",
+            "UPDATE_INTERVENTION",
+            "ADD_SIGNATURE",
+            "COMPLETE_INTERVENTION",
+            "CREATE_INVOICE",
+            "ADD_INVOICE_LINE",
+            "REMOVE_INVOICE_LINE",
+            "SUBMIT_INVOICE",
+            "VALIDATE_INVOICE",
+            "SUBMIT_INVOICE_FULL",
+            "UPDATE_INVOICE_MOBILE",
+        )
+
+        private fun sortPushOperations(ops: List<PushOperationDto>): List<PushOperationDto> {
+            val rankByType =
+                PUSH_OPERATION_SORT_ORDER.withIndex().associate { (index, type) -> type to index }
+            return ops.sortedWith(
+                compareBy(
+                    { rankByType[it.type] ?: Int.MAX_VALUE },
+                    { it.occurredAt },
+                    { it.id },
+                ),
+            )
+        }
     }
 
     suspend fun push(): PushResult {
@@ -189,8 +237,6 @@ class PushRepository @Inject constructor(
                         )
                     )
                 }
-
-                operations.addAll(completeOps)
 
                 dirtyColdMeasures.forEach { measure ->
                     val payload = buildMap<String, Any?> {
@@ -323,6 +369,8 @@ class PushRepository @Inject constructor(
                     )
                 }
 
+                operations.addAll(completeOps)
+
                 if (operations.isEmpty()) {
                     android.util.Log.w(
                         LOG_TAG,
@@ -331,10 +379,14 @@ class PushRepository @Inject constructor(
                     return PushResult.NothingToPush
                 }
 
-                operations.forEachIndexed { index, op ->
+                val sortedOperations = sortPushOperations(operations)
+                val operationsToSend = attachClientKnownVersions(sortedOperations)
+
+                operationsToSend.forEachIndexed { index, op ->
                     android.util.Log.i(
                         LOG_TAG,
-                        "op[$index] id=${op.id} type=${op.type} occurredAt=${op.occurredAt}",
+                        "op[$index] id=${op.id} type=${op.type} occurredAt=${op.occurredAt} " +
+                            "clientKnownVersion=${op.clientKnownVersion}",
                     )
                 }
 
@@ -352,8 +404,8 @@ class PushRepository @Inject constructor(
                     PushRequestDto(
                         deviceId = deviceId,
                         pushedAt = Instant.now().toString(),
-                        operations = operations
-                    )
+                        operations = operationsToSend,
+                    ),
                 )
     
                 val allOk = response.results.all {
@@ -426,7 +478,7 @@ class PushRepository @Inject constructor(
                             result.operationId.startsWith("op-submit-invoice-") -> {
                                 val localInvoiceId =
                                     result.operationId.removePrefix("op-submit-invoice-")
-                                result.serverData?.let { data ->
+                                result.resultPayload()?.let { data ->
                                     val serverId = data["invoiceId"] as? String
                                     val serverNumber = data["invoiceNumber"] as? String
                                     val serverStatus = data["invoiceStatus"] as? String
@@ -441,8 +493,53 @@ class PushRepository @Inject constructor(
                                             localId = localInvoiceId,
                                             serverId = serverId,
                                             number = serverNumber,
-                                            status = serverStatus ?: "pending_validation"
+                                            status = serverStatus ?: "pending_validation",
+                                            acceptedAt = data["acceptedAt"] as? String,
+                                            invoicedAt = data["invoicedAt"] as? String,
+                                            paidAt = data["paidAt"] as? String,
+                                            devisSignatureUrl =
+                                                data["devisSignatureUrl"] as? String,
+                                            hamonSignatureUrl =
+                                                data["hamonSignatureUrl"] as? String,
+                                            hamonRequested =
+                                                (data["hamonRequested"] as? Boolean) == true,
                                         )
+                                    }
+                                }
+                                pendingUpdateDao.markAsSynced(result.operationId)
+                            }
+                            result.operationId.startsWith("op-update-invoice-") -> {
+                                val targetInvoiceId =
+                                    pendingUpdates.find { it.id == result.operationId }?.targetId
+                                result.resultPayload()?.let { data ->
+                                    val serverStatus = data["invoiceStatus"] as? String
+                                    val serverId = data["invoiceId"] as? String
+                                    val resolvedId = targetInvoiceId ?: serverId
+                                    if (serverStatus != null && resolvedId != null) {
+                                        invoiceDao.getById(resolvedId)?.let { inv ->
+                                            invoiceDao.updateLifecycle(
+                                                id = inv.id,
+                                                status = serverStatus,
+                                                acceptedAt =
+                                                    data["acceptedAt"] as? String
+                                                        ?: inv.acceptedAt,
+                                                invoicedAt =
+                                                    data["invoicedAt"] as? String
+                                                        ?: inv.invoicedAt,
+                                                paidAt =
+                                                    data["paidAt"] as? String ?: inv.paidAt,
+                                                devisSignatureUrl =
+                                                    data["devisSignatureUrl"] as? String
+                                                        ?: inv.devisSignatureUrl,
+                                                hamonSignatureUrl =
+                                                    data["hamonSignatureUrl"] as? String
+                                                        ?: inv.hamonSignatureUrl,
+                                                hamonRequested =
+                                                    (data["hamonRequested"] as? Boolean)
+                                                        ?: inv.hamonRequested,
+                                                updatedAt = Instant.now().toString(),
+                                            )
+                                        }
                                     }
                                 }
                                 pendingUpdateDao.markAsSynced(result.operationId)
@@ -451,35 +548,19 @@ class PushRepository @Inject constructor(
                     }
                     pendingUpdateDao.deleteSynced()
                 } else {
-                    android.util.Log.e(
+                    android.util.Log.w(
                         LOG_TAG,
-                        "push partiel ou rejet/conflit — le client renvoie tout de même Success mais rien n’est marqué comme synchronisé",
+                        "push partiel ou rejet/conflit — résolution auto prévue (pull forcé)",
                     )
-                    response.results
-                        .filter { it.status == "conflict" }
-                        .forEach { result ->
-                            if (result.operationId.startsWith("op-complete-")) {
-                                val interventionId = result.operationId
-                                    .removePrefix("op-complete-")
-                                interventionDao.markAsConflict(interventionId)
-                                _conflictEvents.emit(
-                                    ConflictEvent(
-                                        interventionId = interventionId,
-                                        conflictType = result.conflictType ?: "UNKNOWN",
-                                        message = result.message
-                                            ?: result.reason
-                                            ?: "Conflit détecté.",
-                                    )
-                                )
-                            }
-                        }
                 }
+
+                val conflictIds = applyAutoResolvableConflicts(response.results)
 
                 android.util.Log.i(
                     LOG_TAG,
-                    "push() terminé, retour Success (allOk=$allOk)",
+                    "push() terminé, retour Success (allOk=$allOk, conflicts=${conflictIds.size})",
                 )
-                PushResult.Success
+                PushResult.Success(conflictInterventionIds = conflictIds)
             } catch (e: Exception) {
                 android.util.Log.e(LOG_TAG, "push exception: ${e.javaClass.simpleName}: ${e.message}", e)
                 if (e is HttpException) {
@@ -660,5 +741,91 @@ class PushRepository @Inject constructor(
                 mapOf("cle" to p.cle, "resultat" to p.resultat)
             },
         )
+    }
+
+    /** Attache `clientKnownVersion` et simule les bumps serveur pour un batch ordonné. */
+    private suspend fun attachClientKnownVersions(
+        ops: List<PushOperationDto>,
+    ): List<PushOperationDto> {
+        val versionByIntervention = mutableMapOf<String, Int>()
+        return ops.map { op ->
+            if (op.type !in VERSIONED_PUSH_TYPES) return@map op
+            val interventionId = op.payload["interventionId"] as? String ?: return@map op
+            val version = versionByIntervention.getOrPut(interventionId) {
+                interventionDao.getInterventionByIdOnce(interventionId)?.version?.coerceAtLeast(1) ?: 1
+            }
+            versionByIntervention[interventionId] = version + 1
+            op.copy(clientKnownVersion = version)
+        }
+    }
+
+    private suspend fun applyAutoResolvableConflicts(results: List<PushResultDto>): Set<String> {
+        val ids = mutableSetOf<String>()
+        results.forEach { result ->
+            val interventionId = conflictInterventionId(result) ?: return@forEach
+            when {
+                result.status == "rejected" && result.reason == "IMMUTABLE" -> {
+                    interventionDao.setSyncStatus(interventionId, "CONFLICT_IMMUTABLE")
+                    interventionDao.markLocalChanges(interventionId, false)
+                    ids.add(interventionId)
+                    val attempts =
+                        interventionDao.getInterventionByIdOnce(interventionId)?.conflictResolveAttempts ?: 0
+                    re.melchior.saviomobile.observability.SavioSyncSentry.onConflictImmutable(
+                        interventionId,
+                        attempts,
+                    )
+                    android.util.Log.w(
+                        LOG_TAG,
+                        "CONFLICT_IMMUTABLE intervention=$interventionId",
+                    )
+                }
+
+                result.status == "conflict" &&
+                    (result.conflictType == "VERSION_MISMATCH" || result.reason == "VERSION_MISMATCH") -> {
+                    interventionDao.setSyncStatus(interventionId, "CONFLICT_VERSION")
+                    interventionDao.markLocalChanges(interventionId, false)
+                    ids.add(interventionId)
+                    val clientVersion =
+                        (result.serverData?.get("version") as? Number)?.toInt()
+                            ?: interventionDao.getInterventionByIdOnce(interventionId)?.version
+                    re.melchior.saviomobile.observability.SavioSyncSentry.onConflictVersion(
+                        interventionId,
+                        clientVersion,
+                    )
+                    android.util.Log.w(
+                        LOG_TAG,
+                        "CONFLICT_VERSION intervention=$interventionId",
+                    )
+                }
+
+                result.status == "conflict" -> {
+                    interventionDao.markAsConflict(interventionId)
+                    if (result.operationId.startsWith("op-complete-")) {
+                        _conflictEvents.emit(
+                            ConflictEvent(
+                                interventionId = interventionId,
+                                conflictType = result.conflictType ?: "UNKNOWN",
+                                message = result.message
+                                    ?: result.reason
+                                    ?: "Conflit détecté.",
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        return ids
+    }
+
+    private fun conflictInterventionId(result: PushResultDto): String? {
+        return when {
+            result.operationId.startsWith("op-complete-") ->
+                result.operationId.removePrefix("op-complete-")
+            result.operationId.startsWith("op-start-") ->
+                result.operationId.removePrefix("op-start-")
+            result.status == "rejected" || result.status == "conflict" ->
+                result.serverData?.get("interventionId") as? String
+            else -> result.serverData?.get("interventionId") as? String
+        }
     }
 }

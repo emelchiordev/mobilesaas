@@ -24,7 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioUi
 
 @Composable
 fun TourneeCardTablet(
@@ -36,14 +38,14 @@ fun TourneeCardTablet(
         when (intervention.status) {
             "completed" -> SavioPalette.Success
             "in_progress" -> SavioPalette.Accent
-            else -> SavioPalette.TextHint
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(
-                    if (isSelected) SavioPalette.PrimaryLight else SavioPalette.SurfaceCard,
+                    if (isSelected) SavioUi.ChipBackground else MaterialTheme.colorScheme.surface,
                 )
                 .clickable(onClick = onClick)
                 .alpha(if (intervention.isCompleted) 0.5f else 1f),
@@ -67,13 +69,14 @@ fun TourneeCardTablet(
                 Text(
                     text = intervention.time,
                     fontSize = 11.sp,
-                    color = SavioPalette.TextSecondary.copy(alpha = 0.65f),
+                    fontWeight = FontWeight.Medium,
+                    color = SavioUi.BusinessAccent,
                 )
                 if (intervention.status == "in_progress" && intervention.elapsedTime.isNotBlank()) {
                     Text(
                         text = intervention.elapsedTime,
                         fontSize = 10.sp,
-                        color = SavioPalette.Accent,
+                        color = SavioUi.BusinessAccent,
                         fontWeight = FontWeight.Medium,
                     )
                 }
@@ -82,12 +85,12 @@ fun TourneeCardTablet(
                 text = intervention.clientName,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = SavioPalette.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = intervention.address,
                 fontSize = 11.sp,
-                color = SavioPalette.TextSecondary.copy(alpha = 0.55f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -96,13 +99,13 @@ fun TourneeCardTablet(
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = SavioPalette.Accent,
+                tint = SavioUi.BusinessAccent,
                 modifier = Modifier.padding(end = 8.dp).size(16.dp),
             )
         }
     }
     HorizontalDivider(
         thickness = 0.5.dp,
-        color = SavioPalette.BorderDefault,
+        color = MaterialTheme.colorScheme.outline,
     )
 }

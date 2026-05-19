@@ -50,15 +50,15 @@ import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.ui.component.SavioEmptyState
+import re.melchior.saviomobile.ui.screen.invoice.InvoiceMobileStatus
+import re.melchior.saviomobile.ui.screen.invoice.technicianFieldBadge
+import re.melchior.saviomobile.ui.screen.invoice.mobileStatus
 import re.melchior.saviomobile.ui.component.SavioPhotosTabSkeleton
+import re.melchior.saviomobile.ui.theme.SavioInterventionColors
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.utils.equipmentIcon
-
-private val InterventionBlue = SavioUi.Blue
-private val DetailCardBackground = Color(0xFFF7F9FC)
-private val DetailChipBackground = Color(0xFFDDEAF8)
-private val EquipmentCardBorder = Color(0xFFDCE3EC)
 
 internal enum class EquipmentBadge {
     NONE,
@@ -91,8 +91,8 @@ fun InterventionDetailTab(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = DetailCardBackground,
-                border = BorderStroke(0.5.dp, Color(0xFFDCE3EC)),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
             ) {
                 Column {
                     Row(
@@ -105,7 +105,7 @@ fun InterventionDetailTab(
                         Icon(
                             Icons.Filled.CalendarToday,
                             contentDescription = null,
-                            tint = InterventionBlue,
+                            tint = SavioUi.BusinessAccent,
                             modifier = Modifier.size(20.dp),
                         )
                         Column {
@@ -113,6 +113,7 @@ fun InterventionDetailTab(
                                 text = formatInterventionDate(intervention.scheduledAt),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 text = formatInterventionTime(intervention.scheduledAt),
@@ -125,7 +126,7 @@ fun InterventionDetailTab(
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         thickness = 0.5.dp,
-                        color = Color(0xFFDCE3EC),
+                        color = MaterialTheme.colorScheme.outline,
                     )
 
                     intervention.customerId?.let { customerId ->
@@ -141,12 +142,12 @@ fun InterventionDetailTab(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(DetailChipBackground),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = "CM",
-                                    color = InterventionBlue,
+                                    color = SavioUi.BusinessAccent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -156,26 +157,27 @@ fun InterventionDetailTab(
                                     text = "${intervention.customerFirstName.orEmpty()} ${intervention.customerLastName.orEmpty()}".trim(),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 intervention.customerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
                                     Text(
                                         text = phone,
                                         fontSize = 12.sp,
-                                        color = InterventionBlue,
+                                        color = SavioUi.BusinessAccent,
                                     )
                                 }
                             }
                             Icon(
                                 imageVector = Icons.Filled.ChevronRight,
                                 contentDescription = "Fiche client",
-                                tint = InterventionBlue,
+                                tint = SavioUi.BusinessAccent,
                                 modifier = Modifier.size(20.dp),
                             )
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             thickness = 0.5.dp,
-                            color = Color(0xFFDCE3EC),
+                            color = MaterialTheme.colorScheme.outline,
                         )
                     }
 
@@ -189,7 +191,7 @@ fun InterventionDetailTab(
                         Icon(
                             Icons.Filled.LocationOn,
                             contentDescription = null,
-                            tint = InterventionBlue,
+                            tint = SavioUi.BusinessAccent,
                             modifier = Modifier.size(20.dp),
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -197,6 +199,7 @@ fun InterventionDetailTab(
                                 text = intervention.unitStreet,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 text = "${intervention.unitPostalCode} ${intervention.unitCity}",
@@ -222,7 +225,7 @@ fun InterventionDetailTab(
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             thickness = 0.5.dp,
-                            color = Color(0xFFDCE3EC),
+                            color = MaterialTheme.colorScheme.outline,
                         )
                         Row(
                             modifier = Modifier
@@ -234,7 +237,7 @@ fun InterventionDetailTab(
                             Icon(
                                 Icons.Filled.Description,
                                 contentDescription = null,
-                                tint = InterventionBlue,
+                                tint = SavioUi.BusinessAccent,
                                 modifier = Modifier.size(20.dp),
                             )
                             Column(modifier = Modifier.weight(1f)) {
@@ -242,6 +245,7 @@ fun InterventionDetailTab(
                                     text = "Contrat $type",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 intervention.contractRenewalDate?.let { date ->
                                     Text(
@@ -252,7 +256,7 @@ fun InterventionDetailTab(
                                 }
                             }
                             Surface(
-                                color = DetailChipBackground,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(20.dp),
                             ) {
                                 Text(
@@ -260,7 +264,7 @@ fun InterventionDetailTab(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = InterventionBlue,
+                                    color = SavioUi.BusinessAccent,
                                 )
                             }
                         }
@@ -270,7 +274,7 @@ fun InterventionDetailTab(
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             thickness = 0.5.dp,
-                            color = Color(0xFFDCE3EC),
+                            color = MaterialTheme.colorScheme.outline,
                         )
                         Row(
                             modifier = Modifier
@@ -282,13 +286,22 @@ fun InterventionDetailTab(
                             Icon(
                                 Icons.Filled.Notes,
                                 contentDescription = null,
-                                tint = InterventionBlue,
+                                tint = SavioUi.BusinessAccent,
                                 modifier = Modifier.size(20.dp),
                             )
-                            Text(
-                                text = notes,
-                                fontSize = 14.sp,
-                            )
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                color = SavioInterventionColors.NotesDispatcherBg,
+                            ) {
+                                Text(
+                                    text = notes,
+                                    fontSize = 14.sp,
+                                    color = SavioInterventionColors.NotesDispatcherText,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(10.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -315,8 +328,8 @@ fun InterventionEquipementsTab(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            color = SavioPalette.SurfaceCard,
-            border = BorderStroke(0.5.dp, EquipmentCardBorder),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
             shadowElevation = 0.dp,
         ) {
             Column {
@@ -331,7 +344,7 @@ fun InterventionEquipementsTab(
                         Icon(
                             imageVector = Icons.Filled.Build,
                             contentDescription = null,
-                            tint = InterventionBlue,
+                            tint = SavioUi.BusinessAccent,
                             modifier = Modifier.size(20.dp),
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -347,7 +360,7 @@ fun InterventionEquipementsTab(
                                 modifier = Modifier
                                     .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
                                     .clip(CircleShape)
-                                    .background(InterventionBlue),
+                                    .background(SavioUi.BusinessAccent),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -369,7 +382,7 @@ fun InterventionEquipementsTab(
                         Icon(
                             imageVector = Icons.Filled.Add,
                             contentDescription = "Ajouter un appareil",
-                            tint = InterventionBlue,
+                            tint = SavioUi.BusinessAccent,
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -379,7 +392,7 @@ fun InterventionEquipementsTab(
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         thickness = 0.5.dp,
-                        color = EquipmentCardBorder,
+                        color = MaterialTheme.colorScheme.outline,
                     )
                     SavioEmptyState(
                         icon = Icons.Outlined.VpnKey,
@@ -432,7 +445,7 @@ fun InterventionEquipementsTab(
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         thickness = 0.5.dp,
-                        color = EquipmentCardBorder,
+                        color = MaterialTheme.colorScheme.outline,
                     )
 
                     val hybrideGroups = computeHybrideGroups(
@@ -540,8 +553,8 @@ fun InterventionFactureTab(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            color = SavioPalette.SurfaceCard,
-            border = BorderStroke(0.5.dp, EquipmentCardBorder),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
             shadowElevation = 0.dp,
         ) {
             Column {
@@ -554,7 +567,7 @@ fun InterventionFactureTab(
                     Icon(
                         imageVector = Icons.Filled.Receipt,
                         contentDescription = null,
-                        tint = InterventionBlue,
+                                tint = SavioUi.BusinessAccent,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -569,10 +582,20 @@ fun InterventionFactureTab(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     thickness = 0.5.dp,
-                    color = EquipmentCardBorder,
+                    color = MaterialTheme.colorScheme.outline,
                 )
 
                 if (invoice != null) {
+                    val mobileStatus = invoice.mobileStatus()
+                    val fieldBadge = technicianFieldBadge(mobileStatus)
+                    val summaryText =
+                        when {
+                            uiState.invoiceLineCount == 0 -> "Aucune ligne"
+                            else ->
+                                "${uiState.invoiceLineCount} ligne(s) — %.2f € TTC".format(
+                                    invoice.totalTtc,
+                                )
+                        }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -583,53 +606,46 @@ fun InterventionFactureTab(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                invoice.number?.takeIf { it.isNotBlank() }?.let { num ->
+                                    Text(
+                                        text = num,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                                fieldBadge?.let { badge ->
+                                    Surface(
+                                        color = badge.background,
+                                        shape = RoundedCornerShape(20.dp),
+                                    ) {
+                                        Text(
+                                            text = badge.label,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = badge.foreground,
+                                        )
+                                    }
+                                }
+                            }
                             Text(
-                                text = invoice.number ?: "Brouillon",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = "%.2f € TTC".format(invoice.totalTtc),
+                                text = summaryText,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            val (bg, fg, label) = when (invoice.status) {
-                                "draft" -> Triple(0xFFF1EFE8, 0xFF444441, "Brouillon")
-                                "pending_validation" -> Triple(0xFFFAEEDA, 0xFF633806, "En validation")
-                                "validated" -> Triple(0xFFE6F1FB, 0xFF0C447C, "Validée")
-                                "paid" -> Triple(0xFFEAF3DE, 0xFF27500A, "Payée")
-                                else -> Triple(0xFFF1EFE8, 0xFF444441, invoice.status)
-                            }
-                            Surface(
-                                color = Color(bg),
-                                shape = RoundedCornerShape(20.dp),
-                                shadowElevation = 0.dp,
-                            ) {
-                                Text(
-                                    text = label,
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 4.dp,
-                                    ),
-                                    fontSize = 11.sp,
-                                    color = Color(fg),
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Filled.ChevronRight,
-                                contentDescription = null,
-                                tint = InterventionBlue,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Filled.ChevronRight,
+                            contentDescription = null,
+                            tint = SavioUi.BusinessAccent,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 } else {
                     Column(
@@ -770,10 +786,10 @@ internal fun EquipmentRowItem(
                 .width(if (isChild) 40.dp else 52.dp)
                 .height(if (isChild) 28.dp else 36.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(SavioPalette.SurfaceCard)
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = 0.5.dp,
-                    color = SavioPalette.BorderDefault,
+                    color = MaterialTheme.colorScheme.outline,
                     shape = RoundedCornerShape(6.dp),
                 ),
             contentAlignment = Alignment.Center,
@@ -860,7 +876,7 @@ internal fun EquipmentRowItem(
             }
             equipment.typeCode?.let { code ->
                 Text(
-                    text = code,
+                    text = formatEquipmentTypeLabel(code),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

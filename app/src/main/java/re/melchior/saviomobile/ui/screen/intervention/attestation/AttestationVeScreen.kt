@@ -37,8 +37,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,12 +58,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.AttestationVeControlPoints
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -83,19 +84,12 @@ fun AttestationVeScreen(
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                viewModel.save()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.save()
-        }
+    fun leave() {
+        viewModel.saveIfChanged()
+        onBack()
     }
+
+    BackHandler { leave() }
 
     val typeLabel = when (type) {
         "GAZ" -> "Chaudière Gaz"
@@ -113,7 +107,7 @@ fun AttestationVeScreen(
             TopAppBar(
                 title = { Text("Attestation $typeLabel") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = ::leave) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
@@ -121,12 +115,7 @@ fun AttestationVeScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
                 actions = {
                     if (nonValidatedCount > 0) {
                         Surface(
@@ -173,15 +162,24 @@ fun AttestationVeScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(selectedTabIndex = selectedTab) {
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = savioTabUnselectedColor(),
+                indicator = { positions -> SavioInterventionTabIndicator(positions, selectedTab) },
+            ) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
+                    selectedContentColor = savioTabSelectedColor(),
+                    unselectedContentColor = savioTabUnselectedColor(),
                     text = { Text("Installation") },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
+                    selectedContentColor = savioTabSelectedColor(),
+                    unselectedContentColor = savioTabUnselectedColor(),
                     text = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -784,13 +782,13 @@ fun AttestationPointsControleTab(
                             text = point.description,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SavioPalette.Accent,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
                         )
                         HorizontalDivider(
-                            color = SavioPalette.Accent,
+                            color = MaterialTheme.colorScheme.primary,
                             thickness = 1.dp,
                         )
                     }
@@ -948,7 +946,7 @@ fun AttestationSectionTitle(
         text = title,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
-        color = SavioPalette.Accent,
+        color = MaterialTheme.colorScheme.primary,
         modifier = modifier.padding(vertical = 4.dp),
     )
 }

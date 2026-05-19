@@ -26,11 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,11 +62,17 @@ import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.interventionStatusBadge
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarContentColor
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import android.util.Log
 import kotlinx.coroutines.launch
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -89,8 +91,13 @@ fun TourneeScreen(
     onResumeIntervention: (String) -> Unit = {},
     onLogout: () -> Unit = {},
     onCreateClient: () -> Unit = {},
+    onNewIntervention: () -> Unit = {},
     onOfflineIntervention: () -> Unit = {},
     onPendingOfflineList: () -> Unit = {},
+    pendingSnackbar: String? = null,
+    onConsumePendingSnackbar: () -> Unit = {},
+    pendingFocusDateMillis: Long? = null,
+    onConsumePendingFocusDate: () -> Unit = {},
     viewModel: TourneeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,25 +105,43 @@ fun TourneeScreen(
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val pendingOfflineInterventionCount by viewModel.pendingOfflineInterventionCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
+    val pendingCreating by viewModel.pendingCreatingForDate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    var showPendingCreationSheet by remember { mutableStateOf(false) }
     val isOnline = rememberIsNetworkOnline()
     var fabMenuExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(uiState.errorMessage, interventions.isNotEmpty()) {
+    LaunchedEffect(pendingSnackbar, pendingFocusDateMillis) {
+        var focusedDate = false
+        pendingFocusDateMillis?.let { millis ->
+            val date =
+                Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+            viewModel.selectDate(date)
+            onConsumePendingFocusDate()
+            focusedDate = true
+        }
+        pendingSnackbar?.let { msg ->
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+            onConsumePendingSnackbar()
+            if (!focusedDate) {
+                viewModel.pull(force = true)
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { msg ->
-            if (interventions.isNotEmpty()) {
-                val result =
-                    snackbarHostState.showSnackbar(
-                        message = msg,
-                        actionLabel = "Réessayer",
-                        duration = SnackbarDuration.Short,
-                    )
-                viewModel.dismissError()
-                if (result == SnackbarResult.ActionPerformed) {
-                    viewModel.pull(force = true)
-                }
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = msg,
+                    actionLabel = "Réessayer",
+                    duration = SnackbarDuration.Short,
+                )
+            viewModel.dismissError()
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.pull(force = true)
             }
         }
     }
@@ -129,16 +154,12 @@ fun TourneeScreen(
                 title = {
                     Text(
                         "Ma tournée",
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = savioTopAppBarContentColor(),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Medium,
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
                 actions = {
                     IconButton(
                         onClick = onLogout,
@@ -147,7 +168,7 @@ fun TourneeScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Logout,
                             contentDescription = "Se déconnecter",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            tint = savioTopAppBarContentColor(),
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
@@ -179,7 +200,7 @@ fun TourneeScreen(
                             Icon(
                                 imageVector = Icons.Filled.Sync,
                                 contentDescription = "Sync en attente",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = savioTopAppBarContentColor(),
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -192,13 +213,13 @@ fun TourneeScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = savioTopAppBarContentColor(),
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.LibraryBooks,
                                 contentDescription = "Synchroniser le catalogue",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = savioTopAppBarContentColor(),
                             )
                         }
                     }
@@ -211,13 +232,13 @@ fun TourneeScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = savioTopAppBarContentColor(),
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
                                 contentDescription = "Rafraîchir",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = savioTopAppBarContentColor(),
                             )
                         }
                     }
@@ -225,68 +246,22 @@ fun TourneeScreen(
             )
         },
         floatingActionButton = {
-            Box {
-                BadgedBox(
-                    badge = {
-                        if (pendingOfflineInterventionCount > 0) {
-                            Badge(
-                                containerColor = SavioPalette.Accent,
-                                contentColor = SavioPalette.OnAccent,
-                            ) {
-                                Text(pendingOfflineInterventionCount.toString())
-                            }
-                        }
-                    },
-                ) {
-                    FloatingActionButton(
-                        onClick = { fabMenuExpanded = true },
-                        containerColor = SavioPalette.Accent,
-                        contentColor = SavioPalette.OnAccent,
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Actions")
-                    }
-                }
-                DropdownMenu(
-                    expanded = fabMenuExpanded,
-                    onDismissRequest = { fabMenuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Nouveau client") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            onCreateClient()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Nouvelle intervention") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            if (isOnline) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        "Création connectée : prochainement",
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
-                            } else {
-                                onOfflineIntervention()
-                            }
-                        },
-                    )
-                }
-            }
+            TourneeFieldProFab(
+                expanded = fabMenuExpanded,
+                onExpandedChange = { fabMenuExpanded = it },
+                pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+            )
         },
     )  { padding ->
         val pullRefreshState = rememberPullToRefreshState()
 
-        PullToRefreshBox(
-            isRefreshing = uiState.isSyncing,
-            onRefresh = { viewModel.pull(force = true) },
-            state = pullRefreshState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            PullToRefreshBox(
+                isRefreshing = uiState.isSyncing,
+                onRefresh = { viewModel.pull(force = true) },
+                state = pullRefreshState,
+                modifier = Modifier.fillMaxSize(),
+            ) {
           //  var dragAccumulator = remember { 0f }
 
             Column(
@@ -328,12 +303,13 @@ fun TourneeScreen(
                 // Sélecteur de date
                 DateSelector(
                     selectedDate = uiState.selectedDate,
+                    isRefreshing = uiState.isDatePullRefreshing,
                     onPreviousDay = {
                         viewModel.selectDate(uiState.selectedDate.minusDays(1))
                     },
                     onNextDay = {
                         viewModel.selectDate(uiState.selectedDate.plusDays(1))
-                    }
+                    },
                 )
 
                 resumeCandidate?.let { entity ->
@@ -347,9 +323,11 @@ fun TourneeScreen(
                 }
 
                 // Liste interventions
+                val hasListContent = interventions.isNotEmpty() || pendingCreating.isNotEmpty()
+
                 when {
                     !uiState.isSyncing &&
-                        interventions.isEmpty() &&
+                        !hasListContent &&
                         uiState.errorMessage != null -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -363,7 +341,7 @@ fun TourneeScreen(
                         uiState.errorMessage == null -> {
                         SavioTourneeListSkeleton(Modifier.fillMaxSize())
                     }
-                    interventions.isEmpty() &&
+                    !hasListContent &&
                         !uiState.isSyncing &&
                         uiState.errorMessage == null -> {
                         Box(
@@ -394,11 +372,37 @@ fun TourneeScreen(
                                 onClick = { onInterventionClick(intervention.id) }
                             )
                         }
+                        items(
+                            items = pendingCreating,
+                            key = { it.localId }
+                        ) { pending ->
+                            PendingCreatingInterventionCard(
+                                pending = pending,
+                                onClick = { showPendingCreationSheet = true },
+                            )
+                        }
                         item { Spacer(modifier = Modifier.height(8.dp)) }
                     }
                     }
                 }
             }
+        }
+            if (showPendingCreationSheet) {
+                PendingCreationInfoSheet(onDismiss = { showPendingCreationSheet = false })
+            }
+            TourneeFieldProFabMenuOverlay(
+                expanded = fabMenuExpanded,
+                onDismiss = { fabMenuExpanded = false },
+                onCreateClient = {
+                    fabMenuExpanded = false
+                    Log.d("FAB", "Nouveau client cliqué")
+                    onCreateClient()
+                },
+                onNewIntervention = {
+                    fabMenuExpanded = false
+                    onNewIntervention()
+                },
+            )
         }
     }
 
@@ -407,8 +411,9 @@ fun TourneeScreen(
 @Composable
 private fun DateSelector(
     selectedDate: LocalDate,
+    isRefreshing: Boolean,
     onPreviousDay: () -> Unit,
-    onNextDay: () -> Unit
+    onNextDay: () -> Unit,
 ) {
     val isToday = selectedDate == LocalDate.now()
     val formatter = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
@@ -424,7 +429,7 @@ private fun DateSelector(
             Icon(
                 Icons.Filled.ChevronLeft,
                 contentDescription = "Jour précédent",
-                tint = SavioUi.Blue,
+                tint = SavioUi.BusinessAccent,
             )
         }
 
@@ -433,7 +438,7 @@ private fun DateSelector(
                 Text(
                     text = "Aujourd'hui",
                     fontSize = 13.sp,
-                    color = SavioUi.Blue,
+                    color = SavioUi.BusinessAccent,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -443,13 +448,21 @@ private fun DateSelector(
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            if (isRefreshing) {
+                Spacer(modifier = Modifier.height(4.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = SavioUi.BusinessAccent,
+                )
+            }
         }
 
         IconButton(onClick = onNextDay) {
             Icon(
                 Icons.Filled.ChevronRight,
                 contentDescription = "Jour suivant",
-                tint = SavioUi.Blue,
+                tint = SavioUi.BusinessAccent,
             )
         }
     }
@@ -460,37 +473,18 @@ private fun InterventionCard(
     intervention: InterventionEntity,
     onClick: () -> Unit
 ) {
-    val (statusBadgeBg, statusBadgeText) = when {
-        intervention.status == "scheduled" ->
-            SavioUi.PlanifListBadgeBg to SavioUi.PlanifListBadgeFg
-        intervention.syncStatus == "CONFLICT" ->
-            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-            SavioPalette.SuccessDark to SavioPalette.Success
-        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-            SavioPalette.WarningTintBg to SavioPalette.Accent
-        intervention.syncStatus == "COMPLETED" ->
-            SavioPalette.WarningTintBg to SavioPalette.Accent
-        else ->
-            SavioPalette.SurfaceElevated to SavioPalette.TextSecondary
-    }
-
-    val statusText = when {
-        intervention.syncStatus == "CONFLICT" -> "Conflit"
-        intervention.syncStatus == "COMPLETED" -> "En attente"
-        intervention.syncStatus == "IN_PROGRESS" -> "En cours"
-        intervention.syncStatus == "SYNCED" && intervention.status == "completed" -> "Terminée"
-        intervention.status == "pending_validation" -> "À valider"
-        intervention.status == "scheduled" -> "Planifiée"
-        else -> intervention.status
-    }
+    val statusBadge =
+        interventionStatusBadge(
+            status = intervention.status,
+            syncStatus = intervention.syncStatus,
+        )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        color = SavioPalette.SurfaceCard,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, SavioUi.CardBorder),
         shadowElevation = 0.dp,
     ) {
@@ -511,7 +505,7 @@ private fun InterventionCard(
                             .substring(0, 5),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = SavioUi.Blue,
+                        color = SavioUi.BusinessAccent,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
@@ -523,7 +517,7 @@ private fun InterventionCard(
                         Text(
                             text = intervention.typeLabel,
                             fontSize = 11.sp,
-                            color = SavioUi.Blue,
+                            color = SavioUi.BusinessAccent,
                             fontWeight = FontWeight.Medium,
                         )
                     }
@@ -532,22 +526,30 @@ private fun InterventionCard(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(statusBadgeBg)
+                        .background(statusBadge.background)
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        text = statusText,
+                        text = statusBadge.label,
                         fontSize = 11.sp,
-                        color = statusBadgeText,
+                        color = statusBadge.foreground,
                         fontWeight = FontWeight.Medium,
                     )
                 }
             }
 
-            if (intervention.syncStatus == "CONFLICT") {
+            intervention.conflictBannerText()?.let { banner ->
                 Spacer(modifier = Modifier.height(8.dp))
+                val bannerColors =
+                    when (intervention.syncStatus) {
+                        "CONFLICT_VERSION" ->
+                            SavioUi.StatusTintBg to SavioPalette.Accent
+                        else ->
+                            MaterialTheme.colorScheme.errorContainer to
+                                MaterialTheme.colorScheme.onErrorContainer
+                    }
                 Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
+                    color = bannerColors.first,
                     shape = RoundedCornerShape(8.dp),
                     shadowElevation = 0.dp,
                 ) {
@@ -560,12 +562,12 @@ private fun InterventionCard(
                             Icons.Filled.Warning,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            tint = bannerColors.second,
                         )
                         Text(
-                            "Conflit",
+                            banner,
                             fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            color = bannerColors.second,
                             fontWeight = FontWeight.Medium,
                         )
                     }

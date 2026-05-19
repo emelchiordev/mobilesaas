@@ -17,8 +17,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,9 +42,12 @@ fun MeasureScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    DisposableEffect(Unit) {
-        onDispose { viewModel.save() }
+    fun leave() {
+        viewModel.saveIfChanged()
+        onBack()
     }
+
+    BackHandler { leave() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -48,12 +55,7 @@ fun MeasureScreen(
             TopAppBar(
                 title = { Text("Mesures") },
                 navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            viewModel.save()
-                            onBack()
-                        },
-                    ) {
+                    IconButton(onClick = ::leave) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
@@ -61,11 +63,7 @@ fun MeasureScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                ),
+                colors = savioTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -77,6 +75,9 @@ fun MeasureScreen(
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 edgePadding = 0.dp,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = savioTabUnselectedColor(),
+                indicator = { positions -> SavioInterventionTabIndicator(positions, selectedTab) },
             ) {
                 val tabs = listOf(
                     "Essentiel",
@@ -92,6 +93,8 @@ fun MeasureScreen(
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
+                        selectedContentColor = savioTabSelectedColor(),
+                        unselectedContentColor = savioTabUnselectedColor(),
                         text = {
                             Text(
                                 title,

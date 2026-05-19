@@ -706,6 +706,55 @@ val MIGRATION_37_38 = object : Migration(37, 38) {
     }
 }
 
+val MIGRATION_39_40 = object : Migration(39, 40) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE interventions ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+        )
+    }
+}
+
+val MIGRATION_41_42 = object : Migration(41, 42) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE interventions ADD COLUMN hasLocalChanges INTEGER NOT NULL DEFAULT 0",
+        )
+        database.execSQL(
+            "ALTER TABLE interventions ADD COLUMN conflictResolveAttempts INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+}
+
+val MIGRATION_40_41 = object : Migration(40, 41) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS pending_clients (
+                localId TEXT NOT NULL PRIMARY KEY,
+                firstName TEXT NOT NULL,
+                lastName TEXT NOT NULL,
+                civility TEXT,
+                phone TEXT,
+                email TEXT,
+                address TEXT NOT NULL,
+                addressComplement TEXT,
+                city TEXT NOT NULL,
+                zipCode TEXT NOT NULL,
+                lat REAL,
+                lng REAL,
+                unitType TEXT NOT NULL,
+                unitCategory TEXT,
+                floor TEXT,
+                syncStatus TEXT NOT NULL DEFAULT 'PENDING',
+                remoteId TEXT,
+                remoteUnitId TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
 val MIGRATION_38_39 = object : Migration(38, 39) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL(

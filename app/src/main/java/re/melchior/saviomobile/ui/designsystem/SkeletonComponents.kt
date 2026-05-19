@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.designsystem
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,8 +29,8 @@ fun SkeletonCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(SavioDimens.RadiusLG),
-        color = SavioPalette.BackgroundCard,
-        border = BorderStroke(SavioDimens.BorderThin, SavioPalette.BorderDefault),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(SavioDimens.BorderThin, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {

@@ -1,5 +1,7 @@
 package re.melchior.saviomobile.ui.component
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Snackbar
@@ -48,7 +50,7 @@ fun SavioSnackbarHost(
             val contentColor =
                 when {
                     isSuccess -> SavioPalette.Success
-                    else -> SavioPalette.TextPrimary
+                    else -> MaterialTheme.colorScheme.onSurface
                 }
             Snackbar(
                 snackbarData = data,
@@ -56,7 +58,7 @@ fun SavioSnackbarHost(
                 containerColor = containerColor,
                 contentColor = contentColor,
                 actionColor = SavioPalette.Accent,
-                dismissActionContentColor = SavioPalette.TextPrimary.copy(alpha = 0.8f),
+                dismissActionContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             )
         },
     )

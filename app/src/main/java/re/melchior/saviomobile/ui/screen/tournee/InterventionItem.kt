@@ -14,7 +14,12 @@ data class InterventionItem(
     val typeLabel: String,
     val isCompleted: Boolean,
     val elapsedTime: String,
+    val conflictResolveAttempts: Int = 0,
+    val conflictBannerText: String? = null,
 )
+
+fun InterventionEntity.displayTypeLabel(): String =
+    actualTypeLabel?.takeIf { it.isNotBlank() } ?: typeLabel
 
 fun InterventionEntity.toInterventionItem(): InterventionItem {
     val time = scheduledAt.substringAfter("T").take(5)
@@ -42,7 +47,20 @@ fun InterventionEntity.toInterventionItem(): InterventionItem {
         typeLabel = typeLabel,
         isCompleted = isCompleted,
         elapsedTime = elapsed,
+        conflictResolveAttempts = conflictResolveAttempts,
+        conflictBannerText = conflictBannerText(),
     )
+}
+
+internal fun InterventionEntity.conflictBannerText(): String? {
+    val stale = conflictResolveAttempts >= 3
+    return when (syncStatus) {
+        "CONFLICT_IMMUTABLE" ->
+            if (stale) "Contactez votre responsable" else "Clôturée sur un autre appareil"
+        "CONFLICT_VERSION" ->
+            if (stale) "Contactez votre responsable" else "Synchronisation en cours..."
+        else -> null
+    }
 }
 
 private fun formatElapsed(startedAt: String?): String {

@@ -4,11 +4,14 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import re.melchior.saviomobile.data.remote.api.CustomerSearchApi
 import re.melchior.saviomobile.data.remote.api.DocumentApi
+import re.melchior.saviomobile.data.remote.api.InterventionApi
 import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.remote.api.InvoiceApi
 import re.melchior.saviomobile.data.remote.api.PushApi
 import re.melchior.saviomobile.data.remote.api.SyncApi
+import re.melchior.saviomobile.data.remote.api.TenantArticleApi
 import re.melchior.saviomobile.data.remote.api.TourneeApi
 import retrofit2.Retrofit
 import javax.inject.Singleton
@@ -46,4 +49,19 @@ object ApiModule {
     @Singleton
     fun provideInterventionPdfApi(retrofit: Retrofit): InterventionPdfApi =
         retrofit.create(InterventionPdfApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCustomerSearchApi(retrofit: Retrofit): CustomerSearchApi =
+        retrofit.create(CustomerSearchApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideInterventionApi(retrofit: Retrofit): InterventionApi =
+        retrofit.create(InterventionApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTenantArticleApi(retrofit: Retrofit): TenantArticleApi =
+        retrofit.create(TenantArticleApi::class.java)
 }

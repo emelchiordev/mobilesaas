@@ -89,6 +89,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.ui.component.SavioEmptyState
@@ -100,6 +101,13 @@ import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioType
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.SavioInterventionColors
+import re.melchior.saviomobile.ui.theme.interventionStatusBadge
+import re.melchior.saviomobile.ui.theme.savioNavColor
+import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
+import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarContentColor
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 import java.io.File
 import java.util.Locale
@@ -128,32 +136,27 @@ fun InterventionDetailScreen(
     }
 
     Scaffold(
-        containerColor = SavioUi.PageBackground,
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (!embeddedInMasterDetail) {
                 TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
+                    colors = savioTopAppBarColors(),
                     title = {
                         Column {
                             Text(
-                                text = "Dépannage",
+                                text = uiState.intervention?.displayTypeLabel() ?: "Intervention",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = savioTopAppBarContentColor(),
                             )
                             uiState.intervention?.let {
                                 Text(
                                     text = it.scheduledAt.substringAfter("T").substring(0, 5),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onBackground,
+                                    color = savioTopAppBarContentColor(),
                                 )
                             }
                         }
@@ -163,7 +166,7 @@ fun InterventionDetailScreen(
                             Icon(
                                 Icons.Filled.ArrowBack,
                                 contentDescription = "Retour",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = savioTopAppBarContentColor(),
                             )
                         }
                     },
@@ -195,31 +198,16 @@ fun InterventionDetailScreen(
                                     )
                                 }
                             } else {
-                                val label = when {
-                                    sync == "COMPLETED" -> "En attente"
-                                    sync == "SYNCED" && st == "completed" -> "Terminée"
-                                    st == "pending_validation" -> "À valider"
-                                    sync == "IN_PROGRESS" || st == "in_progress" -> "En cours"
-                                    st == "scheduled" -> "Planifiée"
-                                    else -> intervention.status
-                                }
-                                val dotColor = when {
-                                    st == "pending_validation" -> Color(0xFFE65100)
-                                    else -> SavioUi.Blue
-                                }
-                                val bgColor = when {
-                                    st == "pending_validation" -> SavioUi.PlanifListBadgeBg
-                                    else -> SavioUi.ChipBackground
-                                }
-                                val fgColor = when {
-                                    st == "pending_validation" -> SavioUi.PlanifListBadgeFg
-                                    else -> SavioUi.Blue
-                                }
+                                val badge =
+                                    interventionStatusBadge(
+                                        status = st,
+                                        syncStatus = sync,
+                                    )
                                 Row(
                                     modifier = Modifier
                                         .padding(end = 12.dp)
                                         .clip(RoundedCornerShape(20.dp))
-                                        .background(bgColor)
+                                        .background(badge.background)
                                         .padding(horizontal = 10.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -227,13 +215,13 @@ fun InterventionDetailScreen(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(dotColor),
+                                            .background(badge.foreground),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = label,
+                                        text = badge.label,
                                         fontSize = 12.sp,
-                                        color = fgColor,
+                                        color = badge.foreground,
                                         fontWeight = FontWeight.Medium,
                                     )
                                 }
@@ -262,8 +250,8 @@ fun InterventionDetailScreen(
                                     .fillMaxWidth()
                                     .height(52.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = SavioPalette.Accent,
-                                    contentColor = SavioPalette.OnAccent,
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
                                 ),
                                 shape = RoundedCornerShape(28.dp),
                             ) {
@@ -271,7 +259,7 @@ fun InterventionDetailScreen(
                                     imageVector = Icons.Filled.PlayArrow,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = SavioPalette.OnAccent,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
@@ -323,7 +311,7 @@ fun InterventionDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .background(SavioUi.PageBackground),
+                        .background(MaterialTheme.colorScheme.background),
                 ) {
                     val actionable = intervention.status in listOf("scheduled", "in_progress")
                     val pagerModifier =
@@ -333,7 +321,7 @@ fun InterventionDetailScreen(
                     if (intervention.status == "pending_validation") {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFFFEF3C7)
+                            color = SavioInterventionColors.ValidationBg,
                         ) {
                             Row(
                                 modifier = Modifier
@@ -345,13 +333,13 @@ fun InterventionDetailScreen(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFFD97706))
+                                        .background(SavioInterventionColors.ValidationFg)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "En attente de validation par le dispatcher",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF92400E),
+                                    color = SavioInterventionColors.ValidationFg,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -360,8 +348,8 @@ fun InterventionDetailScreen(
 
                     TabRow(
                         selectedTabIndex = pagerState.currentPage,
-                        containerColor = SavioUi.PageBackground,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = savioTabUnselectedColor(),
                         divider = {},
                         indicator = { tabPositions ->
                             val i = pagerState.currentPage
@@ -369,7 +357,7 @@ fun InterventionDetailScreen(
                                 TabRowDefaults.SecondaryIndicator(
                                     modifier = Modifier.tabIndicatorOffset(tabPositions[i]),
                                     height = 3.dp,
-                                    color = SavioUi.Blue,
+                                    color = savioTabSelectedColor(),
                                 )
                             }
                         },
@@ -379,8 +367,8 @@ fun InterventionDetailScreen(
                             Tab(
                                 selected = selected,
                                 onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                                selectedContentColor = SavioUi.Blue,
-                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                selectedContentColor = savioTabSelectedColor(),
+                                unselectedContentColor = savioTabUnselectedColor(),
                                 text = {
                                     Text(
                                         text = tab.label,
@@ -491,7 +479,7 @@ private fun InterventionDetailEmbeddedFooter(
         if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention"
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = SavioPalette.SurfaceCard,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp,
         tonalElevation = 1.dp,
     ) {
@@ -508,12 +496,12 @@ private fun InterventionDetailEmbeddedFooter(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
-                border = BorderStroke(1.dp, SavioPalette.Accent),
+                border = BorderStroke(1.dp, SavioUi.BusinessAccent),
                 shape = RoundedCornerShape(10.dp),
             ) {
                 Text(
                     text = "Mettre en pause",
-                    color = SavioPalette.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
@@ -523,7 +511,8 @@ private fun InterventionDetailEmbeddedFooter(
                     .weight(1f)
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SavioPalette.Accent,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 shape = RoundedCornerShape(10.dp),
             ) {
@@ -575,27 +564,16 @@ private fun SyncStatusCard(intervention: InterventionEntity) {
 
 @Composable
 private fun StatusBadge(intervention: InterventionEntity, modifier: Modifier = Modifier) {
-    val (statusColor, statusLabel) = when {
-        intervention.syncStatus == "CONFLICT" ->
-            Pair(MaterialTheme.colorScheme.error, "Conflit")
-        intervention.syncStatus == "COMPLETED" ->
-            Pair(SavioPalette.Accent, "Terminée")
-        intervention.syncStatus == "SYNCED" && intervention.status == "completed" ->
-            Pair(SavioPalette.Success, "Terminée")
-        intervention.status == "pending_validation" ->        // ← ajouté
-            Pair(Color(0xFFD97706), "À valider")              // ← ajouté
-        intervention.syncStatus == "IN_PROGRESS" || intervention.status == "in_progress" ->
-            Pair(MaterialTheme.colorScheme.tertiary, "En cours")
-        intervention.status == "scheduled" ->
-            Pair(MaterialTheme.colorScheme.primary, "Planifiée")
-        else ->
-            Pair(MaterialTheme.colorScheme.onSurfaceVariant, intervention.status)
-    }
+    val badge =
+        interventionStatusBadge(
+            status = intervention.status,
+            syncStatus = intervention.syncStatus,
+        )
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = statusColor.copy(alpha = 0.08f)
+        color = badge.background,
     ) {
         Row(
             modifier = Modifier
@@ -607,13 +585,13 @@ private fun StatusBadge(intervention: InterventionEntity, modifier: Modifier = M
                 modifier = Modifier
                     .size(10.dp)
                     .clip(CircleShape)
-                    .background(statusColor)
+                    .background(badge.foreground)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = statusLabel,
+                text = badge.label,
                 style = MaterialTheme.typography.labelLarge,
-                color = statusColor,
+                color = badge.foreground,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.weight(1f))
@@ -652,9 +630,9 @@ private fun DetailPage(
         shape = RoundedCornerShape(14.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = Color(0xFF1C2030),
+                containerColor = MaterialTheme.colorScheme.surface,
             ),
-        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column {
@@ -667,7 +645,7 @@ private fun DetailPage(
                 Icon(
                     imageVector = Icons.Filled.Build,
                     contentDescription = null,
-                    tint = SavioUi.Blue,
+                    tint = SavioUi.BusinessAccent,
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -689,7 +667,7 @@ private fun DetailPage(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     thickness = 0.5.dp,
-                    color = SavioUi.CardBorder,
+                    color = MaterialTheme.colorScheme.outline,
                 )
                 Row(
                     modifier = Modifier
@@ -700,7 +678,7 @@ private fun DetailPage(
                     Icon(
                         imageVector = Icons.Filled.Info,
                         contentDescription = null,
-                        tint = Color(0xFFD97706),
+                        tint = SavioUi.BusinessAccent,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -714,13 +692,13 @@ private fun DetailPage(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFFEF3C7),
+                            color = SavioInterventionColors.NotesDispatcherBg,
                             shadowElevation = 0.dp,
                         ) {
                             Text(
                                 text = intervention.notes,
                                 fontSize = 14.sp,
-                                color = Color(0xFF92400E),
+                                color = SavioInterventionColors.NotesDispatcherText,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(10.dp),
                             )
@@ -732,7 +710,7 @@ private fun DetailPage(
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = SavioUi.CardBorder,
+                color = MaterialTheme.colorScheme.outline,
             )
 
             val customerId = intervention.customerId
@@ -758,7 +736,7 @@ private fun DetailPage(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(SavioUi.ChipBackground),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -768,7 +746,7 @@ private fun DetailPage(
                         ),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = SavioUi.Blue,
+                        color = SavioUi.BusinessAccent,
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -789,7 +767,7 @@ private fun DetailPage(
                     Icon(
                         imageVector = Icons.Filled.ChevronRight,
                         contentDescription = "Fiche client",
-                        tint = SavioUi.Blue,
+                        tint = savioNavColor(),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -798,7 +776,7 @@ private fun DetailPage(
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = SavioUi.CardBorder,
+                color = MaterialTheme.colorScheme.outline,
             )
 
             Row(
@@ -810,7 +788,7 @@ private fun DetailPage(
                 Icon(
                     imageVector = Icons.Filled.LocationOn,
                     contentDescription = null,
-                    tint = SavioUi.Blue,
+                    tint = SavioUi.BusinessAccent,
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -847,13 +825,13 @@ private fun DetailPage(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(20.dp))
-                                        .background(SavioUi.ChipBackground)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
                                         text = "Étage $it",
                                         fontSize = 11.sp,
-                                        color = SavioUi.Blue,
+                                        color = SavioUi.BusinessAccent,
                                         fontWeight = FontWeight.Medium,
                                     )
                                 }
@@ -862,13 +840,13 @@ private fun DetailPage(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(20.dp))
-                                        .background(SavioUi.ChipBackground)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
                                         text = "Code $it",
                                         fontSize = 11.sp,
-                                        color = SavioUi.Blue,
+                                        color = SavioUi.BusinessAccent,
                                         fontWeight = FontWeight.Medium,
                                     )
                                 }
@@ -880,7 +858,7 @@ private fun DetailPage(
                     Icon(
                         imageVector = Icons.Filled.LocationOn,
                         contentDescription = "Naviguer",
-                        tint = SavioUi.Blue,
+                        tint = SavioUi.BusinessAccent,
                     )
                 }
             }
@@ -889,7 +867,7 @@ private fun DetailPage(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     thickness = 0.5.dp,
-                    color = SavioUi.CardBorder,
+                    color = MaterialTheme.colorScheme.outline,
                 )
                 Row(
                     modifier = Modifier
@@ -901,8 +879,8 @@ private fun DetailPage(
                         onClick = { onCallClick(phone) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        color = SavioUi.ChipBackground,
-                        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
                         shadowElevation = 0.dp,
                     ) {
                         Row(
@@ -916,14 +894,14 @@ private fun DetailPage(
                                 imageVector = Icons.Filled.Call,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
-                                tint = SavioUi.Blue,
+                                tint = SavioUi.BusinessAccent,
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = phone,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = SavioUi.Blue,
+                                color = savioNavColor(),
                             )
                         }
                     }
@@ -963,7 +941,7 @@ private fun RapportPage(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            color = SavioPalette.SurfaceCard
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column {
                 // Compte rendu
@@ -976,7 +954,7 @@ private fun RapportPage(
                     Icon(
                         imageVector = Icons.Filled.Assignment,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = SavioUi.BusinessAccent,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -1015,7 +993,7 @@ private fun RapportPage(
                         Icon(
                             imageVector = Icons.Filled.CheckCircle,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = SavioUi.BusinessAccent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -1048,7 +1026,7 @@ private fun RapportPage(
                     Icon(
                         imageVector = Icons.Filled.CameraAlt,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = SavioUi.BusinessAccent,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -1062,13 +1040,13 @@ private fun RapportPage(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+                                .background(SavioUi.BusinessAccent)
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = photos.size.toString(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
+                                color = SavioPalette.OnAccent,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1134,9 +1112,9 @@ private fun PlanningEquipmentsSection(
         shape = RoundedCornerShape(14.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = Color(0xFF1C2030),
+                containerColor = MaterialTheme.colorScheme.surface,
             ),
-        border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column {
@@ -1149,7 +1127,7 @@ private fun PlanningEquipmentsSection(
                 Icon(
                     imageVector = Icons.Filled.Build,
                     contentDescription = null,
-                    tint = SavioUi.Blue,
+                    tint = SavioUi.BusinessAccent,
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(10.dp))
@@ -1164,13 +1142,13 @@ private fun PlanningEquipmentsSection(
                     modifier = Modifier
                         .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
                         .clip(CircleShape)
-                        .background(SavioUi.Blue),
+                        .background(SavioUi.BusinessAccent),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = equipments.size.toString(),
                         fontSize = 11.sp,
-                        color = SavioPalette.OnAccent,
+                        color = Color.White,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                     )
@@ -1180,7 +1158,7 @@ private fun PlanningEquipmentsSection(
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 thickness = 0.5.dp,
-                color = SavioUi.CardBorder,
+                color = MaterialTheme.colorScheme.outline,
             )
 
             val allActive = equipments.filter { it.typeCode != "replaced" }
@@ -1267,7 +1245,7 @@ private fun HistoriquePage(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(SavioPalette.BackgroundPage),
+                .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center,
         ) {
             SavioEmptyState(
@@ -1282,7 +1260,7 @@ private fun HistoriquePage(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(SavioPalette.BackgroundPage)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = SavioDimens.SpaceLG, vertical = SavioDimens.SpaceSM),
         verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceSM),
     ) {
@@ -1306,13 +1284,13 @@ private fun HistoriqueItemCard(
         try {
             item.typeColor?.let { Color(android.graphics.Color.parseColor(it)) }
         } catch (e: Exception) { null }
-    } ?: SavioPalette.Primary
+    } ?: SavioUi.BusinessAccent
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(SavioDimens.RadiusLG),
-        color = SavioPalette.BackgroundCard,
-        border = BorderStroke(SavioDimens.BorderThin, SavioPalette.BorderDefault),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(SavioDimens.BorderThin, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {
@@ -1357,7 +1335,7 @@ private fun HistoriqueItemCard(
                     Text(
                         text = item.completedAt?.substring(0, 10) ?: item.scheduledAt.substring(0, 10),
                         style = SavioType.Label,
-                        color = SavioPalette.TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -1366,7 +1344,7 @@ private fun HistoriqueItemCard(
                         text = it,
                         style = SavioType.Label,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = SavioPalette.TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -1376,7 +1354,7 @@ private fun HistoriqueItemCard(
                     Text(
                         text = it,
                         style = SavioType.BodySmall,
-                        color = SavioPalette.TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -1385,7 +1363,7 @@ private fun HistoriqueItemCard(
                     Text(
                         text = report,
                         style = SavioType.BodySmall,
-                        color = SavioPalette.TextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 3,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
@@ -1432,13 +1410,13 @@ private fun HistoriqueItemCard(
                                 imageVector = Icons.Filled.CameraAlt,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = SavioPalette.TextSecondary
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.width(SavioDimens.SpaceXS))
                             Text(
                                 text = "$photoCount photo${if (photoCount > 1) "s" else ""} — réseau requis",
                                 style = SavioType.Label,
-                                color = SavioPalette.TextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
