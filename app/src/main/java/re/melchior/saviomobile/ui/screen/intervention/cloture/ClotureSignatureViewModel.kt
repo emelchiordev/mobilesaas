@@ -18,6 +18,7 @@ import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.remote.api.TourneeApi
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
+import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.PushRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.worker.SyncWorker
@@ -68,6 +69,7 @@ data class ClotureSignatureUiState(
 @HiltViewModel
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val invoiceRepository: InvoiceRepository,
     private val pushRepository: PushRepository,
     private val workManager: WorkManager,
     private val tourneeApi: TourneeApi,
@@ -241,6 +243,16 @@ class ClotureSignatureViewModel @Inject constructor(
                     techSignaturePath = techSigFile.absolutePath,
                     selectedTypes = selectedTypes
                 )
+
+                val intervention = syncRepository.getInterventionByIdOnce(interventionId)
+                val techId = settingsDao.getSettingsOnce()?.technicianId.orEmpty()
+                if (intervention != null) {
+                    invoiceRepository.prepareInvoicePushForClosure(
+                        interventionId = interventionId,
+                        unitId = intervention.unitId,
+                        technicianId = techId,
+                    )
+                }
 
                 android.util.Log.i(SAVIO_PUSH_LOG, "clôture: DB à jour → appel push()")
                 val pushResult = pushRepository.push()

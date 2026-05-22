@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -21,7 +20,6 @@ import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.ui.screen.intervention.cloture.DrawPoint
 import re.melchior.saviomobile.ui.util.encodeSignaturePointsToBase64
 import re.melchior.saviomobile.ui.util.saveSignatureBase64ToFile
-import re.melchior.saviomobile.worker.SyncWorker
 import javax.inject.Inject
 
 data class DevisSignatureUiState(
@@ -42,7 +40,6 @@ class DevisSignatureViewModel @Inject constructor(
     private val invoiceRepository: InvoiceRepository,
     private val syncRepository: SyncRepository,
     private val settingsDao: SettingsDao,
-    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -243,7 +240,6 @@ class DevisSignatureViewModel @Inject constructor(
                     preferredInvoiceId = invoiceId,
                 )
             result.onSuccess {
-                SyncWorker.enqueueNow(workManager)
                 _uiState.update { it.copy(isLoading = false, isCompleted = true) }
             }.onFailure { e ->
                 _uiState.update {

@@ -76,8 +76,8 @@ fun DevisSignatureScreen(
 
     LaunchedEffect(uiState.isCompleted) {
         if (uiState.isCompleted) {
-            snackbarHostState.showSnackbar("Devis signé — synchronisation en cours")
-            delay(1200)
+            snackbarHostState.showSnackbar("Devis enregistré — synchronisation en cours")
+            delay(800)
             onCompleted()
         }
     }

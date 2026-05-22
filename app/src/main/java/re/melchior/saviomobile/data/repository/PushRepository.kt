@@ -126,12 +126,37 @@ class PushRepository @Inject constructor(
             try {
                 android.util.Log.i(LOG_TAG, "push() — début (construction de la file)")
                 val pendingInterventions = interventionDao.getPendingSyncOnce()
+                val pushableInterventionIds = pendingInterventions.map { it.id }.toSet()
+
+                if (pushableInterventionIds.isEmpty()) {
+                    android.util.Log.i(
+                        LOG_TAG,
+                        "rien à pousser : aucune intervention clôturée (COMPLETED) en attente",
+                    )
+                    return PushResult.NothingToPush
+                }
+
                 val pendingUpdates = pendingUpdateDao.getPendingOnce()
-                val pendingOps = pendingOperationDao.getPending()
-                val dirtyColdMeasures = coldMeasureRepository.getDirty()
-                val dirtyMeasures = measureRepository.getDirty()
-                val dirtyPacMeasures = pacMeasureRepository.getDirty()
-                val dirtyAttestations = attestationVeRepository.getDirty()
+                val pendingOps =
+                    pendingOperationDao.getPending().filter { op ->
+                        op.interventionId in pushableInterventionIds
+                    }
+                val dirtyColdMeasures =
+                    coldMeasureRepository.getDirty().filter { measure ->
+                        measure.interventionId in pushableInterventionIds
+                    }
+                val dirtyMeasures =
+                    measureRepository.getDirty().filter { measure ->
+                        measure.interventionId in pushableInterventionIds
+                    }
+                val dirtyPacMeasures =
+                    pacMeasureRepository.getDirty().filter { measure ->
+                        measure.interventionId in pushableInterventionIds
+                    }
+                val dirtyAttestations =
+                    attestationVeRepository.getDirty().filter { attestation ->
+                        attestation.interventionId in pushableInterventionIds
+                    }
 
                 if (pendingInterventions.isEmpty() &&
                     pendingUpdates.isEmpty() &&

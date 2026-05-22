@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Button
@@ -106,7 +107,7 @@ fun InvoiceScreen(
     val showEmitAdjustmentsSheet by viewModel.showEmitAdjustmentsSheet.collectAsStateWithLifecycle()
     val emitSuccessMessage by viewModel.emitSuccessMessage.collectAsStateWithLifecycle()
     val paymentSuccessMessage by viewModel.paymentSuccessMessage.collectAsStateWithLifecycle()
-    val showMarkPaidConfirmDialog by viewModel.showMarkPaidConfirmDialog.collectAsStateWithLifecycle()
+    val devisResignRequiredMessage by viewModel.devisResignRequiredMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val mobileStatus = invoice?.mobileStatus()
     val isEditable = invoice?.isEditableMobile() == true
@@ -122,6 +123,7 @@ fun InvoiceScreen(
     var showAddFree by remember { mutableStateOf(false) }
     var showAddComment by remember { mutableStateOf(false) }
     var showAddPayment by remember { mutableStateOf(false) }
+    var paymentDialogSettleMode by remember { mutableStateOf(false) }
     val sortedLines = remember(lines) { lines.sortedBy { it.order } }
 
     LaunchedEffect(interventionId) {
@@ -139,6 +141,13 @@ fun InvoiceScreen(
         paymentSuccessMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.dismissPaymentSuccessMessage()
+        }
+    }
+
+    LaunchedEffect(devisResignRequiredMessage) {
+        devisResignRequiredMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+            viewModel.dismissDevisResignMessage()
         }
     }
 
@@ -282,10 +291,15 @@ fun InvoiceScreen(
                         }
                         if (remainingAmount > 0) {
                             Button(
-                                onClick = { viewModel.requestMarkAsPaid() },
+                                onClick = {
+                                    paymentDialogSettleMode = true
+                                    showAddPayment = true
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Marquer comme payée")
+                                Text(
+                                    "Solder la facture (%.2f €)".format(remainingAmount),
+                                )
                             }
                         }
                     }
@@ -508,7 +522,12 @@ fun InvoiceScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 if (showPaymentsEditable) {
-                                    TextButton(onClick = { showAddPayment = true }) {
+                                    TextButton(
+                                        onClick = {
+                                            paymentDialogSettleMode = false
+                                            showAddPayment = true
+                                        },
+                                    ) {
                                         Icon(
                                             Icons.Filled.Add,
                                             contentDescription = null,
@@ -651,28 +670,6 @@ fun InvoiceScreen(
         }
     }
 
-    if (showMarkPaidConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissMarkPaidConfirmDialog() },
-            title = { Text("Marquer comme payée ?") },
-            text = {
-                Text(
-                    "Le solde restant (%.2f €) sera considéré comme réglé.".format(remainingAmount),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmMarkAsPaid() }) {
-                    Text("Confirmer")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissMarkPaidConfirmDialog() }) {
-                    Text("Annuler")
-                }
-            },
-        )
-    }
-
     if (showEmitConfirmDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissEmitConfirmDialog() },
@@ -701,6 +698,7 @@ fun InvoiceScreen(
             invoice = invoiceForEmitSheet,
             lines = sortedLines,
             isLoading = isLoading,
+            canEmit = invoiceForEmitSheet.mobileStatus() == InvoiceMobileStatus.ACCEPTED,
             onAddLine = { showCatalogue = true },
             onAddFreeLine = { showAddFree = true },
             onEmit = { viewModel.emitInvoice() },
@@ -761,11 +759,16 @@ fun InvoiceScreen(
         AddPaymentDialog(
             totalTtc = invoice?.totalTtc ?: 0.0,
             remainingAmount = remainingAmount,
+            settleFullBalance = paymentDialogSettleMode,
             onConfirm = { amount, code ->
                 viewModel.addPayment(amount, code)
                 showAddPayment = false
+                paymentDialogSettleMode = false
             },
-            onDismiss = { showAddPayment = false },
+            onDismiss = {
+                showAddPayment = false
+                paymentDialogSettleMode = false
+            },
         )
     }
 }
@@ -775,6 +778,7 @@ fun InvoiceScreen(
 fun AddPaymentDialog(
     totalTtc: Double,
     remainingAmount: Double,
+    settleFullBalance: Boolean = false,
     onConfirm: (amount: Double, paymentMethodCode: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -795,7 +799,15 @@ fun AddPaymentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Encaisser un règlement") },
+        title = {
+            Text(
+                if (settleFullBalance) {
+                    "Solder la facture"
+                } else {
+                    "Encaisser un règlement"
+                },
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -860,7 +872,7 @@ fun AddPaymentDialog(
                 },
                 enabled = canConfirm,
             ) {
-                Text("Encaisser")
+                Text(if (settleFullBalance) "Solder" else "Encaisser")
             }
         },
         dismissButton = {
@@ -1537,6 +1549,7 @@ fun EmitInvoiceAdjustmentsSheet(
     invoice: InvoiceEntity,
     lines: List<InvoiceLineEntity>,
     isLoading: Boolean,
+    canEmit: Boolean,
     onAddLine: () -> Unit,
     onAddFreeLine: () -> Unit,
     onEmit: () -> Unit,
@@ -1562,7 +1575,9 @@ fun EmitInvoiceAdjustmentsSheet(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "Vous pouvez ajouter des lignes supplémentaires avant d'émettre la facture.",
+                "Vous pouvez ajouter des lignes supplémentaires avant d'émettre la facture. " +
+                    "Toute modification après signature du devis impose une nouvelle signature client " +
+                    "(la précédente sera remplacée).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1622,7 +1637,7 @@ fun EmitInvoiceAdjustmentsSheet(
                 Button(
                     onClick = onEmit,
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading,
+                    enabled = !isLoading && canEmit,
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(

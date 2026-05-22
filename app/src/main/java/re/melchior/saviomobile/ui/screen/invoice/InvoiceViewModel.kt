@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -25,7 +24,6 @@ import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.data.repository.TenantArticleSyncRepository
 import re.melchior.saviomobile.ui.utils.NetworkUtils
-import re.melchior.saviomobile.worker.SyncWorker
 import javax.inject.Inject
 
 @HiltViewModel
@@ -34,7 +32,6 @@ class InvoiceViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val tenantArticleSyncRepository: TenantArticleSyncRepository,
     private val settingsDao: SettingsDao,
-    private val workManager: WorkManager,
     @ApplicationContext private val appContext: Context,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -79,8 +76,8 @@ class InvoiceViewModel @Inject constructor(
     private val _paymentSuccessMessage = MutableStateFlow<String?>(null)
     val paymentSuccessMessage: StateFlow<String?> = _paymentSuccessMessage.asStateFlow()
 
-    private val _showMarkPaidConfirmDialog = MutableStateFlow(false)
-    val showMarkPaidConfirmDialog: StateFlow<Boolean> = _showMarkPaidConfirmDialog.asStateFlow()
+    private val _devisResignRequiredMessage = MutableStateFlow<String?>(null)
+    val devisResignRequiredMessage: StateFlow<String?> = _devisResignRequiredMessage.asStateFlow()
 
     private var linesCollectionJob: Job? = null
     private var paymentsJob: Job? = null
@@ -187,16 +184,24 @@ class InvoiceViewModel @Inject constructor(
     ) {
         val invoiceId = _invoice.value?.id ?: return
         viewModelScope.launch {
-            invoiceRepository.addLine(
-                invoiceId = invoiceId,
-                reference = reference,
-                label = label,
-                quantity = quantity,
-                unitPriceHt = unitPriceHt,
-                vatRate = vatRate,
-                billingType = billingType,
-            )
-            _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+            try {
+                val invalidated =
+                    invoiceRepository.addLine(
+                        invoiceId = invoiceId,
+                        reference = reference,
+                        label = label,
+                        quantity = quantity,
+                        unitPriceHt = unitPriceHt,
+                        vatRate = vatRate,
+                        billingType = billingType,
+                    )
+                _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+                if (invalidated) {
+                    onDevisInvalidatedAfterLineChange()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Impossible d'ajouter la ligne"
+            }
         }
     }
 
@@ -210,24 +215,39 @@ class InvoiceViewModel @Inject constructor(
     ) {
         val invoiceId = _invoice.value?.id ?: return
         viewModelScope.launch {
-            invoiceRepository.addLine(
-                invoiceId = invoiceId,
-                reference = reference?.trim()?.takeIf { it.isNotEmpty() },
-                label = label,
-                quantity = quantity,
-                unitPriceHt = unitPriceHt,
-                vatRate = vatRate,
-                billingType = billingType,
-            )
-            _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+            try {
+                val invalidated =
+                    invoiceRepository.addLine(
+                        invoiceId = invoiceId,
+                        reference = reference?.trim()?.takeIf { it.isNotEmpty() },
+                        label = label,
+                        quantity = quantity,
+                        unitPriceHt = unitPriceHt,
+                        vatRate = vatRate,
+                        billingType = billingType,
+                    )
+                _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+                if (invalidated) {
+                    onDevisInvalidatedAfterLineChange()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Impossible d'ajouter la ligne"
+            }
         }
     }
 
     fun removeLine(lineId: String) {
         val invoiceId = _invoice.value?.id ?: return
         viewModelScope.launch {
-            invoiceRepository.removeLine(invoiceId, lineId)
-            _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+            try {
+                val invalidated = invoiceRepository.removeLine(invoiceId, lineId)
+                _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+                if (invalidated) {
+                    onDevisInvalidatedAfterLineChange()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Impossible de supprimer la ligne"
+            }
         }
     }
 
@@ -242,28 +262,24 @@ class InvoiceViewModel @Inject constructor(
     fun moveLine(fromIndex: Int, toIndex: Int) {
         val invoiceId = _invoice.value?.id ?: return
         viewModelScope.launch {
-            invoiceRepository.moveLine(invoiceId, fromIndex, toIndex)
+            try {
+                val invalidated = invoiceRepository.moveLine(invoiceId, fromIndex, toIndex)
+                if (invalidated) {
+                    onDevisInvalidatedAfterLineChange()
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Impossible de déplacer la ligne"
+            }
         }
     }
 
-    fun requestMarkAsPaid() {
-        val inv = _invoice.value ?: return
-        if (inv.mobileStatus() != InvoiceMobileStatus.INVOICED) return
-        val remaining = remainingAmount.value
-        if (remaining <= 0) return
-        _showMarkPaidConfirmDialog.value = true
+    fun dismissDevisResignMessage() {
+        _devisResignRequiredMessage.value = null
     }
 
-    fun dismissMarkPaidConfirmDialog() {
-        _showMarkPaidConfirmDialog.value = false
-    }
-
-    fun confirmMarkAsPaid() {
-        val invoiceId = _invoice.value?.id ?: return
-        _showMarkPaidConfirmDialog.value = false
-        viewModelScope.launch {
-            markInvoicePaidInternal(invoiceId, showSuccessSnackbar = false)
-        }
+    private fun onDevisInvalidatedAfterLineChange() {
+        _showEmitAdjustmentsSheet.value = false
+        _devisResignRequiredMessage.value = InvoiceRepository.DEVIS_RESIGN_REQUIRED_MESSAGE
     }
 
     fun dismissPaymentSuccessMessage() {
@@ -276,7 +292,6 @@ class InvoiceViewModel @Inject constructor(
         invoiceRepository.markInvoicePaid(invoiceId)
             .onSuccess {
                 _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
-                SyncWorker.enqueueNow(workManager)
                 if (showSuccessSnackbar) {
                     _paymentSuccessMessage.value = "Facture soldée"
                 }
@@ -363,7 +378,6 @@ class InvoiceViewModel @Inject constructor(
                 .onSuccess {
                     _showEmitAdjustmentsSheet.value = false
                     _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
-                    SyncWorker.enqueueNow(workManager)
                 }
                 .onFailure {
                     _error.value = it.message ?: "Erreur lors de l'émission"
@@ -393,7 +407,6 @@ class InvoiceViewModel @Inject constructor(
                     _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
                     _emitSuccessMessage.value =
                         "Facture soumise au responsable pour validation"
-                    SyncWorker.enqueueNow(workManager)
                 }
                 .onFailure {
                     _error.value = it.message ?: "Erreur lors de la soumission"

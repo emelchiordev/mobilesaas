@@ -453,10 +453,14 @@ fun AppNavigation(
             DevisSignatureScreen(
                 onBack = { navController.popBackStack() },
                 onCompleted = {
-                    navController.popBackStack(
-                        Screen.Invoice.createRoute(interventionId),
-                        inclusive = false,
-                    )
+                    val popped = navController.popBackStack()
+                    if (!popped) {
+                        navController.navigate(Screen.Invoice.createRoute(interventionId)) {
+                            popUpTo(Screen.Tournee.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 },
             )
         }

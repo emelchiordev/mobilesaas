@@ -32,6 +32,8 @@ fun SavioSnackbarHost(
                     msg.contains("clôtur", ignoreCase = true) ||
                     msg.contains("mise à jour", ignoreCase = true) ||
                     msg.contains("validé", ignoreCase = true) ||
+                    msg.contains("signé", ignoreCase = true) ||
+                    msg.contains("synchronisation", ignoreCase = true) ||
                     msg.contains("termin", ignoreCase = true) ||
                     msg.contains("soumise", ignoreCase = true)
             val isWarning =

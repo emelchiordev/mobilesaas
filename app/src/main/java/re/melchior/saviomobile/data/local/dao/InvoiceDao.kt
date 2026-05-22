@@ -89,4 +89,7 @@ interface InvoiceDao {
 
     @Query("DELETE FROM invoices WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("UPDATE invoices SET acceptedLinesFingerprint = :fingerprint WHERE id = :id")
+    suspend fun updateAcceptedLinesFingerprint(id: String, fingerprint: String?)
 }

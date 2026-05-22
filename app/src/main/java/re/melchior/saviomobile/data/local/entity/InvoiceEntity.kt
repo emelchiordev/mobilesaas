@@ -25,4 +25,6 @@ data class InvoiceEntity(
     val devisSignatureUrl: String? = null,
     val hamonSignatureUrl: String? = null,
     val hamonRequested: Boolean = false,
+    /** Empreinte des lignes au moment de la signature devis (détection re-signature). */
+    val acceptedLinesFingerprint: String? = null,
 )

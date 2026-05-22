@@ -66,7 +66,8 @@ abstract class InterventionDao {
     @Query("SELECT * FROM interventions WHERE id = :id")
     abstract fun getInterventionById(id: String): Flow<InterventionEntity?>
 
-    @Query("SELECT * FROM interventions WHERE syncStatus IN ('PENDING', 'COMPLETED') ORDER BY scheduledAt ASC")
+    /** Interventions clôturées localement, en attente d’envoi (pas de push pendant IN_PROGRESS). */
+    @Query("SELECT * FROM interventions WHERE syncStatus = 'COMPLETED' ORDER BY scheduledAt ASC")
     abstract fun getPendingSync(): Flow<List<InterventionEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -173,7 +174,7 @@ abstract class InterventionDao {
     )
     abstract suspend fun deleteOlderThan(date: String)
 
-    @Query("SELECT * FROM interventions WHERE syncStatus IN ('PENDING', 'COMPLETED') ORDER BY scheduledAt ASC")
+    @Query("SELECT * FROM interventions WHERE syncStatus = 'COMPLETED' ORDER BY scheduledAt ASC")
     abstract suspend fun getPendingSyncOnce(): List<InterventionEntity>
     /**
      * Supprime les interventions SYNCED du jour encore « ouvertes » côté sync,
@@ -204,7 +205,7 @@ abstract class InterventionDao {
     )
     abstract suspend fun deleteSyncedOpenInterventionsForDateWhenPullEmpty(date: String)
 
-    @Query("SELECT COUNT(*) FROM interventions WHERE syncStatus IN ('PENDING', 'COMPLETED')")
+    @Query("SELECT COUNT(*) FROM interventions WHERE syncStatus = 'COMPLETED'")
     abstract fun getPendingSyncCount(): Flow<Int>
 
     @Query("SELECT * FROM interventions WHERE status = 'in_progress' LIMIT 1")

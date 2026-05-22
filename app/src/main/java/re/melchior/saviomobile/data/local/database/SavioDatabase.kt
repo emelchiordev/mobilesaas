@@ -76,7 +76,7 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         PendingInterventionEntity::class,
         PendingClientEntity::class,
     ],
-    version = 44,
+    version = 45,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {

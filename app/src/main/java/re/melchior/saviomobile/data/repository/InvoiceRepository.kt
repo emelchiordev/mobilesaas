@@ -17,7 +17,9 @@ import re.melchior.saviomobile.data.remote.api.InvoiceApi
 import re.melchior.saviomobile.data.remote.dto.InvoiceDto
 import re.melchior.saviomobile.data.remote.dto.InvoiceLineDto
 import re.melchior.saviomobile.data.remote.dto.SearchRefResponseDto
+import java.io.File
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +40,14 @@ class InvoiceRepository @Inject constructor(
 ) {
 
     private val gson = Gson()
+
+    companion object {
+        const val DEVIS_RESIGN_REQUIRED_MESSAGE =
+            "Le devis a été modifié. Le client doit signer à nouveau avant l'émission de la facture."
+
+        private val LOCKED_INVOICE_STATUSES = setOf("invoiced", "paid")
+        private val SIGNED_DEVIS_STATUSES = setOf("accepted", "pending_validation")
+    }
 
     suspend fun getInvoiceById(id: String): InvoiceEntity? =
         invoiceDao.getById(id)
@@ -190,6 +200,7 @@ class InvoiceRepository @Inject constructor(
         return entity
     }
 
+    /** @return true si le devis signé a été invalidé (re-signature requise). */
     suspend fun addLine(
         invoiceId: String,
         reference: String?,
@@ -198,7 +209,8 @@ class InvoiceRepository @Inject constructor(
         unitPriceHt: Double,
         vatRate: Double,
         billingType: String = "billable"
-    ): InvoiceLineEntity {
+    ): Boolean {
+        ensureInvoiceLinesEditable(invoiceId)
         val lineId = UUID.randomUUID().toString()
         val existingLines = invoiceLineDao.getByInvoiceIdOnce(invoiceId)
         val nextOrder = (existingLines.maxOfOrNull { it.order } ?: 0) + 1
@@ -220,20 +232,19 @@ class InvoiceRepository @Inject constructor(
         )
         invoiceLineDao.insert(entity)
         recalcTotals(invoiceId)
-        invoiceDao.getById(invoiceId)?.let { inv ->
-            if (inv.status == "accepted") {
-                enqueueAddInvoiceLine(invoiceId, entity)
-            }
-        }
-        return entity
+        return afterLinesMutated(invoiceId)
     }
 
-    suspend fun removeLine(invoiceId: String, lineId: String) {
+    /** @return true si le devis signé a été invalidé (re-signature requise). */
+    suspend fun removeLine(invoiceId: String, lineId: String): Boolean {
+        ensureInvoiceLinesEditable(invoiceId)
         invoiceLineDao.deleteById(lineId)
         recalcTotals(invoiceId)
+        return afterLinesMutated(invoiceId)
     }
 
     suspend fun addTextBlockLine(invoiceId: String, text: String): InvoiceLineEntity {
+        ensureInvoiceLinesEditable(invoiceId)
         val lineId = UUID.randomUUID().toString()
         val existingLines = invoiceLineDao.getByInvoiceIdOnce(invoiceId)
         val nextOrder = (existingLines.maxOfOrNull { it.order } ?: 0) + 1
@@ -253,19 +264,17 @@ class InvoiceRepository @Inject constructor(
             order = nextOrder,
         )
         invoiceLineDao.insert(entity)
-        invoiceDao.getById(invoiceId)?.let { inv ->
-            if (inv.status == "accepted") {
-                enqueueAddInvoiceLine(invoiceId, entity)
-            }
-        }
+        afterLinesMutated(invoiceId)
         return entity
     }
 
-    suspend fun moveLine(invoiceId: String, fromIndex: Int, toIndex: Int) {
+    /** @return true si le devis signé a été invalidé (re-signature requise). */
+    suspend fun moveLine(invoiceId: String, fromIndex: Int, toIndex: Int): Boolean {
+        ensureInvoiceLinesEditable(invoiceId)
         val list =
             invoiceLineDao.getByInvoiceIdOnce(invoiceId).sortedBy { it.order }.toMutableList()
         if (fromIndex !in list.indices || toIndex !in list.indices || fromIndex == toIndex) {
-            return
+            return false
         }
         val item = list.removeAt(fromIndex)
         list.add(toIndex, item)
@@ -274,6 +283,7 @@ class InvoiceRepository @Inject constructor(
                 invoiceLineDao.update(line.copy(order = index + 1))
             }
         }
+        return afterLinesMutated(invoiceId)
     }
 
     suspend fun updateLine(
@@ -327,8 +337,8 @@ class InvoiceRepository @Inject constructor(
                 } ?: invoiceDao.getByInterventionId(interventionId)
                     ?: error("Facture introuvable pour cette intervention")
             val invoiceId = current.id
-            if (current.status == "accepted") {
-                return@runCatching
+            if (current.status in LOCKED_INVOICE_STATUSES) {
+                error("Impossible de signer un devis sur une facture déjà émise.")
             }
             invoiceDao.updateLifecycle(
                 id = invoiceId,
@@ -341,16 +351,9 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = hamonRequested,
                 updatedAt = now,
             )
-            enqueueSubmitInvoiceFull(
-                invoiceId = invoiceId,
-                interventionId = interventionId,
-                unitId = unitId,
-                technicianId = technicianId,
-                status = "accepted",
-                acceptedAt = now,
-                devisSignatureBase64 = devisSignatureBase64,
-                hamonSignatureBase64 = hamonSignatureBase64,
-                hamonRequested = hamonRequested,
+            invoiceDao.updateAcceptedLinesFingerprint(
+                invoiceId,
+                computeLinesFingerprint(invoiceId),
             )
         }
 
@@ -374,19 +377,15 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
-            enqueueSubmitInvoiceFull(
-                invoiceId = invoiceId,
-                interventionId = interventionId,
-                unitId = unitId,
-                technicianId = technicianId,
-                status = "pending_validation",
-            )
         }
 
     suspend fun emitInvoice(invoiceId: String): Result<Unit> =
         runCatching {
             val now = Instant.now().toString()
             val current = invoiceDao.getById(invoiceId) ?: error("Facture introuvable")
+            if (current.status !in SIGNED_DEVIS_STATUSES) {
+                error("Le devis doit être signé avant d'émettre la facture.")
+            }
             invoiceDao.updateLifecycle(
                 id = invoiceId,
                 status = "invoiced",
@@ -398,7 +397,6 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
-            enqueueUpdateInvoiceMobile(invoiceId, "invoiced", invoicedAt = now)
         }
 
     suspend fun markInvoicePaid(invoiceId: String): Result<Unit> =
@@ -416,8 +414,51 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
-            enqueueUpdateInvoiceMobile(invoiceId, "paid", paidAt = now, includePayments = true)
         }
+
+    /**
+     * Enfile un unique SUBMIT_INVOICE_FULL pour la clôture (état final Room).
+     * Aucun push facture ne doit être enqueue avant la clôture.
+     */
+    suspend fun prepareInvoicePushForClosure(
+        interventionId: String,
+        unitId: String,
+        technicianId: String,
+    ) {
+        val invoice =
+            invoiceDao.getByInterventionId(interventionId) ?: return
+        val invoiceId = invoice.id
+        pendingUpdateDao.deleteByTargetId(invoiceId)
+
+        val devisSignatureBase64 = readSignatureFileBase64(invoice.devisSignatureUrl)
+        val hamonSignatureBase64 = readSignatureFileBase64(invoice.hamonSignatureUrl)
+        val hamonRequested =
+            when (invoice.status) {
+                "accepted", "pending_validation", "invoiced", "paid" -> invoice.hamonRequested
+                else -> null
+            }
+
+        enqueueSubmitInvoiceFull(
+            invoiceId = invoiceId,
+            interventionId = interventionId,
+            unitId = unitId,
+            technicianId = technicianId,
+            status = invoice.status,
+            acceptedAt = invoice.acceptedAt,
+            invoicedAt = invoice.invoicedAt,
+            paidAt = invoice.paidAt,
+            devisSignatureBase64 = devisSignatureBase64,
+            hamonSignatureBase64 = hamonSignatureBase64,
+            hamonRequested = hamonRequested,
+        )
+    }
+
+    private fun readSignatureFileBase64(path: String?): String? {
+        if (path.isNullOrBlank()) return null
+        val file = File(path)
+        if (!file.isFile) return null
+        return Base64.getEncoder().encodeToString(file.readBytes())
+    }
 
     private suspend fun enqueueSubmitInvoiceFull(
         invoiceId: String,
@@ -426,6 +467,8 @@ class InvoiceRepository @Inject constructor(
         technicianId: String,
         status: String,
         acceptedAt: String? = null,
+        invoicedAt: String? = null,
+        paidAt: String? = null,
         devisSignatureBase64: String? = null,
         hamonSignatureBase64: String? = null,
         hamonRequested: Boolean? = null,
@@ -436,11 +479,13 @@ class InvoiceRepository @Inject constructor(
             unitId = unitId,
             technicianId = technicianId,
             status = status,
+            invoiceId = invoiceId,
             acceptedAt = acceptedAt,
+            invoicedAt = invoicedAt,
+            paidAt = paidAt,
             devisSignatureBase64 = devisSignatureBase64,
             hamonSignatureBase64 = hamonSignatureBase64,
             hamonRequested = hamonRequested,
-            invoiceId = invoiceId,
         )
         pendingUpdateDao.insert(
             PendingUpdateEntity(
@@ -448,78 +493,6 @@ class InvoiceRepository @Inject constructor(
                 type = "SUBMIT_INVOICE_FULL",
                 targetId = invoiceId,
                 payload = gson.toJson(payload),
-                occurredAt = now,
-                syncStatus = "PENDING",
-            ),
-        )
-    }
-
-    private suspend fun enqueueAddInvoiceLine(
-        invoiceId: String,
-        line: InvoiceLineEntity,
-    ) {
-        val now = Instant.now().toString()
-        pendingUpdateDao.insert(
-            PendingUpdateEntity(
-                id = "op-add-line-${line.id}",
-                type = "ADD_INVOICE_LINE",
-                targetId = invoiceId,
-                payload =
-                    gson.toJson(
-                        mapOf(
-                            "invoiceId" to invoiceId,
-                            "reference" to line.reference,
-                            "label" to line.label,
-                            "quantity" to line.quantity,
-                            "unitPriceHt" to line.unitPriceHt,
-                            "vatRate" to line.vatRate,
-                            "billingType" to line.billingType,
-                        ),
-                    ),
-                occurredAt = now,
-                syncStatus = "PENDING",
-            ),
-        )
-    }
-
-    private suspend fun enqueueUpdateInvoiceMobile(
-        invoiceId: String,
-        status: String,
-        acceptedAt: String? = null,
-        invoicedAt: String? = null,
-        paidAt: String? = null,
-        includePayments: Boolean = false,
-    ) {
-        val invoice = invoiceDao.getById(invoiceId)
-        val now = Instant.now().toString()
-        val payments =
-            if (includePayments) {
-                invoicePaymentDao.getByInvoiceIdOnce(invoiceId).map { payment ->
-                    mapOf(
-                        "amount" to payment.amount,
-                        "paymentMethodCode" to payment.paymentMethodCode,
-                        "paidAt" to payment.paidAt,
-                    )
-                }
-            } else {
-                emptyList()
-            }
-        pendingUpdateDao.insert(
-            PendingUpdateEntity(
-                id = "op-update-invoice-$invoiceId-$status-${System.currentTimeMillis()}",
-                type = "UPDATE_INVOICE_MOBILE",
-                targetId = invoiceId,
-                payload = gson.toJson(
-                    mapOf(
-                        "invoiceId" to invoiceId,
-                        "interventionId" to invoice?.interventionId,
-                        "status" to status,
-                        "acceptedAt" to acceptedAt,
-                        "invoicedAt" to invoicedAt,
-                        "paidAt" to paidAt,
-                        "payments" to payments,
-                    ),
-                ),
                 occurredAt = now,
                 syncStatus = "PENDING",
             ),
@@ -590,6 +563,58 @@ class InvoiceRepository @Inject constructor(
         invoiceDao.deleteById(inv.id)
     }
 
+    private suspend fun ensureInvoiceLinesEditable(invoiceId: String) {
+        val inv = invoiceDao.getById(invoiceId) ?: return
+        if (inv.status in LOCKED_INVOICE_STATUSES) {
+            error("Impossible de modifier une facture déjà émise.")
+        }
+    }
+
+    private suspend fun computeLinesFingerprint(invoiceId: String): String {
+        val lines = invoiceLineDao.getByInvoiceIdOnce(invoiceId).sortedBy { it.order }
+        return lines.joinToString("|") { line ->
+            "${line.id}:${line.order}:${line.quantity}:${line.unitPriceHt}:${line.totalHt}:${line.label}:${line.type}"
+        }
+    }
+
+    private suspend fun afterLinesMutated(invoiceId: String): Boolean =
+        maybeInvalidateDevisAcceptance(invoiceId)
+
+    private suspend fun maybeInvalidateDevisAcceptance(invoiceId: String): Boolean {
+        val inv = invoiceDao.getById(invoiceId) ?: return false
+        if (inv.status !in SIGNED_DEVIS_STATUSES) return false
+        val stored = inv.acceptedLinesFingerprint?.trim().orEmpty()
+        if (stored.isEmpty()) return false
+        val current = computeLinesFingerprint(invoiceId)
+        if (stored == current) return false
+        invalidateDevisAcceptance(invoiceId)
+        return true
+    }
+
+    private suspend fun invalidateDevisAcceptance(invoiceId: String) {
+        val inv = invoiceDao.getById(invoiceId) ?: return
+        val now = Instant.now().toString()
+        deleteLocalSignatureFile(inv.devisSignatureUrl)
+        deleteLocalSignatureFile(inv.hamonSignatureUrl)
+        invoiceDao.updateLifecycle(
+            id = invoiceId,
+            status = "draft",
+            acceptedAt = null,
+            invoicedAt = inv.invoicedAt,
+            paidAt = inv.paidAt,
+            devisSignatureUrl = null,
+            hamonSignatureUrl = null,
+            hamonRequested = inv.hamonRequested,
+            updatedAt = now,
+        )
+        invoiceDao.updateAcceptedLinesFingerprint(invoiceId, null)
+    }
+
+    private fun deleteLocalSignatureFile(path: String?) {
+        if (path.isNullOrBlank()) return
+        runCatching { File(path).delete() }
+    }
+
     private suspend fun recalcTotals(invoiceId: String) {
         val lines = invoiceLineDao.getByInvoiceIdOnce(invoiceId)
         val billable = lines.filter {
@@ -640,6 +665,7 @@ fun InvoiceDto.toEntity() = InvoiceEntity(
     devisSignatureUrl = devisSignatureUrl,
     hamonSignatureUrl = hamonSignatureUrl,
     hamonRequested = hamonRequested,
+    acceptedLinesFingerprint = null,
 )
 
 fun InvoiceLineDto.toEntity() = InvoiceLineEntity(
