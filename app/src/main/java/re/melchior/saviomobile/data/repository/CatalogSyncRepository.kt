@@ -29,13 +29,26 @@ class CatalogSyncRepository @Inject constructor(
         private const val SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 
+    data class SyncResult(
+        val nomenclatureCount: Int,
+        val equipmentCount: Int,
+        val fullSync: Boolean,
+    )
+
     suspend fun syncIfNeeded() {
         val lastSync = prefs.getLong(KEY_LAST_SYNC, 0L)
         if (System.currentTimeMillis() - lastSync < SYNC_INTERVAL_MS) return
-        sync()
+        sync(forceFull = false)
     }
 
-    suspend fun sync() {
+    /**
+     * @param forceFull true = ignore le curseur `since` (bouton manuel sur la tournée).
+     */
+    suspend fun sync(forceFull: Boolean = false): SyncResult {
+        if (forceFull) {
+            prefs.edit().remove(KEY_LAST_SYNC).apply()
+        }
+
         val lastSync = prefs.getLong(KEY_LAST_SYNC, 0L)
         val since = if (lastSync == 0L) {
             null
@@ -50,6 +63,12 @@ class CatalogSyncRepository @Inject constructor(
 
         val syncedAt = Instant.parse(response.syncedAt).toEpochMilli()
         prefs.edit().putLong(KEY_LAST_SYNC, syncedAt).apply()
+
+        return SyncResult(
+            nomenclatureCount = response.nomenclature.size,
+            equipmentCount = response.equipment.size,
+            fullSync = since == null,
+        )
     }
 
     fun getLastSyncMillis(): Long = prefs.getLong(KEY_LAST_SYNC, 0L)

@@ -24,6 +24,10 @@ import re.melchior.saviomobile.data.local.dao.MeasureDao
 import re.melchior.saviomobile.data.local.dao.PacMeasureDao
 import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
+import re.melchior.saviomobile.data.local.dao.AnomalyDraftDao
+import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
+import re.melchior.saviomobile.data.local.dao.ContractProposalDao
+import re.melchior.saviomobile.data.local.dao.ContractTariffDao
 import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
 import re.melchior.saviomobile.data.local.entity.CatalogEquipmentEntity
@@ -44,6 +48,10 @@ import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.local.entity.PendingClientEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
+import re.melchior.saviomobile.data.local.entity.ContractProposalEntity
+import re.melchior.saviomobile.data.local.entity.ContractTariffEntity
+import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
+import re.melchior.saviomobile.data.local.entity.AnomalyTypeEntity
 import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
 import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
@@ -75,8 +83,12 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         AttestationVePointControleEntity::class,
         PendingInterventionEntity::class,
         PendingClientEntity::class,
+        ContractTariffEntity::class,
+        ContractProposalEntity::class,
+        AnomalyTypeEntity::class,
+        AnomalyDraftEntity::class,
     ],
-    version = 45,
+    version = 53,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {
@@ -120,4 +132,12 @@ abstract class SavioDatabase : RoomDatabase() {
     abstract fun pendingInterventionDao(): PendingInterventionDao
 
     abstract fun pendingClientDao(): PendingClientDao
+
+    abstract fun contractTariffDao(): ContractTariffDao
+
+    abstract fun contractProposalDao(): ContractProposalDao
+
+    abstract fun anomalyTypeDao(): AnomalyTypeDao
+
+    abstract fun anomalyDraftDao(): AnomalyDraftDao
 }

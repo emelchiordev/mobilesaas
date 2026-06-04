@@ -67,12 +67,16 @@ import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.savioTopAppBarContentColor
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.util.formatScheduledAtTime
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import android.util.Log
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import re.melchior.saviomobile.ui.designsystem.BottomNavBar
+import re.melchior.saviomobile.ui.screen.client.mainBottomNavItems
 import kotlinx.coroutines.launch
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -90,7 +94,6 @@ fun TourneeScreen(
     onInterventionClick: (String) -> Unit,
     onResumeIntervention: (String) -> Unit = {},
     onLogout: () -> Unit = {},
-    onCreateClient: () -> Unit = {},
     onNewIntervention: () -> Unit = {},
     onOfflineIntervention: () -> Unit = {},
     onPendingOfflineList: () -> Unit = {},
@@ -98,6 +101,9 @@ fun TourneeScreen(
     onConsumePendingSnackbar: () -> Unit = {},
     pendingFocusDateMillis: Long? = null,
     onConsumePendingFocusDate: () -> Unit = {},
+    showBottomNav: Boolean = false,
+    bottomNavSelectedIndex: Int = 0,
+    onBottomNavSelect: (Int) -> Unit = {},
     viewModel: TourneeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -110,7 +116,6 @@ fun TourneeScreen(
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
     var showPendingCreationSheet by remember { mutableStateOf(false) }
     val isOnline = rememberIsNetworkOnline()
-    var fabMenuExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(pendingSnackbar, pendingFocusDateMillis) {
@@ -153,7 +158,7 @@ fun TourneeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Ma tournée",
+                        "Planning",
                         color = savioTopAppBarContentColor(),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Medium,
@@ -246,11 +251,22 @@ fun TourneeScreen(
             )
         },
         floatingActionButton = {
-            TourneeFieldProFab(
-                expanded = fabMenuExpanded,
-                onExpandedChange = { fabMenuExpanded = it },
-                pendingOfflineInterventionCount = pendingOfflineInterventionCount,
-            )
+            FloatingActionButton(
+                onClick = onNewIntervention,
+                containerColor = SavioPalette.Accent,
+                contentColor = SavioPalette.OnAccent,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+            }
+        },
+        bottomBar = {
+            if (showBottomNav) {
+                BottomNavBar(
+                    items = mainBottomNavItems(),
+                    selectedIndex = bottomNavSelectedIndex,
+                    onSelect = onBottomNavSelect,
+                )
+            }
         },
     )  { padding ->
         val pullRefreshState = rememberPullToRefreshState()
@@ -390,19 +406,6 @@ fun TourneeScreen(
             if (showPendingCreationSheet) {
                 PendingCreationInfoSheet(onDismiss = { showPendingCreationSheet = false })
             }
-            TourneeFieldProFabMenuOverlay(
-                expanded = fabMenuExpanded,
-                onDismiss = { fabMenuExpanded = false },
-                onCreateClient = {
-                    fabMenuExpanded = false
-                    Log.d("FAB", "Nouveau client cliqué")
-                    onCreateClient()
-                },
-                onNewIntervention = {
-                    fabMenuExpanded = false
-                    onNewIntervention()
-                },
-            )
         }
     }
 
@@ -500,9 +503,7 @@ private fun InterventionCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = intervention.scheduledAt
-                            .substringAfter("T")
-                            .substring(0, 5),
+                        text = formatScheduledAtTime(intervention.scheduledAt),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
                         color = SavioUi.BusinessAccent,

@@ -13,13 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
-import re.melchior.saviomobile.data.remote.api.TourneeApi
+import re.melchior.saviomobile.data.local.entity.toDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
-import re.melchior.saviomobile.data.repository.InvoiceRepository
-import re.melchior.saviomobile.data.repository.PushRepository
+import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.worker.SyncWorker
 import androidx.work.WorkManager
@@ -42,7 +42,8 @@ data class ClotureSignatureUiState(
     val closeTypes: List<InterventionTypeDto> = emptyList(),
     val closeTypesLoading: Boolean = true,
     val closeTypesError: String? = null,
-    val selectedCloseTypes: List<InterventionTypeDto> = emptyList()
+    val selectedCloseTypes: List<InterventionTypeDto> = emptyList(),
+    val dgiAnomalyCount: Int = 0,
 ) {
     val isAbsent: Boolean get() = selectedCloseTypes.any { it.code == "ABS" }
 
@@ -66,13 +67,15 @@ data class ClotureSignatureUiState(
         }
 }
 
+private const val CLOSE_TYPES_SYNC_REQUIRED =
+    "Types d'intervention non disponibles. Une synchronisation est requise."
+
 @HiltViewModel
 class ClotureSignatureViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
-    private val invoiceRepository: InvoiceRepository,
-    private val pushRepository: PushRepository,
+    private val anomalyDraftRepository: AnomalyDraftRepository,
     private val workManager: WorkManager,
-    private val tourneeApi: TourneeApi,
+    private val referentielDao: ReferentielDao,
     private val settingsDao: SettingsDao,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -93,6 +96,14 @@ class ClotureSignatureViewModel @Inject constructor(
     init {
         loadIntervention()
         loadCloseTypes()
+        loadDgiCount()
+    }
+
+    private fun loadDgiCount() {
+        viewModelScope.launch {
+            val count = anomalyDraftRepository.countDgiForIntervention(interventionId)
+            _uiState.update { it.copy(dgiAnomalyCount = count) }
+        }
     }
 
     private fun loadIntervention() {
@@ -107,24 +118,16 @@ class ClotureSignatureViewModel @Inject constructor(
 
     private fun loadCloseTypes() {
         viewModelScope.launch {
-            try {
-                val types = tourneeApi.getInterventionTypesForClose(showOnClose = true)
-                _uiState.update {
-                    it.copy(
-                        closeTypes = types,
-                        closeTypesLoading = false,
-                        closeTypesError = null
-                    )
-                }
-                tryInitCloseTypeSelection()
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        closeTypesLoading = false,
-                        closeTypesError = e.message ?: "Impossible de charger les types d'intervention"
-                    )
-                }
+            val types = referentielDao.getCloseTypesOnce().map { it.toDto() }
+            _uiState.update {
+                it.copy(
+                    closeTypes = types,
+                    closeTypesLoading = false,
+                    closeTypesError =
+                        if (types.isEmpty()) CLOSE_TYPES_SYNC_REQUIRED else null,
+                )
             }
+            tryInitCloseTypeSelection()
         }
     }
 
@@ -244,27 +247,17 @@ class ClotureSignatureViewModel @Inject constructor(
                     selectedTypes = selectedTypes
                 )
 
-                val intervention = syncRepository.getInterventionByIdOnce(interventionId)
-                val techId = settingsDao.getSettingsOnce()?.technicianId.orEmpty()
-                if (intervention != null) {
-                    invoiceRepository.prepareInvoicePushForClosure(
-                        interventionId = interventionId,
-                        unitId = intervention.unitId,
-                        technicianId = techId,
-                    )
-                }
-
-                android.util.Log.i(SAVIO_PUSH_LOG, "clôture: DB à jour → appel push()")
-                val pushResult = pushRepository.push()
-                android.util.Log.i(SAVIO_PUSH_LOG, "clôture: push() retourne $pushResult")
-
-                SyncWorker.enqueueNow(workManager)
-                android.util.Log.i(
-                    SAVIO_PUSH_LOG,
-                    "clôture: SyncWorker enqueued (upload photos/signatures hors ViewModel)",
+                anomalyDraftRepository.enqueuePendingPushOps(
+                    interventionId = interventionId,
+                    completedAt = now,
                 )
 
-                val requiresValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
+                val requiresValidation =
+                    settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
+                android.util.Log.i(
+                    SAVIO_PUSH_LOG,
+                    "clôture: Room OK → navigation immédiate (offline-first)",
+                )
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -272,6 +265,7 @@ class ClotureSignatureViewModel @Inject constructor(
                         isPendingValidation = requiresValidation,
                     )
                 }
+                SyncWorker.enqueueNow(workManager)
             } catch (e: Exception) {
                 android.util.Log.e(SAVIO_PUSH_LOG, "clôture échouée avant/après push: ${e.message}", e)
                 _uiState.update {

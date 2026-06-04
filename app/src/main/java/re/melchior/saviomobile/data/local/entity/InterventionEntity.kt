@@ -42,6 +42,7 @@ data class InterventionEntity(
     val customerEmail: String?,
     // Contract
     val contractType: String?,
+    val contractStatus: String? = null,
     val contractRenewalDate: String?,
     val contractTariff: Double?,
     val contractVatRate: Double?,

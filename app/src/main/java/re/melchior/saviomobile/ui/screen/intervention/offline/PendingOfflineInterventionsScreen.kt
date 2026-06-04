@@ -50,7 +50,6 @@ fun PendingOfflineInterventionsScreen(
                 title = {
                     Text(
                         "Interventions en attente ☁️",
-                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -59,7 +58,6 @@ fun PendingOfflineInterventionsScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },

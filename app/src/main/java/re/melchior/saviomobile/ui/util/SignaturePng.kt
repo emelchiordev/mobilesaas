@@ -48,6 +48,6 @@ fun saveSignatureBase64ToFile(
         val dir = File(filesDir, "signatures").apply { mkdirs() }
         val file = File(dir, fileName)
         file.writeBytes(bytes)
-        file.toURI().toString()
+        file.absolutePath
     }.getOrNull()
 }

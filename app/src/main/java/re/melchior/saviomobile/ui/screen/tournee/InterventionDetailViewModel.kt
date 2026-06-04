@@ -13,7 +13,10 @@ import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.remote.api.DocumentApi
+import re.melchior.saviomobile.data.repository.InvoiceRepository
+import re.melchior.saviomobile.data.repository.MobileSyncOrchestrator
 import re.melchior.saviomobile.data.repository.SyncRepository
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class InterventionDetailUiState(
@@ -22,12 +25,16 @@ data class InterventionDetailUiState(
     val history: List<InterventionHistoryEntity> = emptyList(),
     val historyPhotoUrls: Map<String, List<String>> = emptyMap(),
     val isLoading: Boolean = false,
+    val isSyncRetrying: Boolean = false,
+    val pendingInvoiceHamonIssue: Boolean = false,
     val errorMessage: String? = null
 )
 
 @HiltViewModel
 class InterventionDetailViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val invoiceRepository: InvoiceRepository,
+    private val mobileSyncOrchestrator: MobileSyncOrchestrator,
     private val documentApi: DocumentApi,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -47,8 +54,34 @@ class InterventionDetailViewModel @Inject constructor(
             syncRepository.getInterventionById(interventionId)
                 .collect { intervention ->
                     _uiState.update { it.copy(intervention = intervention) }
-                    intervention?.let { loadHistory(it.unitId) }
+                    intervention?.let {
+                        loadHistory(it.unitId)
+                        refreshInvoiceSyncState()
+                    }
                 }
+        }
+    }
+
+    private suspend fun refreshInvoiceSyncState() {
+        val invoice = invoiceRepository.resolveInvoiceForIntervention(interventionId)
+        val hamonIssue =
+            invoice != null && invoiceRepository.isLocalHamonSignatureMissing(invoice)
+        _uiState.update { it.copy(pendingInvoiceHamonIssue = hamonIssue) }
+    }
+
+    fun retrySync() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncRetrying = true, errorMessage = null) }
+            try {
+                mobileSyncOrchestrator.runFullSync(pullDate = LocalDate.now(), pullForce = true)
+                refreshInvoiceSyncState()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = e.message ?: "Échec de la synchronisation")
+                }
+            } finally {
+                _uiState.update { it.copy(isSyncRetrying = false) }
+            }
         }
     }
 

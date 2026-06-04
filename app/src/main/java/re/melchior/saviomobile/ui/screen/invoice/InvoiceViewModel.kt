@@ -181,6 +181,7 @@ class InvoiceViewModel @Inject constructor(
         unitPriceHt: Double,
         vatRate: Double,
         billingType: String,
+        catalogLineType: String,
     ) {
         val invoiceId = _invoice.value?.id ?: return
         viewModelScope.launch {
@@ -194,6 +195,7 @@ class InvoiceViewModel @Inject constructor(
                         unitPriceHt = unitPriceHt,
                         vatRate = vatRate,
                         billingType = billingType,
+                        catalogLineType = catalogLineType,
                     )
                 _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
                 if (invalidated) {
@@ -366,6 +368,11 @@ class InvoiceViewModel @Inject constructor(
     }
 
     fun dismissEmitAdjustmentsSheet() {
+        _showEmitAdjustmentsSheet.value = false
+    }
+
+    fun resetEmitUiState() {
+        _showEmitConfirmDialog.value = false
         _showEmitAdjustmentsSheet.value = false
     }
 

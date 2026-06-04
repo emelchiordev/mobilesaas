@@ -36,6 +36,9 @@ interface AttestationVeDao {
         interventionId: String,
     ): Flow<List<AttestationVeEntity>>
 
+    @Query("SELECT COUNT(*) FROM attestation_ve WHERE interventionId = :interventionId")
+    suspend fun countForIntervention(interventionId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: AttestationVeEntity)
 

@@ -148,7 +148,6 @@ fun CreateClientScreen(
                 title = {
                     Text(
                         "Nouveau client",
-                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -157,7 +156,6 @@ fun CreateClientScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },

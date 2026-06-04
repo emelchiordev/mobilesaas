@@ -1,14 +1,27 @@
 package re.melchior.saviomobile.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "intervention_types")
+@Entity(
+    tableName = "intervention_types",
+    indices = [Index(value = ["code"], unique = true)],
+)
 data class InterventionTypeEntity(
     @PrimaryKey
+    val id: String,
     val code: String,
     val label: String,
-    val color: String?
+    val color: String?,
+    val isVeType: Boolean = false,
+    val isRamonageType: Boolean = false,
+    val isSystem: Boolean = false,
+    val showOnCreate: Boolean = true,
+    val showOnClose: Boolean = true,
+    val requireClientSignature: Boolean = true,
+    val requireReport: Boolean = true,
+    val triggerEquipmentSetup: Boolean = false,
 )
 
 @Entity(tableName = "equipment_types")

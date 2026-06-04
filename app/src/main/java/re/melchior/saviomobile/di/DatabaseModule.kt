@@ -55,9 +55,19 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_41_42
 import re.melchior.saviomobile.data.local.database.MIGRATION_42_43
 import re.melchior.saviomobile.data.local.database.MIGRATION_43_44
 import re.melchior.saviomobile.data.local.database.MIGRATION_44_45
+import re.melchior.saviomobile.data.local.database.MIGRATION_45_46
+import re.melchior.saviomobile.data.local.database.MIGRATION_46_47
+import re.melchior.saviomobile.data.local.database.MIGRATION_47_48
+import re.melchior.saviomobile.data.local.database.MIGRATION_48_49
+import re.melchior.saviomobile.data.local.database.MIGRATION_49_50
+import re.melchior.saviomobile.data.local.database.MIGRATION_50_51
+import re.melchior.saviomobile.data.local.database.MIGRATION_51_52
+import re.melchior.saviomobile.data.local.database.MIGRATION_52_53
 import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
+import re.melchior.saviomobile.data.local.dao.AnomalyDraftDao
+import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
@@ -112,6 +122,14 @@ object DatabaseModule {
             MIGRATION_42_43,
             MIGRATION_43_44,
             MIGRATION_44_45,
+            MIGRATION_45_46,
+            MIGRATION_46_47,
+            MIGRATION_47_48,
+            MIGRATION_48_49,
+            MIGRATION_49_50,
+            MIGRATION_50_51,
+            MIGRATION_51_52,
+            MIGRATION_52_53,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -205,4 +223,12 @@ object DatabaseModule {
     @Provides
     fun providePendingClientDao(db: SavioDatabase): PendingClientDao =
         db.pendingClientDao()
+
+    @Provides
+    fun provideAnomalyTypeDao(db: SavioDatabase): AnomalyTypeDao =
+        db.anomalyTypeDao()
+
+    @Provides
+    fun provideAnomalyDraftDao(db: SavioDatabase): AnomalyDraftDao =
+        db.anomalyDraftDao()
 }

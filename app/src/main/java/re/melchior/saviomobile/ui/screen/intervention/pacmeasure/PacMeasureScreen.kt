@@ -78,7 +78,6 @@ fun PacMeasureScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },

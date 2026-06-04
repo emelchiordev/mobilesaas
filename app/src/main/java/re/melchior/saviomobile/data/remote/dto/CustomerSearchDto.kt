@@ -9,13 +9,21 @@ data class CustomerSearchPageDto(
 
 data class CustomerSearchRowDto(
     @SerializedName("id") val unitId: String,
+    @SerializedName("customerId") val customerId: String? = null,
     @SerializedName("customerFirstName") val customerFirstName: String,
     @SerializedName("customerLastName") val customerLastName: String,
     @SerializedName("customerDisplayName") val customerDisplayName: String,
+    @SerializedName("phone") val phone: String? = null,
+    @SerializedName("email") val email: String? = null,
     @SerializedName("street") val street: String,
     @SerializedName("city") val city: String,
     @SerializedName("postalCode") val postalCode: String,
 ) {
+    fun resolvedDisplayName(): String =
+        customerDisplayName.ifBlank {
+            "${customerFirstName} ${customerLastName}".trim()
+        }
+
     fun formattedAddress(): String =
         listOf(street, "$postalCode $city".trim())
             .filter { it.isNotBlank() }

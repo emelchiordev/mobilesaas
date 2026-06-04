@@ -12,17 +12,30 @@ import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
 import re.melchior.saviomobile.data.local.entity.InvoiceEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.InvoicePaymentEntity
-import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
 import re.melchior.saviomobile.data.remote.api.InvoiceApi
 import re.melchior.saviomobile.data.remote.dto.InvoiceDto
 import re.melchior.saviomobile.data.remote.dto.InvoiceLineDto
 import re.melchior.saviomobile.data.remote.dto.SearchRefResponseDto
 import java.io.File
+import java.net.URI
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+
+sealed class SubmitInvoiceFullPayloadResult {
+    data class Ok(
+        val payload: Map<String, Any?>,
+        val devisSignatureBase64: String?,
+        val hamonSignatureBase64: String?,
+        val hamonRequested: Boolean?,
+    ) : SubmitInvoiceFullPayloadResult()
+
+    data class HamonMissing(val invoiceId: String) : SubmitInvoiceFullPayloadResult()
+
+    data object InvoiceNotFound : SubmitInvoiceFullPayloadResult()
+}
 
 data class InvoiceBillingSummary(
     val invoice: InvoiceEntity?,
@@ -52,6 +65,54 @@ class InvoiceRepository @Inject constructor(
     suspend fun getInvoiceById(id: String): InvoiceEntity? =
         invoiceDao.getById(id)
 
+    /**
+     * Facture déjà au niveau attendu côté serveur pour acquitter un SUBMIT_INVOICE_FULL en attente.
+     * [expectedSubmitStatus] = `status` du payload mobile (aligné sur l’idempotence API).
+     */
+    fun isSubmitInvoiceFullSatisfiedOnServer(
+        invoice: InvoiceEntity,
+        expectedSubmitStatus: String,
+    ): Boolean {
+        val expected = expectedSubmitStatus.trim().lowercase()
+        val invStatus = invoice.status.trim().lowercase()
+        val hamonOk =
+            !invoice.hamonRequested || !invoice.hamonSignatureUrl.isNullOrBlank()
+        val devisOk =
+            !invoice.devisSignatureUrl.isNullOrBlank() || !invoice.acceptedAt.isNullOrBlank()
+
+        return when (expected) {
+            "accepted" ->
+                invStatus in
+                    setOf(
+                        "accepted",
+                        "pending_validation",
+                        "validated",
+                        "invoiced",
+                        "partial",
+                        "paid",
+                    ) && hamonOk && devisOk
+            "pending_validation" ->
+                invStatus in
+                    setOf(
+                        "pending_validation",
+                        "validated",
+                        "invoiced",
+                        "partial",
+                        "paid",
+                    ) && hamonOk
+            "validated" ->
+                invStatus in setOf("validated", "invoiced", "partial", "paid")
+            "invoiced" ->
+                invStatus in setOf("invoiced", "partial", "paid") && hamonOk && devisOk
+            "paid" -> invStatus == "paid"
+            else -> false
+        }
+    }
+
+    fun isLocalHamonSignatureMissing(invoice: InvoiceEntity): Boolean =
+        invoice.hamonRequested &&
+            readSignatureFileBase64(invoice.hamonSignatureUrl).isNullOrBlank()
+
     suspend fun refreshInvoiceFromServer(interventionId: String): InvoiceEntity? {
         val local = invoiceDao.getByInterventionId(interventionId)
         return try {
@@ -69,24 +130,40 @@ class InvoiceRepository @Inject constructor(
                 }
                 return server
             }
+            val hasPendingLocalChanges = !local.syncStatus.equals("synced", ignoreCase = true)
             val merged =
-                local.copy(
-                    status = server.status,
-                    number = server.number ?: local.number,
-                    totalHt = server.totalHt,
-                    totalVat = server.totalVat,
-                    totalTtc = server.totalTtc,
-                    emittedAt = server.emittedAt ?: local.emittedAt,
-                    dueAt = server.dueAt ?: local.dueAt,
-                    acceptedAt = server.acceptedAt ?: local.acceptedAt,
-                    invoicedAt = server.invoicedAt ?: local.invoicedAt,
-                    paidAt = server.paidAt ?: local.paidAt,
-                    devisSignatureUrl = server.devisSignatureUrl ?: local.devisSignatureUrl,
-                    hamonSignatureUrl = server.hamonSignatureUrl ?: local.hamonSignatureUrl,
-                    hamonRequested = server.hamonRequested,
-                    updatedAt = server.updatedAt,
-                    syncStatus = "synced",
-                )
+                if (hasPendingLocalChanges) {
+                    local.copy(
+                        number = server.number ?: local.number,
+                        totalHt = server.totalHt,
+                        totalVat = server.totalVat,
+                        totalTtc = server.totalTtc,
+                        emittedAt = server.emittedAt ?: local.emittedAt,
+                        dueAt = server.dueAt ?: local.dueAt,
+                        devisSignatureUrl = server.devisSignatureUrl ?: local.devisSignatureUrl,
+                        hamonSignatureUrl = server.hamonSignatureUrl ?: local.hamonSignatureUrl,
+                        hamonRequested = server.hamonRequested,
+                        updatedAt = maxOf(local.updatedAt, server.updatedAt),
+                    )
+                } else {
+                    local.copy(
+                        status = server.status,
+                        number = server.number ?: local.number,
+                        totalHt = server.totalHt,
+                        totalVat = server.totalVat,
+                        totalTtc = server.totalTtc,
+                        emittedAt = server.emittedAt ?: local.emittedAt,
+                        dueAt = server.dueAt ?: local.dueAt,
+                        acceptedAt = server.acceptedAt ?: local.acceptedAt,
+                        invoicedAt = server.invoicedAt ?: local.invoicedAt,
+                        paidAt = server.paidAt ?: local.paidAt,
+                        devisSignatureUrl = server.devisSignatureUrl ?: local.devisSignatureUrl,
+                        hamonSignatureUrl = server.hamonSignatureUrl ?: local.hamonSignatureUrl,
+                        hamonRequested = server.hamonRequested,
+                        updatedAt = server.updatedAt,
+                        syncStatus = "synced",
+                    )
+                }
             invoiceDao.update(merged)
             merged
         } catch (_: Exception) {
@@ -208,17 +285,24 @@ class InvoiceRepository @Inject constructor(
         quantity: Double,
         unitPriceHt: Double,
         vatRate: Double,
-        billingType: String = "billable"
+        billingType: String = "billable",
+        catalogLineType: String? = null,
     ): Boolean {
         ensureInvoiceLinesEditable(invoiceId)
         val lineId = UUID.randomUUID().toString()
         val existingLines = invoiceLineDao.getByInvoiceIdOnce(invoiceId)
         val nextOrder = (existingLines.maxOfOrNull { it.order } ?: 0) + 1
         val totalHt = quantity * unitPriceHt
+        val resolvedType =
+            when (catalogLineType?.lowercase()) {
+                "piece", "article" -> "piece"
+                "prestation" -> "prestation"
+                else -> if (reference != null) "prestation" else "free_text"
+            }
         val entity = InvoiceLineEntity(
             id = lineId,
             invoiceId = invoiceId,
-            type = if (reference != null) "prestation" else "free_text",
+            type = resolvedType,
             label = label,
             reference = reference,
             quantity = quantity,
@@ -355,6 +439,7 @@ class InvoiceRepository @Inject constructor(
                 invoiceId,
                 computeLinesFingerprint(invoiceId),
             )
+            markInvoiceSyncPending(invoiceId)
         }
 
     suspend fun submitForValidation(
@@ -377,6 +462,7 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
+            markInvoiceSyncPending(invoiceId)
         }
 
     suspend fun emitInvoice(invoiceId: String): Result<Unit> =
@@ -397,6 +483,7 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
+            markInvoiceSyncPending(invoiceId)
         }
 
     suspend fun markInvoicePaid(invoiceId: String): Result<Unit> =
@@ -414,22 +501,49 @@ class InvoiceRepository @Inject constructor(
                 hamonRequested = current.hamonRequested,
                 updatedAt = now,
             )
+            markInvoiceSyncPending(invoiceId)
         }
 
     /**
-     * Enfile un unique SUBMIT_INVOICE_FULL pour la clôture (état final Room).
-     * Aucun push facture ne doit être enqueue avant la clôture.
+     * Payload facture embarqué dans CLOSE_INTERVENTION (push uniquement à la clôture).
      */
-    suspend fun prepareInvoicePushForClosure(
+    suspend fun buildInvoicePayloadForClosure(
         interventionId: String,
         unitId: String,
         technicianId: String,
-    ) {
-        val invoice =
-            invoiceDao.getByInterventionId(interventionId) ?: return
-        val invoiceId = invoice.id
-        pendingUpdateDao.deleteByTargetId(invoiceId)
+    ): SubmitInvoiceFullPayloadResult {
+        val invoice = invoiceDao.getByInterventionId(interventionId)
+            ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        return buildSubmitInvoiceFullPayloadForPush(
+            invoiceId = invoice.id,
+            interventionId = interventionId,
+            unitId = unitId,
+            technicianId = technicianId,
+            requireLocalHamonFile = true,
+        )
+    }
 
+    private suspend fun markInvoiceSyncPending(invoiceId: String) {
+        invoiceDao.markAsPending(invoiceId)
+    }
+
+    /**
+     * Reconstruit le payload facture depuis Room (signatures relues sur disque).
+     */
+    suspend fun buildSubmitInvoiceFullPayloadForPush(
+        invoiceId: String,
+        interventionId: String? = null,
+        unitId: String? = null,
+        technicianId: String? = null,
+        /** true = clôture : fichier Hamon obligatoire en local. false = push : tenter l’API (idempotence). */
+        requireLocalHamonFile: Boolean = false,
+    ): SubmitInvoiceFullPayloadResult {
+        val invoice = invoiceDao.getById(invoiceId) ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        val resolvedInterventionId =
+            interventionId?.trim().orEmpty().ifBlank { invoice.interventionId?.trim().orEmpty() }
+        if (resolvedInterventionId.isEmpty()) {
+            return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        }
         val devisSignatureBase64 = readSignatureFileBase64(invoice.devisSignatureUrl)
         val hamonSignatureBase64 = readSignatureFileBase64(invoice.hamonSignatureUrl)
         val hamonRequested =
@@ -437,66 +551,56 @@ class InvoiceRepository @Inject constructor(
                 "accepted", "pending_validation", "invoiced", "paid" -> invoice.hamonRequested
                 else -> null
             }
-
-        enqueueSubmitInvoiceFull(
-            invoiceId = invoiceId,
-            interventionId = interventionId,
-            unitId = unitId,
-            technicianId = technicianId,
-            status = invoice.status,
-            acceptedAt = invoice.acceptedAt,
-            invoicedAt = invoice.invoicedAt,
-            paidAt = invoice.paidAt,
+        if (hamonRequested == true && hamonSignatureBase64.isNullOrBlank()) {
+            if (requireLocalHamonFile) {
+                return SubmitInvoiceFullPayloadResult.HamonMissing(invoiceId)
+            }
+            android.util.Log.w(
+                "SavioPush",
+                "Hamon absent en local pour $invoiceId — envoi sans base64 (idempotence serveur)",
+            )
+        }
+        val resolvedUnitId = unitId?.trim().orEmpty()
+        val resolvedTechId = technicianId?.trim().orEmpty()
+        val payload =
+            buildSyncPayload(
+                interventionId = resolvedInterventionId,
+                unitId = resolvedUnitId,
+                technicianId = resolvedTechId,
+                status = invoice.status,
+                invoiceId = invoiceId,
+                acceptedAt = invoice.acceptedAt,
+                invoicedAt = invoice.invoicedAt,
+                paidAt = invoice.paidAt,
+                devisSignatureBase64 = devisSignatureBase64,
+                hamonSignatureBase64 = hamonSignatureBase64,
+                hamonRequested = hamonRequested,
+            )
+        return SubmitInvoiceFullPayloadResult.Ok(
+            payload = payload,
             devisSignatureBase64 = devisSignatureBase64,
             hamonSignatureBase64 = hamonSignatureBase64,
             hamonRequested = hamonRequested,
         )
     }
 
-    private fun readSignatureFileBase64(path: String?): String? {
-        if (path.isNullOrBlank()) return null
-        val file = File(path)
-        if (!file.isFile) return null
+    fun readSignatureFileBase64(path: String?): String? {
+        val file = resolveSignatureFile(path) ?: return null
         return Base64.getEncoder().encodeToString(file.readBytes())
     }
 
-    private suspend fun enqueueSubmitInvoiceFull(
-        invoiceId: String,
-        interventionId: String,
-        unitId: String,
-        technicianId: String,
-        status: String,
-        acceptedAt: String? = null,
-        invoicedAt: String? = null,
-        paidAt: String? = null,
-        devisSignatureBase64: String? = null,
-        hamonSignatureBase64: String? = null,
-        hamonRequested: Boolean? = null,
-    ) {
-        val now = Instant.now().toString()
-        val payload = buildSyncPayload(
-            interventionId = interventionId,
-            unitId = unitId,
-            technicianId = technicianId,
-            status = status,
-            invoiceId = invoiceId,
-            acceptedAt = acceptedAt,
-            invoicedAt = invoicedAt,
-            paidAt = paidAt,
-            devisSignatureBase64 = devisSignatureBase64,
-            hamonSignatureBase64 = hamonSignatureBase64,
-            hamonRequested = hamonRequested,
-        )
-        pendingUpdateDao.insert(
-            PendingUpdateEntity(
-                id = "op-submit-invoice-$invoiceId",
-                type = "SUBMIT_INVOICE_FULL",
-                targetId = invoiceId,
-                payload = gson.toJson(payload),
-                occurredAt = now,
-                syncStatus = "PENDING",
-            ),
-        )
+    private fun resolveSignatureFile(path: String?): File? {
+        val trimmed = path?.trim().orEmpty()
+        if (trimmed.isEmpty()) return null
+        val file =
+            when {
+                trimmed.startsWith("file://", ignoreCase = true) ->
+                    runCatching { File(URI.create(trimmed)) }.getOrNull()
+                trimmed.startsWith("http://", ignoreCase = true) ||
+                    trimmed.startsWith("https://", ignoreCase = true) -> null
+                else -> File(trimmed)
+            }
+        return file?.takeIf { it.isFile }
     }
 
     private suspend fun buildSyncPayload(

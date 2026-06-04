@@ -65,6 +65,7 @@ fun interventionStatusLabel(status: String, syncStatus: String): String =
         syncStatus == "CONFLICT_IMMUTABLE" -> "🔴 Clôturée ailleurs"
         syncStatus == "CONFLICT_VERSION" -> "🟠 Sync…"
         syncStatus == "CONFLICT" -> "Conflit"
+        syncStatus == "SKIPPED" -> "Ignorée"
         syncStatus == "COMPLETED" -> "En attente"
         syncStatus == "IN_PROGRESS" -> "En cours"
         syncStatus == "SYNCED" && status == "completed" -> "Terminée"
@@ -84,6 +85,8 @@ fun interventionStatusBadge(status: String, syncStatus: String): InterventionSta
             when {
                 syncStatus in CONFLICT_SYNC ->
                     MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+                syncStatus == "SKIPPED" ->
+                    SavioInterventionColors.AnnuleeBg to SavioInterventionColors.AnnuleeFg
                 status == "cancelled" ->
                     SavioInterventionColors.AnnuleeBg to SavioInterventionColors.AnnuleeFg
                 status == "pending_validation" ->
@@ -103,6 +106,8 @@ fun interventionStatusBadge(status: String, syncStatus: String): InterventionSta
         when {
             syncStatus in CONFLICT_SYNC ->
                 MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.errorContainer
+            syncStatus == "SKIPPED" ->
+                MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant
             status == "pending_validation" ->
                 SavioPalette.Accent to SavioUi.StatusTintBg
             syncStatus == "SYNCED" && status == "completed" ->

@@ -31,6 +31,9 @@ interface PendingUpdateDao {
     @Query("DELETE FROM pending_updates WHERE targetId = :targetId")
     suspend fun deleteByTargetId(targetId: String)
 
+    @Query("DELETE FROM pending_updates WHERE type = 'SUBMIT_INVOICE_FULL'")
+    suspend fun deletePendingSubmitInvoiceFull()
+
     @Query("UPDATE pending_updates SET targetId = :remoteId WHERE targetId = :localId")
     suspend fun remapTargetId(localId: String, remoteId: String)
 }

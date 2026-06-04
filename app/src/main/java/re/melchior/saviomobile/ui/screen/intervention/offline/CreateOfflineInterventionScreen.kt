@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarDuration
@@ -56,15 +58,6 @@ import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.savioFieldColors
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
-private data class InterventionTypeOption(val label: String, val code: String)
-
-private val typeOptions = listOf(
-    InterventionTypeOption("Entretien", "01"),
-    InterventionTypeOption("Dépannage", "02"),
-    InterventionTypeOption("Installation", "03"),
-    InterventionTypeOption("Mise en service", "04"),
-)
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateOfflineInterventionScreen(
@@ -73,6 +66,7 @@ fun CreateOfflineInterventionScreen(
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val typeOptions by viewModel.interventionTypes.collectAsStateWithLifecycle()
 
     var clientName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
@@ -81,7 +75,13 @@ fun CreateOfflineInterventionScreen(
     var phone by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var scheduledAtMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var selectedType by remember { mutableStateOf(typeOptions[0]) }
+    var selectedType by remember { mutableStateOf<InterventionTypeEntity?>(null) }
+
+    LaunchedEffect(typeOptions) {
+        if (selectedType == null && typeOptions.isNotEmpty()) {
+            selectedType = typeOptions.first()
+        }
+    }
 
     val dateTimeLabel = remember(scheduledAtMillis) {
         val z = ZoneId.systemDefault()
@@ -137,7 +137,6 @@ fun CreateOfflineInterventionScreen(
                 title = {
                     Text(
                         "Intervention terrain",
-                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -146,7 +145,6 @@ fun CreateOfflineInterventionScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
@@ -235,13 +233,20 @@ fun CreateOfflineInterventionScreen(
                 fontWeight = FontWeight.Medium,
             )
             Spacer(modifier = Modifier.height(6.dp))
+            if (typeOptions.isEmpty()) {
+                Text(
+                    "Types d'intervention non disponibles. Une synchronisation est requise.",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp,
+                )
+            }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 typeOptions.forEach { opt ->
                     FilterChip(
-                        selected = selectedType == opt,
+                        selected = selectedType?.code == opt.code,
                         onClick = { selectedType = opt },
                         label = { Text(opt.label) },
                         colors = FilterChipDefaults.filterChipColors(
@@ -284,16 +289,17 @@ fun CreateOfflineInterventionScreen(
             )
 
             Spacer(modifier = Modifier.height(20.dp))
-            val canSave = clientName.isNotBlank()
+            val canSave = clientName.isNotBlank() && selectedType != null
             Button(
                 onClick = {
+                    val typeCode = selectedType?.code ?: return@Button
                     viewModel.save(
                         clientNameFree = clientName,
                         addressFree = address,
                         city = city,
                         zipCode = zip,
                         phone = phone,
-                        interventionTypeCode = selectedType.code,
+                        interventionTypeCode = typeCode,
                         scheduledAtMillis = scheduledAtMillis,
                         notes = notes,
                     )

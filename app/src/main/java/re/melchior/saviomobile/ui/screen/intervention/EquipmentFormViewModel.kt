@@ -17,7 +17,9 @@ import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
+import re.melchior.saviomobile.data.remote.dto.ScanPlateResultDto
 import re.melchior.saviomobile.data.repository.CatalogSyncRepository
+import re.melchior.saviomobile.ui.navigation.ScanPlateNavPayload
 import javax.inject.Inject
 
 @HiltViewModel
@@ -72,6 +74,35 @@ class EquipmentFormViewModel @Inject constructor(
     fun updateIsPrimary(v: Boolean) = _uiState.update { it.copy(isPrimary = v) }
     fun updateReplacementReason(v: String) = _uiState.update { it.copy(replacementReason = v) }
 
+    fun applyScanPayload(payload: ScanPlateNavPayload) {
+        payload.parsed?.let { applyScanResult(it) }
+        if (payload.ocrFallback && !payload.rawOcrText.isNullOrBlank()) {
+            applyOcrFallback(payload.rawOcrText)
+        }
+    }
+
+    fun applyScanResult(dto: ScanPlateResultDto) {
+        val scanNotes = buildScanNotes(dto)
+        _uiState.update { state ->
+            state.copy(
+                brand = dto.brand?.takeIf { it.isNotBlank() } ?: state.brand,
+                model = dto.model?.takeIf { it.isNotBlank() } ?: state.model,
+                serialNumber = dto.serialNumber?.takeIf { it.isNotBlank() } ?: state.serialNumber,
+                typeCode = dto.typeCode?.takeIf { it.isNotBlank() } ?: state.typeCode,
+                energyLabel = dto.energyCode?.takeIf { it.isNotBlank() } ?: state.energyLabel,
+                powerKw = dto.powerKw?.let { formatPowerKw(it) } ?: state.powerKw,
+                notes = mergeNotes(state.notes, scanNotes),
+                scanPrefilled = true,
+            )
+        }
+    }
+
+    fun applyOcrFallback(rawText: String) {
+        _uiState.update {
+            it.copy(notes = mergeNotes(it.notes, "Plaque OCR :\n$rawText"))
+        }
+    }
+
     fun save(
         interventionId: String,
         unitId: String,
@@ -98,6 +129,7 @@ class EquipmentFormViewModel @Inject constructor(
                 put("energyCode", state.energyCode)
                 put("serialNumber", state.serialNumber.ifBlank { null })
                 put("notes", state.notes.ifBlank { null })
+                state.powerKw?.toDoubleOrNull()?.let { put("powerKw", it) }
                 put("isPrimary", state.isPrimary)
                 put("equipmentCatalogId", state.equipmentCatalogId)
                 put("catalogBrandId", state.catalogBrandId)
@@ -138,7 +170,7 @@ class EquipmentFormViewModel @Inject constructor(
                 equipmentCatalogId = state.equipmentCatalogId,
                 catalogBrandId = state.catalogBrandId,
                 parentEquipmentId = if (existingEquipmentId == null) parentEquipmentId else null,
-                powerKw = null,
+                powerKw = state.powerKw,
                 evacuationMode = null,
             )
             equipmentDao.insertAll(listOf(localEq))
@@ -163,4 +195,31 @@ data class EquipmentFormUiState(
     val catalogBrandId: String? = null,
     val catalogEquipmentTypeId: String? = null,
     val catalogEnergyId: String? = null,
+    val powerKw: String? = null,
+    val scanPrefilled: Boolean = false,
 )
+
+private fun buildScanNotes(dto: ScanPlateResultDto): String {
+    val lines = buildList {
+        dto.powerKw?.let { add("Puissance : ${formatPowerKw(it)} kW") }
+        dto.refrigerant?.takeIf { it.isNotBlank() }?.let { add("Fluide : $it") }
+        dto.manufactureYear?.let { add("Année : $it") }
+        dto.extraNotes?.takeIf { it.isNotBlank() }?.let { add(it) }
+    }
+    return lines.joinToString("\n")
+}
+
+private fun mergeNotes(existing: String, block: String): String {
+    if (block.isBlank()) return existing
+    if (existing.isBlank()) return block
+    return "$existing\n\n$block"
+}
+
+private fun formatPowerKw(value: Double): String {
+    val rounded = (value * 1000).toLong() / 1000.0
+    return if (rounded % 1.0 == 0.0) {
+        rounded.toLong().toString()
+    } else {
+        rounded.toString()
+    }
+}

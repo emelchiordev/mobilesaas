@@ -9,7 +9,7 @@ data class NoticeUrlResponseDto(
 )
 
 data class CatalogSyncResponseDto(
-    @SerializedName("syncedAt") val syncedAt: String,
+    @SerializedName(value = "syncedAt", alternate = ["synced_at"]) val syncedAt: String,
     @SerializedName("nomenclature") val nomenclature: List<NomenclatureItemDto>,
     @SerializedName("equipment") val equipment: List<CatalogEquipmentDto>,
 )
@@ -19,22 +19,24 @@ data class NomenclatureItemDto(
     @SerializedName("domain") val domain: String,
     @SerializedName("code") val code: String,
     @SerializedName("label") val label: String,
-    @SerializedName("isActive") val isActive: Boolean,
-    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName(value = "isActive", alternate = ["is_active"]) val isActive: Boolean = true,
+    @SerializedName(value = "updatedAt", alternate = ["updated_at"]) val updatedAt: String? = null,
 )
 
 data class CatalogEquipmentDto(
     @SerializedName("id") val id: String,
     @SerializedName("model") val model: String,
-    @SerializedName("brandId") val brandId: String,
-    @SerializedName("energyId") val energyId: String,
-    @SerializedName("equipmentTypeId") val equipmentTypeId: String,
-    @SerializedName("powerKw") val powerKw: Double?,
-    @SerializedName("maintenanceDurationHours") val maintenanceDurationHours: Double?,
-    @SerializedName("referenceConstructeur") val referenceConstructeur: String?,
-    @SerializedName("noticeUrl") val noticeUrl: String?,
-    @SerializedName("isActive") val isActive: Boolean,
-    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName(value = "brandId", alternate = ["brand_id"]) val brandId: String,
+    @SerializedName(value = "energyId", alternate = ["energy_id"]) val energyId: String,
+    @SerializedName(value = "equipmentTypeId", alternate = ["equipment_type_id"]) val equipmentTypeId: String,
+    @SerializedName(value = "powerKw", alternate = ["power_kw"]) val powerKw: Double?,
+    @SerializedName(value = "maintenanceDurationHours", alternate = ["maintenance_duration_hours"])
+    val maintenanceDurationHours: Double?,
+    @SerializedName(value = "referenceConstructeur", alternate = ["reference_constructeur"])
+    val referenceConstructeur: String?,
+    @SerializedName(value = "noticeUrl", alternate = ["notice_url"]) val noticeUrl: String?,
+    @SerializedName(value = "isActive", alternate = ["is_active"]) val isActive: Boolean = true,
+    @SerializedName(value = "updatedAt", alternate = ["updated_at"]) val updatedAt: String? = null,
 )
 
 fun NomenclatureItemDto.toEntity() = CatalogNomenclatureEntity(

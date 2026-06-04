@@ -168,7 +168,6 @@ fun EquipementDetailScreen(
                         } ?: "Équipement",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onBackground,
                     )
                 },
                 navigationIcon = {
@@ -176,7 +175,6 @@ fun EquipementDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },
@@ -186,7 +184,6 @@ fun EquipementDetailScreen(
                             Icon(
                                 imageVector = Icons.Filled.Delete,
                                 contentDescription = "Supprimer l'appareil",
-                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                     }

@@ -7,9 +7,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -188,29 +190,27 @@ fun SavioPhotosTabSkeleton(modifier: Modifier = Modifier) {
 fun SavioClientDetailSkeleton(modifier: Modifier = Modifier) {
     val brush = rememberSavioShimmerBrush()
     Column(
-        modifier = modifier.fillMaxWidth().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SavioShimmerBox(
-            modifier = Modifier.size(56.dp),
-            shape = CircleShape,
-            brush = brush,
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-        SavioShimmerBox(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp),
             shape = RoundedCornerShape(14.dp),
             brush = brush,
         )
-        Spacer(modifier = Modifier.height(12.dp))
         SavioShimmerBox(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(160.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(14.dp),
+            brush = brush,
+        )
+        SavioShimmerBox(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             shape = RoundedCornerShape(14.dp),
             brush = brush,
         )

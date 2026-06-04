@@ -62,6 +62,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,7 @@ import org.burnoutcrew.reorderable.reorderable
 import re.melchior.saviomobile.data.local.entity.InvoiceEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.remote.dto.PrestationDto
+import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +132,10 @@ fun InvoiceScreen(
         viewModel.loadInvoice(interventionId)
     }
 
+    DisposableEffect(Unit) {
+        onDispose { viewModel.resetEmitUiState() }
+    }
+
     LaunchedEffect(emitSuccessMessage) {
         emitSuccessMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -159,6 +165,7 @@ fun InvoiceScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = savioTopAppBarColors(),
                 title = {
                     Column {
                         Text(
@@ -351,7 +358,7 @@ fun InvoiceScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isLoading,
                             ) {
-                                Text("Émettre la facture")
+                                Text("Convertir en facture")
                             }
                         }
                     }
@@ -673,7 +680,7 @@ fun InvoiceScreen(
     if (showEmitConfirmDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissEmitConfirmDialog() },
-            title = { Text("Émettre la facture ?") },
+            title = { Text("Convertir en facture ?") },
             text = {
                 Text(
                     "Le devis sera converti en facture. Cette action est irréversible.",
@@ -681,7 +688,7 @@ fun InvoiceScreen(
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmEmitDialog() }) {
-                    Text("Émettre")
+                    Text("Convertir")
                 }
             },
             dismissButton = {
@@ -728,6 +735,7 @@ fun InvoiceScreen(
                     unitPriceHt = price,
                     vatRate = vat,
                     billingType = billingType,
+                    catalogLineType = item.type,
                 )
                 catalogueItemToEdit = null
             },
@@ -1570,12 +1578,12 @@ fun EmitInvoiceAdjustmentsSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                "Ajustements avant émission",
+                "Ajustements avant conversion",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "Vous pouvez ajouter des lignes supplémentaires avant d'émettre la facture. " +
+                "Vous pouvez ajouter des lignes supplémentaires avant de convertir en facture. " +
                     "Toute modification après signature du devis impose une nouvelle signature client " +
                     "(la précédente sera remplacée).",
                 style = MaterialTheme.typography.bodySmall,
@@ -1645,7 +1653,7 @@ fun EmitInvoiceAdjustmentsSheet(
                             strokeWidth = 2.dp,
                         )
                     } else {
-                        Text("Émettre la facture")
+                        Text("Convertir en facture")
                     }
                 }
             }

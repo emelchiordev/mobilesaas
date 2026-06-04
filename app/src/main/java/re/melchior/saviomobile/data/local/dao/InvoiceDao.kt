@@ -58,6 +58,9 @@ interface InvoiceDao {
     @Query("UPDATE invoices SET syncStatus = 'synced' WHERE id = :id")
     suspend fun markAsSynced(id: String)
 
+    @Query("UPDATE invoices SET syncStatus = 'PENDING' WHERE id = :id")
+    suspend fun markAsPending(id: String)
+
     @Query(
         """
         UPDATE invoices

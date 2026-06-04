@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -44,8 +45,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import android.util.Log
-import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import re.melchior.saviomobile.ui.designsystem.BottomNavBar
+import re.melchior.saviomobile.ui.screen.client.mainBottomNavItems
+import re.melchior.saviomobile.ui.theme.SavioPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +57,6 @@ fun TourneeTabletScreen(
     parentNavController: NavController,
     onResumeIntervention: (String) -> Unit = {},
     onLogout: () -> Unit = {},
-    onCreateClient: () -> Unit = {},
     onNewIntervention: () -> Unit = {},
     onOfflineIntervention: () -> Unit = {},
     onPendingOfflineList: () -> Unit = {},
@@ -61,6 +64,9 @@ fun TourneeTabletScreen(
     onConsumePendingSnackbar: () -> Unit = {},
     pendingFocusDateMillis: Long? = null,
     onConsumePendingFocusDate: () -> Unit = {},
+    showBottomNav: Boolean = false,
+    bottomNavSelectedIndex: Int = 0,
+    onBottomNavSelect: (Int) -> Unit = {},
     viewModel: TourneeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -73,9 +79,7 @@ fun TourneeTabletScreen(
     val detailNavController = rememberNavController()
     val isOnline = rememberIsNetworkOnline()
     val pendingOfflineInterventionCount by viewModel.pendingOfflineInterventionCount.collectAsStateWithLifecycle()
-    var fabMenuExpanded by remember { mutableStateOf(false) }
     var showPendingCreationSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(pendingSnackbar, pendingFocusDateMillis) {
         var focusedDate = false
@@ -131,11 +135,22 @@ fun TourneeTabletScreen(
         containerColor = SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            TourneeFieldProFab(
-                expanded = fabMenuExpanded,
-                onExpandedChange = { fabMenuExpanded = it },
-                pendingOfflineInterventionCount = pendingOfflineInterventionCount,
-            )
+            FloatingActionButton(
+                onClick = onNewIntervention,
+                containerColor = SavioPalette.Accent,
+                contentColor = SavioPalette.OnAccent,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+            }
+        },
+        bottomBar = {
+            if (showBottomNav) {
+                BottomNavBar(
+                    items = mainBottomNavItems(),
+                    selectedIndex = bottomNavSelectedIndex,
+                    onSelect = onBottomNavSelect,
+                )
+            }
         },
     ) { padding ->
         val pullRefreshState = rememberPullToRefreshState()
@@ -248,7 +263,14 @@ fun TourneeTabletScreen(
                             )
                         },
                         onClientClick = { customerId ->
-                            parentNavController.navigate(Screen.ClientDetail.createRoute(customerId))
+                            parentNavController.navigate(
+                                Screen.ClientDetail.createRoute(customerId = customerId),
+                            )
+                        },
+                        onNavigateToDevisSignature = { interventionId ->
+                            parentNavController.navigate(
+                                Screen.DevisSignature.createRoute(interventionId),
+                            )
                         },
                         currentDateLabel = currentDateLabel,
                         pendingSyncCount = pendingSyncCount,
@@ -267,19 +289,6 @@ fun TourneeTabletScreen(
             if (showPendingCreationSheet) {
                 PendingCreationInfoSheet(onDismiss = { showPendingCreationSheet = false })
             }
-            TourneeFieldProFabMenuOverlay(
-                expanded = fabMenuExpanded,
-                onDismiss = { fabMenuExpanded = false },
-                onCreateClient = {
-                    fabMenuExpanded = false
-                    Log.d("FAB", "Nouveau client cliqué")
-                    onCreateClient()
-                },
-                onNewIntervention = {
-                    fabMenuExpanded = false
-                    onNewIntervention()
-                },
-            )
         }
     }
 }

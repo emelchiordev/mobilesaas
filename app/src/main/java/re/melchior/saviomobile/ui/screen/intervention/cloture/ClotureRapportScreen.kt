@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -50,6 +51,7 @@ import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarSubtitleColor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -83,7 +85,7 @@ fun ClotureRapportScreen(
                         Text(
                             text = "Compte-rendu",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = savioTopAppBarSubtitleColor(),
                         )
                     }
                 },
@@ -201,7 +203,53 @@ fun ClotureRapportScreen(
                     }
                 }
 
+                ContractVeSummaryCard(
+                    contractInfo = uiState.contractInfo,
+                    lastVe = uiState.lastVe,
+                    nextVe = uiState.nextVe,
+                )
+
+                ClosureConsequencesCard(consequences = uiState.consequences)
+
+                ClosureAnomaliesSection(
+                    drafts = buildAnomalyDraftDisplays(uiState.anomalyDrafts, uiState.anomalyCatalog),
+                    onAddClick = viewModel::openAddAnomalySheet,
+                )
+
                 if (uiState.showReport) {
+                    OutlinedButton(
+                        onClick = viewModel::generateReport,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = uiState.canGenerateReport &&
+                            !uiState.isGeneratingReport &&
+                            !uiState.isLoading,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (uiState.isGeneratingReport) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
+                            Text(
+                                text = if (uiState.isGeneratingReport) {
+                                    "Génération…"
+                                } else {
+                                    "Générer le compte rendu"
+                                },
+                            )
+                        }
+                    }
+                    if (!uiState.canGenerateReport) {
+                        Text(
+                            text = "Ajoutez des observations, pièces ou anomalies pour activer la génération.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     OutlinedTextField(
                         value = uiState.report,
                         onValueChange = viewModel::onReportChange,
@@ -267,6 +315,15 @@ fun ClotureRapportScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    if (uiState.showAddAnomalySheet) {
+        AddAnomalyBottomSheet(
+            catalogTypes = uiState.anomalyCatalog,
+            rootEquipments = uiState.rootEquipments,
+            onDismiss = viewModel::dismissAddAnomalySheet,
+            onConfirm = viewModel::addAnomalyDraft,
+        )
     }
 }
 

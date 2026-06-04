@@ -24,7 +24,12 @@ fun SavioSnackbarHost(
         modifier = modifier.padding(horizontal = SavioDimens.SpaceLG, vertical = SavioDimens.SpaceSM),
         snackbar = { data: SnackbarData ->
             val msg = data.visuals.message
+            val isError =
+                msg.startsWith("erreur", ignoreCase = true) ||
+                    msg.startsWith("échec", ignoreCase = true)
             val isSuccess =
+                !isError &&
+                (
                 msg.contains("enregistr", ignoreCase = true) ||
                     msg.contains("succès", ignoreCase = true) ||
                     msg.contains("créé", ignoreCase = true) ||
@@ -36,8 +41,10 @@ fun SavioSnackbarHost(
                     msg.contains("synchronisation", ignoreCase = true) ||
                     msg.contains("termin", ignoreCase = true) ||
                     msg.contains("soumise", ignoreCase = true)
+                )
             val isWarning =
-                !isSuccess &&
+                !isError &&
+                    !isSuccess &&
                     (
                         msg.contains("attente", ignoreCase = true) ||
                             msg.contains("validation", ignoreCase = true) ||

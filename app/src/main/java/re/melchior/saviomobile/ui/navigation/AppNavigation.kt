@@ -5,6 +5,10 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -38,6 +42,7 @@ import re.melchior.saviomobile.ui.screen.intervention.cerfa.CerfaFroidScreen
 import re.melchior.saviomobile.ui.screen.intervention.cerfa.CerfaScreen
 import re.melchior.saviomobile.ui.screen.intervention.CatalogSearchScreen
 import re.melchior.saviomobile.ui.screen.intervention.EquipmentFormScreen
+import re.melchior.saviomobile.ui.screen.intervention.PlateScanScreen
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationVeScreen
 import re.melchior.saviomobile.ui.screen.intervention.measure.MeasureScreen
 import re.melchior.saviomobile.ui.screen.intervention.pacmeasure.PacMeasureScreen
@@ -48,12 +53,10 @@ import re.melchior.saviomobile.ui.screen.invoice.InvoiceScreen
 import re.melchior.saviomobile.ui.screen.intervention.PhotosScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureRapportScreen
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ClotureSignatureScreen
-import re.melchior.saviomobile.ui.screen.tournee.TourneeTabletScreen
-import re.melchior.saviomobile.ui.screen.tournee.TourneeScreen
+import re.melchior.saviomobile.ui.navigation.MainShellScreen
 import re.melchior.saviomobile.ui.screen.tournee.TourneeViewModel
-import re.melchior.saviomobile.ui.utils.SavioWindowSize
-import re.melchior.saviomobile.ui.utils.rememberSavioWindowSize
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
+import com.google.gson.Gson
 
 @Composable
 fun AppNavigation(
@@ -127,7 +130,7 @@ fun AppNavigation(
             ActivationScreen(
                 authViewModel = authViewModel,
                 onActivationAuthenticated = {
-                    navController.navigate(Screen.Tournee.route) {
+                    navController.navigate(Screen.Main.route) {
                         popUpTo(navController.graph.id) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -183,7 +186,7 @@ fun AppNavigation(
         composable(Screen.Onboarding.route) {
             OnboardingScreen(
                 onFinished = {
-                    navController.navigate(Screen.Tournee.route) {
+                    navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -194,7 +197,7 @@ fun AppNavigation(
         composable(Screen.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(Screen.Tournee.route) {
+                    navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -231,7 +234,7 @@ fun AppNavigation(
                             launchSingleTop = true
                         }
                     } else {
-                        navController.navigate(Screen.Tournee.route) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(navController.graph.id) { inclusive = true }
                             launchSingleTop = true
                         }
@@ -241,78 +244,34 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.Tournee.route) { backStackEntry ->
-            val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
+        composable(Screen.Main.route) { backStackEntry ->
             val tourneeViewModel: TourneeViewModel = hiltViewModel(backStackEntry)
-            val context = LocalContext.current
             val pendingSnackbar =
                 backStackEntry.savedStateHandle.get<String>("pending_snackbar")
             val pendingFocusDateMillis =
                 backStackEntry.savedStateHandle.get<Long>("pending_focus_date_millis")
-            val onConsumePendingSnackbar: () -> Unit = {
-                backStackEntry.savedStateHandle.remove<String>("pending_snackbar")
-            }
-            val onConsumePendingFocusDate: () -> Unit = {
-                backStackEntry.savedStateHandle.remove<Long>("pending_focus_date_millis")
-            }
-            val onNewIntervention: () -> Unit = {
-                if (NetworkUtils.isOnline(context)) {
-                    navController.navigate(Screen.CreateIntervention.createRoute())
-                } else {
-                    navController.navigate(Screen.CreateOfflineIntervention.route)
-                }
-            }
+            MainShellScreen(
+                parentNavController = navController,
+                windowSizeClass = windowSizeClass,
+                onLogout = logoutAndGoWelcome,
+                pendingSnackbar = pendingSnackbar,
+                onConsumePendingSnackbar = {
+                    backStackEntry.savedStateHandle.remove<String>("pending_snackbar")
+                },
+                pendingFocusDateMillis = pendingFocusDateMillis,
+                onConsumePendingFocusDate = {
+                    backStackEntry.savedStateHandle.remove<Long>("pending_focus_date_millis")
+                },
+                tourneeViewModel = tourneeViewModel,
+            )
+        }
 
-            if (savioWindowSize == SavioWindowSize.EXPANDED) {
-                TourneeTabletScreen(
-                    parentNavController = navController,
-                    onResumeIntervention = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionActive.createRoute(interventionId),
-                        )
-                    },
-                    onLogout = logoutAndGoWelcome,
-                    onCreateClient = { navController.navigate(Screen.CreateClient.route) },
-                    onNewIntervention = onNewIntervention,
-                    onOfflineIntervention = {
-                        navController.navigate(Screen.CreateOfflineIntervention.route)
-                    },
-                    onPendingOfflineList = {
-                        navController.navigate(Screen.PendingOfflineInterventions.route)
-                    },
-                    pendingSnackbar = pendingSnackbar,
-                    onConsumePendingSnackbar = onConsumePendingSnackbar,
-                    pendingFocusDateMillis = pendingFocusDateMillis,
-                    onConsumePendingFocusDate = onConsumePendingFocusDate,
-                    viewModel = tourneeViewModel,
-                )
-            } else {
-                TourneeScreen(
-                    onInterventionClick = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionDetail.createRoute(interventionId),
-                        )
-                    },
-                    onResumeIntervention = { interventionId ->
-                        navController.navigate(
-                            Screen.InterventionActive.createRoute(interventionId),
-                        )
-                    },
-                    onLogout = logoutAndGoWelcome,
-                    onCreateClient = { navController.navigate(Screen.CreateClient.route) },
-                    onNewIntervention = onNewIntervention,
-                    onOfflineIntervention = {
-                        navController.navigate(Screen.CreateOfflineIntervention.route)
-                    },
-                    onPendingOfflineList = {
-                        navController.navigate(Screen.PendingOfflineInterventions.route)
-                    },
-                    pendingSnackbar = pendingSnackbar,
-                    onConsumePendingSnackbar = onConsumePendingSnackbar,
-                    pendingFocusDateMillis = pendingFocusDateMillis,
-                    onConsumePendingFocusDate = onConsumePendingFocusDate,
-                    viewModel = tourneeViewModel,
-                )
+        composable(Screen.Tournee.route) {
+            LaunchedEffect(Unit) {
+                navController.navigate(Screen.Main.route) {
+                    popUpTo(Screen.Tournee.route) { inclusive = true }
+                    launchSingleTop = true
+                }
             }
         }
 
@@ -358,7 +317,7 @@ fun AppNavigation(
             CreateInterventionScreen(
                 onBack = { navController.popBackStack() },
                 onCreated = { scheduledAtMillis ->
-                    navController.getBackStackEntry(Screen.Tournee.route).savedStateHandle.apply {
+                    navController.getBackStackEntry(Screen.Main.route).savedStateHandle.apply {
                         set("pending_snackbar", "Intervention créée ✅")
                         set("pending_focus_date_millis", scheduledAtMillis)
                     }
@@ -369,6 +328,7 @@ fun AppNavigation(
                         popUpTo(Screen.CreateIntervention.route) { inclusive = true }
                     }
                 },
+                onCreateClient = { navController.navigate(Screen.CreateClient.route) },
             )
         }
 
@@ -393,8 +353,8 @@ fun AppNavigation(
             ClotureSignatureScreen(
                 onBack = { navController.popBackStack() },
                 onCompleted = {
-                    navController.navigate(Screen.Tournee.route) {
-                        popUpTo(Screen.Tournee.route) { inclusive = true }
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Main.route) { inclusive = true }
                     }
                 },
             )
@@ -411,16 +371,24 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.InterventionDetail.route) {
+        composable(
+            route = Screen.InterventionDetail.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val interventionId =
+                backStackEntry.arguments?.getString("interventionId") ?: return@composable
             InterventionDetailScreen(
                 onBack = { navController.popBackStack() },
-                onStartIntervention = { interventionId ->
-                    navController.navigate(
-                        Screen.InterventionActive.createRoute(interventionId)
-                    )
+                onStartIntervention = { id ->
+                    navController.navigate(Screen.InterventionActive.createRoute(id))
                 },
                 onClientClick = { customerId ->
                     navController.navigate(Screen.ClientDetail.createRoute(customerId))
+                },
+                onNavigateToDevisSignature = {
+                    navController.navigate(Screen.DevisSignature.createRoute(interventionId))
                 },
             )
         }
@@ -456,7 +424,7 @@ fun AppNavigation(
                     val popped = navController.popBackStack()
                     if (!popped) {
                         navController.navigate(Screen.Invoice.createRoute(interventionId)) {
-                            popUpTo(Screen.Tournee.route) { saveState = true }
+                            popUpTo(Screen.Main.route) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -469,7 +437,7 @@ fun AppNavigation(
             val interventionId =
                 backStackEntry.arguments?.getString("interventionId") ?: return@composable
             InterventionActiveScreen(
-                onQuit = { navController.popBackStack(Screen.Tournee.route, false) },
+                onQuit = { navController.popBackStack(Screen.Main.route, false) },
                 onCloture = { id ->
                     navController.navigate(
                         Screen.ClotureRapport.createRoute(id)
@@ -596,6 +564,28 @@ fun AppNavigation(
                 ?.takeIf { it.isNotBlank() }
             val parentEquipmentId = backStackEntry.arguments?.getString("parentEquipmentId")
                 ?.takeIf { it.isNotBlank() }
+            val formViewModel: re.melchior.saviomobile.ui.screen.intervention.EquipmentFormViewModel =
+                hiltViewModel(backStackEntry)
+            val scanResultJsonFlow = remember(backStackEntry) {
+                backStackEntry.savedStateHandle.getStateFlow<String?>(ScanPlateNav.RESULT_JSON, null)
+            }
+            val scanResultJson by scanResultJsonFlow.collectAsState()
+            var scanSnackbarMessage by remember { mutableStateOf<String?>(null) }
+
+            LaunchedEffect(scanResultJson) {
+                val json = scanResultJson ?: return@LaunchedEffect
+                val payload = Gson().fromJson(json, ScanPlateNavPayload::class.java)
+                formViewModel.applyScanPayload(payload)
+                backStackEntry.savedStateHandle.remove<String>(ScanPlateNav.RESULT_JSON)
+                val snackbar = backStackEntry.savedStateHandle.get<String>(ScanPlateNav.SNACKBAR)
+                if (snackbar != null) {
+                    scanSnackbarMessage = snackbar
+                    backStackEntry.savedStateHandle.remove<String>(ScanPlateNav.SNACKBAR)
+                } else if (payload.parsed != null) {
+                    scanSnackbarMessage = "Plaque analysée — vérifiez les champs"
+                }
+            }
+
             EquipmentFormScreen(
                 interventionId = interventionId,
                 unitId = unitId,
@@ -609,7 +599,33 @@ fun AppNavigation(
                     )
                 },
                 onBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(backStackEntry),
+                onScanPlate = {
+                    navController.navigate(
+                        Screen.PlateScan.createRoute(interventionId, unitId),
+                    )
+                },
+                scanSnackbarMessage = scanSnackbarMessage,
+                onConsumeScanSnackbar = { scanSnackbarMessage = null },
+                viewModel = formViewModel,
+            )
+        }
+
+        composable(
+            route = Screen.PlateScan.route,
+            arguments = listOf(
+                navArgument("interventionId") { type = NavType.StringType },
+                navArgument("unitId") { type = NavType.StringType },
+            ),
+        ) {
+            PlateScanScreen(
+                onBack = { navController.popBackStack() },
+                onScanComplete = { payload, snackbarMessage ->
+                    navController.previousBackStackEntry?.savedStateHandle?.apply {
+                        set(ScanPlateNav.RESULT_JSON, Gson().toJson(payload))
+                        snackbarMessage?.let { msg -> set(ScanPlateNav.SNACKBAR, msg) }
+                    }
+                    navController.popBackStack()
+                },
             )
         }
 
@@ -751,9 +767,37 @@ fun AppNavigation(
         }
 
 
-        composable(Screen.ClientDetail.route) {
+        composable(
+            route = Screen.ClientDetail.route,
+            arguments = listOf(
+                navArgument("customerId") { type = NavType.StringType },
+                navArgument("unitId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("displayName") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("addressLine") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) {
             ClientDetailScreen(
-                onBack = { navController.popBackStack() }
+                windowSizeClass = windowSizeClass,
+                onBack = { navController.popBackStack() },
+                onNewIntervention = { unitId, customerId, displayName, addressLine ->
+                    navController.navigate(
+                        Screen.CreateIntervention.createRoute(
+                            unitId = unitId,
+                            customerId = customerId,
+                            displayName = displayName,
+                            addressLine = addressLine,
+                        ),
+                    )
+                },
             )
         }
 

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -49,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.screen.intervention.cloture.DrawPoint
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
@@ -76,8 +77,6 @@ fun DevisSignatureScreen(
 
     LaunchedEffect(uiState.isCompleted) {
         if (uiState.isCompleted) {
-            snackbarHostState.showSnackbar("Devis enregistré — synchronisation en cours")
-            delay(800)
             onCompleted()
         }
     }
@@ -405,10 +404,18 @@ private fun DevisSignatureBottomBar(
                 enabled = canFinalizeStep2,
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(20.dp),
-                        strokeWidth = 2.dp,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("Enregistrement…")
+                    }
                 } else {
                     Text(
                         if (uiState.hamonImmediateRequested) {

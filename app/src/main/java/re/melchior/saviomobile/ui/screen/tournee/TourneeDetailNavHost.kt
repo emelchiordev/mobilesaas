@@ -19,6 +19,7 @@ fun TourneeDetailNavHost(
     detailNavController: NavHostController,
     onStartIntervention: (String) -> Unit,
     onClientClick: (String) -> Unit = {},
+    onNavigateToDevisSignature: (String) -> Unit = {},
 ) {
     NavHost(
         navController = detailNavController,
@@ -31,13 +32,16 @@ fun TourneeDetailNavHost(
         composable(
             route = Screen.InterventionDetail.route,
             arguments = listOf(
-                navArgument("interventionId") { type = NavType.StringType }
-            )
-        ) {
+                navArgument("interventionId") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val interventionId =
+                backStackEntry.arguments?.getString("interventionId") ?: return@composable
             InterventionDetailScreen(
                 onBack = { detailNavController.popBackStack() },
                 onStartIntervention = onStartIntervention,
                 onClientClick = onClientClick,
+                onNavigateToDevisSignature = { onNavigateToDevisSignature(interventionId) },
                 embeddedInMasterDetail = true,
             )
         }

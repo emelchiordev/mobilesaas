@@ -24,6 +24,7 @@ import re.melchior.saviomobile.data.repository.SyncResult
 import android.util.Log
 import java.time.LocalDate
 import javax.inject.Inject
+import retrofit2.HttpException
 
 data class TourneeUiState(
     val isLoading: Boolean = false,
@@ -196,18 +197,41 @@ class TourneeViewModel @Inject constructor(
 
     private companion object {
         val CONFLICT_SYNC_STATUSES = setOf("CONFLICT_IMMUTABLE", "CONFLICT_VERSION")
+
+        fun catalogSyncErrorMessage(e: Exception): String = when {
+            e is HttpException && e.code() == 401 ->
+                "Clé catalogue refusée (HTTP 401). Rebuilder l’app release avec BAN_API_KEY " +
+                    "identique à API_KEY sur ban.melchior.re (fichier local.properties)."
+            else ->
+                "Catalogue BAN : ${e.message ?: "échec de synchronisation"}"
+        }
     }
 
     fun syncCatalog() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isCatalogSyncing = true) }
+            _uiState.update { it.copy(isCatalogSyncing = true, errorMessage = null) }
             try {
-                android.util.Log.d("CatalogSync", "Démarrage sync catalogue...")
-                catalogSyncRepository.sync()
+                Log.d("CatalogSync", "Démarrage sync catalogue (full)...")
+                val result = catalogSyncRepository.sync(forceFull = true)
                 tenantArticleSyncRepository.sync(force = true)
-                android.util.Log.d("CatalogSync", "Sync catalogue terminée avec succès")
+                Log.d(
+                    "CatalogSync",
+                    "Sync OK — nomenclature=${result.nomenclatureCount}, équipements=${result.equipmentCount}, full=${result.fullSync}",
+                )
+                val message = when {
+                    result.equipmentCount == 0 && result.fullSync ->
+                        "Catalogue synchronisé mais aucun appareil reçu — vérifiez l’API BAN (URL / clé x-api-key)."
+                    result.equipmentCount == 0 ->
+                        "Catalogue à jour (aucun nouvel appareil)."
+                    else ->
+                        "Catalogue : ${result.equipmentCount} appareil(s) synchronisé(s)."
+                }
+                _uiState.update { it.copy(errorMessage = message) }
             } catch (e: Exception) {
-                android.util.Log.e("CatalogSync", "Erreur sync catalogue: ${e.message}", e)
+                Log.e("CatalogSync", "Erreur sync catalogue: ${e.message}", e)
+                _uiState.update {
+                    it.copy(errorMessage = catalogSyncErrorMessage(e))
+                }
             } finally {
                 _uiState.update { it.copy(isCatalogSyncing = false) }
             }

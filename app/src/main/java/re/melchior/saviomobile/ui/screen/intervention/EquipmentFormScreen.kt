@@ -19,7 +19,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -28,11 +31,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,13 +51,24 @@ fun EquipmentFormScreen(
     parentEquipmentId: String?,
     onSaved: () -> Unit,
     onBack: () -> Unit,
+    onScanPlate: () -> Unit = {},
+    scanSnackbarMessage: String? = null,
+    onConsumeScanSnackbar: () -> Unit = {},
     viewModel: EquipmentFormViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.saved.collect {
             onSaved()
+        }
+    }
+
+    LaunchedEffect(scanSnackbarMessage) {
+        scanSnackbarMessage?.let { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+            onConsumeScanSnackbar()
         }
     }
 
@@ -63,6 +80,7 @@ fun EquipmentFormScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(title) },
@@ -96,6 +114,27 @@ fun EquipmentFormScreen(
                             modifier = Modifier.padding(12.dp),
                         )
                     }
+                }
+
+                if (uiState.scanPrefilled) {
+                    Surface(
+                        color = SavioPalette.SuccessDark,
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(
+                            text = "Plaque analysée — vérifiez avant enregistrement",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SavioPalette.Success,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onScanPlate,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Scanner la plaque")
                 }
 
                 OutlinedTextField(

@@ -241,11 +241,11 @@ class DevisSignatureViewModel @Inject constructor(
                 )
             result.onSuccess {
                 _uiState.update { it.copy(isLoading = false, isCompleted = true) }
-            }.onFailure { e ->
+            }.onFailure {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = e.message ?: "Erreur lors de la signature",
+                        errorMessage = "Erreur lors de l'enregistrement",
                     )
                 }
             }

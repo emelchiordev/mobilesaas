@@ -1,6 +1,7 @@
 package re.melchior.saviomobile.data.repository
 
 import com.google.gson.Gson
+import kotlinx.coroutines.flow.Flow
 import re.melchior.saviomobile.data.local.dao.CatalogEquipmentDao
 import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
@@ -8,6 +9,7 @@ import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
 import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
+import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
 import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
@@ -18,13 +20,15 @@ import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
-import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
+import re.melchior.saviomobile.data.local.entity.toEntity
+import re.melchior.saviomobile.data.local.entity.toEntityFromLegacyReferentiel
 import re.melchior.saviomobile.data.local.entity.SettingsEntity
 import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.dto.InterventionDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.remote.dto.SettingsDto
+import re.melchior.saviomobile.util.toScheduledAtIsoRange
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -48,6 +52,7 @@ class SyncRepository @Inject constructor(
     private val pendingOperationDao: PendingOperationDao,
     private val coldMeasureDao: ColdMeasureDao,
     private val equipmentSnapshotDao: EquipmentSnapshotDao,
+    private val anomalyTypeDao: AnomalyTypeDao,
     private val measureRepository: MeasureRepository,
     private val pacMeasureRepository: PacMeasureRepository,
 ) {
@@ -207,7 +212,9 @@ class SyncRepository @Inject constructor(
                 }
             }
 
+            // Date calendaire (yyyy-MM-dd) — filtre Room en plage ISO Europe/Paris (aligné pull API).
             val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val dayRange = date.toScheduledAtIsoRange()
 
             val localSettings = settingsDao.getSettingsOnce()
             val ifModifiedSince = localSettings?.lastPulledAt
@@ -228,15 +235,23 @@ class SyncRepository @Inject constructor(
             // global repose sur interventionDao.deleteOlderThan et deleteOlderThan sur les équipements.
             val returnedInterventionIds = response.interventions.map { it.id }
             if (returnedInterventionIds.isEmpty()) {
-                equipmentDao.deleteEquipmentsForAllSyncedInterventionsOnDate(dateStr)
-                interventionDao.deleteSyncedOpenInterventionsForDateWhenPullEmpty(dateStr)
+                equipmentDao.deleteEquipmentsForAllSyncedInterventionsOnDate(
+                    dayRange.startIso,
+                    dayRange.endIso,
+                )
+                interventionDao.deleteSyncedOpenInterventionsForDateWhenPullEmpty(
+                    dayRange.startIso,
+                    dayRange.endIso,
+                )
             } else {
                 equipmentDao.deleteEquipmentsForSyncedInterventionsNotInKeepList(
-                    dateStr,
+                    dayRange.startIso,
+                    dayRange.endIso,
                     returnedInterventionIds,
                 )
                 interventionDao.deleteSyncedOpenForDateNotInKeepList(
-                    dateStr,
+                    dayRange.startIso,
+                    dayRange.endIso,
                     returnedInterventionIds,
                 )
             }
@@ -282,6 +297,7 @@ class SyncRepository @Inject constructor(
                         scheduledAt = h.scheduledAt,
                         completedAt = h.completedAt,
                         report = h.report,
+                        notes = h.notes,
                         typeCode = h.typeCode,
                         typeLabel = h.typeLabel,
                         typeColor = h.typeColor,
@@ -378,12 +394,22 @@ class SyncRepository @Inject constructor(
                 }
             }
 
-            response.referentiels?.let { refs ->
-                refs.interventionTypes?.let { types ->
-                    referentielDao.insertInterventionTypes(
-                        types.map { InterventionTypeEntity(it.code, it.label, it.color) }
-                    )
+            val rootTypes = response.interventionTypes
+            if (!rootTypes.isNullOrEmpty()) {
+                referentielDao.deleteAllInterventionTypes()
+                referentielDao.upsertInterventionTypes(rootTypes.map { it.toEntity() })
+            } else {
+                response.referentiels?.interventionTypes?.let { types ->
+                    if (types.isNotEmpty()) {
+                        referentielDao.deleteAllInterventionTypes()
+                        referentielDao.upsertInterventionTypes(
+                            types.map { it.toEntityFromLegacyReferentiel() },
+                        )
+                    }
                 }
+            }
+
+            response.referentiels?.let { refs ->
                 refs.equipmentTypes?.let { types ->
                     referentielDao.insertEquipmentTypes(
                         types.map { EquipmentTypeEntity(it.code, it.label) }
@@ -393,6 +419,13 @@ class SyncRepository @Inject constructor(
                     referentielDao.insertEnergyTypes(
                         types.map { EnergyTypeEntity(it.code, it.label) }
                     )
+                }
+            }
+
+            response.anomalyTypes?.let { types ->
+                if (types.isNotEmpty()) {
+                    anomalyTypeDao.deleteAll()
+                    anomalyTypeDao.insertAll(types.map { it.toEntity() })
                 }
             }
 
@@ -439,9 +472,9 @@ class SyncRepository @Inject constructor(
                 }
             }
 
-            val cutoffDate = date.minusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE)
-            equipmentDao.deleteOlderThan(cutoffDate)
-            interventionDao.deleteOlderThan(cutoffDate)
+            val cutoffBeforeIso = date.minusDays(7).toScheduledAtIsoRange().startIso
+            equipmentDao.deleteOlderThan(cutoffBeforeIso)
+            interventionDao.deleteOlderThan(cutoffBeforeIso)
 
             SyncResult.Success
 
@@ -450,15 +483,15 @@ class SyncRepository @Inject constructor(
         }
     }
 
-    fun getInterventionsByDate(date: LocalDate) =
-        interventionDao.getInterventionsByDate(
-            date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        )
+    fun getInterventionsByDate(date: LocalDate): Flow<List<InterventionEntity>> {
+        val range = date.toScheduledAtIsoRange()
+        return interventionDao.getInterventionsByDate(range.startIso, range.endIso)
+    }
 
-    suspend fun hasCachedInterventionsForDate(date: LocalDate): Boolean =
-        interventionDao.countInterventionsByDate(
-            date.format(DateTimeFormatter.ISO_LOCAL_DATE),
-        ) > 0
+    suspend fun hasCachedInterventionsForDate(date: LocalDate): Boolean {
+        val range = date.toScheduledAtIsoRange()
+        return interventionDao.countInterventionsByDate(range.startIso, range.endIso) > 0
+    }
 
     fun getInterventionById(id: String) =
         interventionDao.getInterventionById(id)
@@ -471,6 +504,9 @@ class SyncRepository @Inject constructor(
 
     suspend fun getHistoryForUnit(unitId: String): List<InterventionHistoryEntity> =
         interventionHistoryDao.getHistoryForUnit(unitId)
+
+    suspend fun getLastCompletedVeForUnit(unitId: String): InterventionHistoryEntity? =
+        interventionHistoryDao.getLastCompletedVeForUnit(unitId)
 
     suspend fun getInProgressIntervention(): InterventionEntity? =
         interventionDao.findFirstInProgress()
@@ -582,6 +618,7 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     customerEmail = customer?.email,
     notes = notes,
     contractType = contract?.type,
+    contractStatus = contract?.status,
     contractRenewalDate = contract?.renewalDate,
     contractTariff = contract?.tariff,
     contractVatRate = contract?.vatRate,

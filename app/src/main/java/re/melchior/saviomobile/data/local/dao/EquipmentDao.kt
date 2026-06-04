@@ -30,6 +30,16 @@ interface EquipmentDao {
 
     @Query(
         """
+        SELECT * FROM equipments
+        WHERE interventionId = :interventionId
+        AND (parent_equipment_id IS NULL OR parent_equipment_id = '')
+        ORDER BY `order` ASC, id ASC
+        """,
+    )
+    suspend fun getRootEquipmentsByInterventionOnce(interventionId: String): List<EquipmentEntity>
+
+    @Query(
+        """
         SELECT * FROM equipments 
         WHERE unitId = :unitId
         AND (typeCode != 'replaced' OR typeCode IS NULL)
@@ -52,41 +62,48 @@ interface EquipmentDao {
         DELETE FROM equipments 
         WHERE interventionId IN (
             SELECT id FROM interventions 
-            WHERE scheduledAt < :date 
+            WHERE scheduledAt < :beforeIso 
             AND syncStatus = 'SYNCED'
             AND status NOT IN ('in_progress', 'pending_validation', 'completed')
             AND isChantier = 0
         )
         """,
     )
-    suspend fun deleteOlderThan(date: String)
+    suspend fun deleteOlderThan(beforeIso: String)
 
     @Query(
         """
         DELETE FROM equipments 
         WHERE interventionId IN (
             SELECT id FROM interventions 
-            WHERE scheduledAt LIKE :date || '%' 
+            WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
             AND syncStatus = 'SYNCED' 
             AND status NOT IN ('completed', 'pending_validation')
             AND id NOT IN (:keepIds)
         )
         """,
     )
-    suspend fun deleteEquipmentsForSyncedInterventionsNotInKeepList(date: String, keepIds: List<String>)
+    suspend fun deleteEquipmentsForSyncedInterventionsNotInKeepList(
+        startIso: String,
+        endIso: String,
+        keepIds: List<String>,
+    )
 
     @Query(
         """
         DELETE FROM equipments 
         WHERE interventionId IN (
             SELECT id FROM interventions 
-            WHERE scheduledAt LIKE :date || '%' 
+            WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
             AND syncStatus = 'SYNCED'
             AND status NOT IN ('completed', 'pending_validation')
         )
         """,
     )
-    suspend fun deleteEquipmentsForAllSyncedInterventionsOnDate(date: String)
+    suspend fun deleteEquipmentsForAllSyncedInterventionsOnDate(
+        startIso: String,
+        endIso: String,
+    )
 
     @Query("SELECT * FROM equipments WHERE id = :serverId LIMIT 1")
     fun getEquipmentByServerId(serverId: String): Flow<EquipmentEntity?>
@@ -174,4 +191,16 @@ interface EquipmentDao {
         """,
     )
     suspend fun restoreTypeCode(interventionId: String, order: Int)
+
+    @Query(
+        """
+        UPDATE equipments SET id = :newId
+        WHERE interventionId = :interventionId AND id = :oldId
+        """,
+    )
+    suspend fun updateEquipmentId(
+        interventionId: String,
+        oldId: String,
+        newId: String,
+    )
 }

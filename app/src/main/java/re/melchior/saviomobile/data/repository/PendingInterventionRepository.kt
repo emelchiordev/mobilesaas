@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.Flow
 import retrofit2.HttpException
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.ZoneOffset
+import re.melchior.saviomobile.util.SavioTimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,7 +66,8 @@ class PendingInterventionRepository @Inject constructor(
         }
     }
 
-    private fun LocalDate.dayRangeMillis(zone: ZoneId = ZoneId.systemDefault()): Pair<Long, Long> {
+    private fun LocalDate.dayRangeMillis(): Pair<Long, Long> {
+        val zone = SavioTimeZone.appZone
         val dayStart = atStartOfDay(zone).toInstant().toEpochMilli()
         val dayEnd = plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         return dayStart to dayEnd

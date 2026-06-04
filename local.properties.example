@@ -1,0 +1,12 @@
+# Copier ce fichier vers local.properties (gitignored) et adapter les valeurs.
+# sdk.dir est souvent ajouté automatiquement par Android Studio.
+
+# --- API Savio (debug / tablette LAN) ---
+# DEV_BASE_URL=http://192.168.1.XX:3000
+
+# --- API catalogue BAN (debug uniquement pour l’URL) ---
+# DEV_BAN_BASE_URL=http://192.168.1.XX:3001
+
+# --- Obligatoire pour release (et recommandé en debug) ---
+# Même valeur que API_KEY sur le serveur https://ban.melchior.re (codepoAPI)
+BAN_API_KEY=remplacer-par-votre-cle-api-ban-prod

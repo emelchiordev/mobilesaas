@@ -1,4 +1,4 @@
-package re.melchior.saviomobile.ui.screen.intervention
+﻿package re.melchior.saviomobile.ui.screen.intervention
 
 import android.content.Intent
 import android.net.Uri
@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -90,8 +91,11 @@ import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
+import re.melchior.saviomobile.util.formatScheduledAtDate
+import re.melchior.saviomobile.util.formatScheduledAtTime
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
+import re.melchior.saviomobile.ui.component.HistoriquePage
 import re.melchior.saviomobile.ui.component.SavioEmptyState
 import re.melchior.saviomobile.ui.component.SavioInterventionDetailSkeleton
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
@@ -120,6 +124,7 @@ fun InterventionDetailScreen(
     onBack: () -> Unit,
     onStartIntervention: (String) -> Unit,
     onClientClick: (customerId: String) -> Unit = {},
+    onNavigateToDevisSignature: () -> Unit = {},
     embeddedInMasterDetail: Boolean = false,
     viewModel: InterventionDetailViewModel = hiltViewModel()
 ) {
@@ -153,7 +158,7 @@ fun InterventionDetailScreen(
                             )
                             uiState.intervention?.let {
                                 Text(
-                                    text = it.scheduledAt.substringAfter("T").substring(0, 5),
+                                    text = formatScheduledAtTime(it.scheduledAt),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = savioTopAppBarContentColor(),
@@ -264,7 +269,7 @@ fun InterventionDetailScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = if (intervention.status == "scheduled") {
-                                        "Démarrer l'intervention"
+                                        "DÃ©marrer l'intervention"
                                     } else {
                                         "Reprendre l'intervention"
                                     },
@@ -290,15 +295,15 @@ fun InterventionDetailScreen(
             else -> {
                 val intervention = uiState.intervention!!
 
-                // ← ICI intervention est disponible
+                // â† ICI intervention est disponible
                 val isCompleted = intervention.status == "completed"
 
                 val tabs = remember(isCompleted) {
                     buildList {
                         if (isCompleted) add(DetailTab("Rapport", Icons.Filled.Assessment))
-                        add(DetailTab("Détail", Icons.Filled.Person))
-                        add(DetailTab("Équipements", Icons.Filled.Build))
-                        add(DetailTab("Historique", Icons.Filled.History)) // ← ajouté
+                        add(DetailTab("DÃ©tail", Icons.Filled.Person))
+                        add(DetailTab("Ã‰quipements", Icons.Filled.Build))
+                        add(DetailTab("Historique", Icons.Filled.History)) // â† ajoutÃ©
                     }
                 }
 
@@ -388,7 +393,7 @@ fun InterventionDetailScreen(
                     }
 
                     HorizontalPager(state = pagerState, key = { it }, modifier = pagerModifier) { page ->
-                        // Si isCompleted, page 0 = Rapport, sinon page 0 = Détail
+                        // Si isCompleted, page 0 = Rapport, sinon page 0 = DÃ©tail
                         val adjustedPage = if (isCompleted) page else page + 1
 
                         when (adjustedPage) {
@@ -416,7 +421,13 @@ fun InterventionDetailScreen(
                                     }
                                 )
                                 if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
-                                    SyncStatusCard(intervention = intervention)
+                                    SyncStatusCard(
+                                        intervention = intervention,
+                                        pendingHamonIssue = uiState.pendingInvoiceHamonIssue,
+                                        isRetrying = uiState.isSyncRetrying,
+                                        onRetrySync = { viewModel.retrySync() },
+                                        onDevisSignature = onNavigateToDevisSignature,
+                                    )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -439,8 +450,8 @@ fun InterventionDetailScreen(
                                     ) {
                                         SavioEmptyState(
                                             icon = Icons.Outlined.VpnKey,
-                                            title = "Aucun équipement enregistré",
-                                            subtitle = "Aucun appareil n'est associé à cette intervention.",
+                                            title = "Aucun Ã©quipement enregistrÃ©",
+                                            subtitle = "Aucun appareil n'est associÃ© Ã  cette intervention.",
                                         )
                                     }
                                 }
@@ -448,7 +459,7 @@ fun InterventionDetailScreen(
                             }
                             3 -> HistoriquePage(
                                 history = uiState.history,
-                                photoUrls = uiState.historyPhotoUrls // ← ajouté
+                                photoUrls = uiState.historyPhotoUrls // â† ajoutÃ©
                             )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
@@ -476,7 +487,7 @@ private fun InterventionDetailEmbeddedFooter(
     onPrimaryClick: () -> Unit,
 ) {
     val primaryLabel =
-        if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention"
+        if (intervention.status == "scheduled") "DÃ©marrer l'intervention" else "Reprendre l'intervention"
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -528,36 +539,69 @@ private fun InterventionDetailEmbeddedFooter(
 }
 
 @Composable
-private fun SyncStatusCard(intervention: InterventionEntity) {
-    val syncColor = if (intervention.syncStatus == "CONFLICT")
-        MaterialTheme.colorScheme.error
-    else MaterialTheme.colorScheme.primary
-    val syncLabel = if (intervention.syncStatus == "CONFLICT")
-        "Conflit de synchronisation"
-    else "En attente de synchronisation"
+private fun SyncStatusCard(
+    intervention: InterventionEntity,
+    pendingHamonIssue: Boolean,
+    isRetrying: Boolean,
+    onRetrySync: () -> Unit,
+    onDevisSignature: () -> Unit,
+) {
+    val isConflict = intervention.syncStatus == "CONFLICT"
+    val syncColor =
+        if (isConflict) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary
+    val message =
+        when {
+            isConflict -> "Conflit de synchronisation â€” contactez le support si le problÃ¨me persiste."
+            pendingHamonIssue ->
+                "La signature Hamon nâ€™a pas Ã©tÃ© envoyÃ©e. Reprenez la signature du devis ou rÃ©essayez la synchronisation aprÃ¨s correction cÃ´tÃ© bureau."
+            else -> "En attente de synchronisation avec le serveur."
+        }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = syncColor.copy(alpha = 0.08f)
+        color = syncColor.copy(alpha = 0.08f),
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(syncColor)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(syncColor),
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = if (isConflict) "Conflit de synchronisation" else "Synchronisation en attente",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = syncColor,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
             Text(
-                text = syncLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = syncColor,
-                fontWeight = FontWeight.Medium
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (!isConflict) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onRetrySync,
+                        enabled = !isRetrying,
+                    ) {
+                        Text(if (isRetrying) "Synchronisationâ€¦" else "RÃ©essayer la synchronisation")
+                    }
+                    if (pendingHamonIssue) {
+                        OutlinedButton(onClick = onDevisSignature) {
+                            Text("Signature du devis")
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -717,7 +761,7 @@ private fun DetailPage(
             val clientName = if (intervention.customerFirstName != null) {
                 "${intervention.customerFirstName} ${intervention.customerLastName}".trim()
             } else {
-                "Non renseigné"
+                "Non renseignÃ©"
             }
             Row(
                 modifier = Modifier
@@ -829,7 +873,7 @@ private fun DetailPage(
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
-                                        text = "Étage $it",
+                                        text = "Ã‰tage $it",
                                         fontSize = 11.sp,
                                         color = SavioUi.BusinessAccent,
                                         fontWeight = FontWeight.Medium,
@@ -978,7 +1022,7 @@ private fun RapportPage(
                     }
                 }
 
-                // Date de clôture
+                // Date de clÃ´ture
                 intervention.completedAt?.let { completedAt ->
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -999,12 +1043,12 @@ private fun RapportPage(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Clôturée le",
+                                text = "ClÃ´turÃ©e le",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "${completedAt.substring(0, 10)} à ${completedAt.substringAfter("T").substring(0, 5)}",
+                                text = "${formatScheduledAtDate(completedAt)} Ã  ${formatScheduledAtTime(completedAt)}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -1075,7 +1119,7 @@ private fun RapportPage(
                                             .weight(1f)
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable { selectedPhoto = photo } // ← ajouté
+                                            .clickable { selectedPhoto = photo } // â† ajoutÃ©
                                     )
                                 }
                                 repeat(3 - row.size) {
@@ -1087,8 +1131,8 @@ private fun RapportPage(
                 } else {
                     SavioEmptyState(
                         icon = Icons.Outlined.PhotoCamera,
-                        title = "Aucune photo ajoutée",
-                        subtitle = "Aucune image n'a été jointe au rapport.",
+                        title = "Aucune photo ajoutÃ©e",
+                        subtitle = "Aucune image n'a Ã©tÃ© jointe au rapport.",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     )
                 }
@@ -1132,7 +1176,7 @@ private fun PlanningEquipmentsSection(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Équipements",
+                    text = "Ã‰quipements",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium,
@@ -1229,197 +1273,6 @@ private fun PlanningEquipmentsSection(
                         interactive = false,
                         onEquipementClick = { _, _ -> },
                     )
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun HistoriquePage(
-    history: List<InterventionHistoryEntity>,
-    photoUrls: Map<String, List<String>>
-) {
-    if (history.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center,
-        ) {
-            SavioEmptyState(
-                icon = Icons.Outlined.Schedule,
-                title = "Aucun historique disponible",
-                subtitle = "Les interventions passées sur ce logement apparaîtront ici.",
-            )
-        }
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = SavioDimens.SpaceLG, vertical = SavioDimens.SpaceSM),
-        verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceSM),
-    ) {
-        item { Spacer(modifier = Modifier.height(SavioDimens.SpaceXS)) }
-        items(history) { item ->
-            HistoriqueItemCard(
-                item = item,
-                signedUrls = photoUrls[item.id] ?: emptyList()
-            )
-        }
-        item { Spacer(modifier = Modifier.height(SavioDimens.SpaceSM)) }
-    }
-}
-
-@Composable
-private fun HistoriqueItemCard(
-    item: InterventionHistoryEntity,
-    signedUrls: List<String> = emptyList()
-) {
-    val typeColor = remember(item.typeColor) {
-        try {
-            item.typeColor?.let { Color(android.graphics.Color.parseColor(it)) }
-        } catch (e: Exception) { null }
-    } ?: SavioUi.BusinessAccent
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(SavioDimens.RadiusLG),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(SavioDimens.BorderThin, MaterialTheme.colorScheme.outline),
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(typeColor)
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(
-                        horizontal = SavioDimens.SpaceLG,
-                        vertical = SavioDimens.SpaceMD,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(SavioDimens.RadiusBadge),
-                        color = typeColor.copy(alpha = 0.12f),
-                        shadowElevation = 0.dp,
-                        tonalElevation = 0.dp,
-                    ) {
-                        Text(
-                            text = item.typeLabel,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = SavioType.Label,
-                            color = typeColor,
-                        )
-                    }
-                    Text(
-                        text = item.completedAt?.substring(0, 10) ?: item.scheduledAt.substring(0, 10),
-                        style = SavioType.Label,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                item.number?.let {
-                    Text(
-                        text = it,
-                        style = SavioType.Label,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                val techName = listOfNotNull(item.technicianFirstName, item.technicianLastName)
-                    .joinToString(" ").ifEmpty { null }
-                techName?.let {
-                    Text(
-                        text = it,
-                        style = SavioType.BodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                item.report?.takeIf { it.isNotBlank() }?.let { report ->
-                    SectionDivider(modifier = Modifier.padding(vertical = SavioDimens.SpaceXS))
-                    Text(
-                        text = report,
-                        style = SavioType.BodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 3,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                }
-
-                if (signedUrls.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.padding(top = SavioDimens.SpaceXS),
-                        verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS)
-                    ) {
-                        signedUrls.chunked(3).forEach { row ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(SavioDimens.SpaceXS),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                row.forEach { url ->
-                                    AsyncImage(
-                                        model = url,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(SavioDimens.RadiusSM))
-                                    )
-                                }
-                                repeat(3 - row.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    val photoCount = try {
-                        item.photoKeys?.let {
-                            com.google.gson.Gson()
-                                .fromJson(it, Array<String>::class.java)?.size ?: 0
-                        } ?: 0
-                    } catch (e: Exception) { 0 }
-
-                    if (photoCount > 0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(SavioDimens.SpaceXS))
-                            Text(
-                                text = "$photoCount photo${if (photoCount > 1) "s" else ""} — réseau requis",
-                                style = SavioType.Label,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
             }
         }

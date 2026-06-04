@@ -10,6 +10,10 @@ data class PullResponseDto(
     val technician: TechnicianDto,
     @SerializedName("interventions")
     val interventions: List<InterventionDto>,
+    @SerializedName("interventionTypes")
+    val interventionTypes: List<InterventionTypeDto>? = null,
+    @SerializedName("anomalyTypes")
+    val anomalyTypes: List<AnomalyTypeDto>? = null,
     @SerializedName("referentiels")
     val referentiels: ReferentielsDto?,
     @SerializedName("settings")
@@ -142,12 +146,16 @@ data class HistoryItemDto(
     val completedAt: String? = null,
     @SerializedName("report")
     val report: String? = null,
+    @SerializedName("notes")
+    val notes: String? = null,
     @SerializedName("typeCode")
     val typeCode: String,
     @SerializedName("typeLabel")
     val typeLabel: String,
     @SerializedName("typeColor")
     val typeColor: String? = null,
+    @SerializedName("completedAsVe")
+    val completedAsVe: Boolean = false,
     @SerializedName("technicianFirstName")
     val technicianFirstName: String? = null,
     @SerializedName("technicianLastName")
@@ -230,6 +238,8 @@ data class EquipmentDto(
 data class ContractDto(
     @SerializedName("type")
     val type: String?,
+    @SerializedName("status")
+    val status: String? = null,
     @SerializedName("renewalDate")
     val renewalDate: String?,
     @SerializedName("tariff")
@@ -252,6 +262,25 @@ data class CodeLabelDto(
     val code: String,
     @SerializedName("label")
     val label: String
+)
+
+data class AnomalyTypeDto(
+    @SerializedName("id")
+    val id: String,
+    @SerializedName("code")
+    val code: String,
+    @SerializedName("designation")
+    val designation: String,
+    @SerializedName("type")
+    val type: String,
+    @SerializedName("level")
+    val level: String,
+    @SerializedName("nomenclature")
+    val nomenclature: String,
+    @SerializedName("energyType")
+    val energyType: String,
+    @SerializedName("isActive")
+    val isActive: Boolean = true,
 )
 
 data class SettingsDto(

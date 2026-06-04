@@ -19,6 +19,17 @@ interface PendingOperationDao {
     @Query("UPDATE pending_operations SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
+    @Query("UPDATE pending_operations SET payload = :payload WHERE id = :id")
+    suspend fun updatePayload(id: String, payload: String)
+
+    @Query(
+        """
+        SELECT * FROM pending_operations
+        WHERE interventionId = :interventionId AND status = 'pending'
+        """,
+    )
+    suspend fun getPendingByInterventionIdOnce(interventionId: String): List<PendingOperationEntity>
+
     @Query("SELECT COUNT(*) FROM pending_operations WHERE status = 'pending'")
     fun getPendingCount(): Flow<Int>
 

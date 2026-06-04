@@ -57,11 +57,22 @@ abstract class InterventionDao {
     @Query("SELECT * FROM interventions WHERE id = :id LIMIT 1")
     abstract suspend fun getInterventionByIdOnce(id: String): InterventionEntity?
 
-    @Query("SELECT * FROM interventions WHERE scheduledAt LIKE :date || '%' ORDER BY scheduledAt ASC")
-    abstract fun getInterventionsByDate(date: String): Flow<List<InterventionEntity>>
+    @Query(
+        """
+        SELECT * FROM interventions
+        WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
+        ORDER BY scheduledAt ASC
+        """,
+    )
+    abstract fun getInterventionsByDate(startIso: String, endIso: String): Flow<List<InterventionEntity>>
 
-    @Query("SELECT COUNT(*) FROM interventions WHERE scheduledAt LIKE :date || '%'")
-    abstract suspend fun countInterventionsByDate(date: String): Int
+    @Query(
+        """
+        SELECT COUNT(*) FROM interventions
+        WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
+        """,
+    )
+    abstract suspend fun countInterventionsByDate(startIso: String, endIso: String): Int
 
     @Query("SELECT * FROM interventions WHERE id = :id")
     abstract fun getInterventionById(id: String): Flow<InterventionEntity?>
@@ -150,6 +161,15 @@ abstract class InterventionDao {
     @Query("UPDATE interventions SET syncStatus = :syncStatus WHERE id = :id")
     abstract suspend fun setSyncStatus(id: String, syncStatus: String)
 
+    @Query(
+        """
+        UPDATE interventions
+        SET status = 'in_progress', syncStatus = 'IN_PROGRESS'
+        WHERE id = :id
+        """,
+    )
+    abstract suspend fun revertClosurePendingSync(id: String)
+
     @Query("UPDATE interventions SET hasLocalChanges = :hasLocalChanges WHERE id = :id")
     abstract suspend fun markLocalChanges(id: String, hasLocalChanges: Boolean)
 
@@ -168,11 +188,11 @@ abstract class InterventionDao {
     @Query(
         """
         DELETE FROM interventions
-        WHERE scheduledAt < :date
+        WHERE scheduledAt < :beforeIso
         AND status NOT IN ('completed', 'pending_validation')
         """,
     )
-    abstract suspend fun deleteOlderThan(date: String)
+    abstract suspend fun deleteOlderThan(beforeIso: String)
 
     @Query("SELECT * FROM interventions WHERE syncStatus = 'COMPLETED' ORDER BY scheduledAt ASC")
     abstract suspend fun getPendingSyncOnce(): List<InterventionEntity>
@@ -183,13 +203,17 @@ abstract class InterventionDao {
     @Query(
         """
         DELETE FROM interventions 
-        WHERE scheduledAt LIKE :date || '%'
+        WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
         AND syncStatus = 'SYNCED'
         AND status NOT IN ('completed', 'pending_validation')
         AND id NOT IN (:keepIds)
         """,
     )
-    abstract suspend fun deleteSyncedOpenForDateNotInKeepList(date: String, keepIds: List<String>)
+    abstract suspend fun deleteSyncedOpenForDateNotInKeepList(
+        startIso: String,
+        endIso: String,
+        keepIds: List<String>,
+    )
 
     /**
      * Cas pull vide : retire du jour les interventions SYNCED ouvertes uniquement
@@ -198,12 +222,15 @@ abstract class InterventionDao {
     @Query(
         """
         DELETE FROM interventions 
-        WHERE scheduledAt LIKE :date || '%'
+        WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
         AND syncStatus = 'SYNCED'
         AND status NOT IN ('completed', 'pending_validation')
         """,
     )
-    abstract suspend fun deleteSyncedOpenInterventionsForDateWhenPullEmpty(date: String)
+    abstract suspend fun deleteSyncedOpenInterventionsForDateWhenPullEmpty(
+        startIso: String,
+        endIso: String,
+    )
 
     @Query("SELECT COUNT(*) FROM interventions WHERE syncStatus = 'COMPLETED'")
     abstract fun getPendingSyncCount(): Flow<Int>

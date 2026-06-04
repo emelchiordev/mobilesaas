@@ -221,8 +221,16 @@ fun CatalogSearchScreen(
             Spacer(modifier = Modifier.padding(8.dp))
 
             if (results.isEmpty()) {
+                val emptyHint = when {
+                    brands.isEmpty() && equipmentTypes.isEmpty() ->
+                        "Catalogue vide ou non synchronisé. Sur l’écran Tournée, appuyez sur l’icône livre pour mettre à jour le catalogue BAN, puis réessayez."
+                    query.isNotBlank() || selectedBrandId != null || selectedTypeId != null ->
+                        "Aucun résultat pour ces critères — essayez la saisie manuelle."
+                    else ->
+                        "Aucun appareil dans le catalogue local — synchronisez depuis la Tournée (icône livre)."
+                }
                 Text(
-                    text = "Aucun résultat — essayez la saisie manuelle",
+                    text = emptyHint,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 24.dp),

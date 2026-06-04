@@ -17,6 +17,9 @@ sealed class Screen(val route: String) {
         fun createRoute(registerFlow: Boolean = false) = "select_societe/$registerFlow"
     }
 
+    object Main : Screen("main")
+
+    /** @deprecated Utiliser [Main] — conservé pour deep links internes. */
     object Tournee : Screen("tournee")
 
     object CreateClient : Screen("create_client")
@@ -71,8 +74,20 @@ sealed class Screen(val route: String) {
         fun createRoute(interventionId: String) = "intervention/$interventionId/active"
     }
 
-    object ClientDetail : Screen("client/{customerId}") {
-        fun createRoute(customerId: String) = "client/$customerId"
+    object ClientDetail :
+        Screen(
+            "client/{customerId}?unitId={unitId}&displayName={displayName}&addressLine={addressLine}",
+        ) {
+        fun createRoute(
+            customerId: String,
+            unitId: String = "",
+            displayName: String = "",
+            addressLine: String = "",
+        ): String =
+            "client/${Uri.encode(customerId)}?" +
+                "unitId=${Uri.encode(unitId)}&" +
+                "displayName=${Uri.encode(displayName)}&" +
+                "addressLine=${Uri.encode(addressLine)}"
     }
 
     object EquipementDetail : Screen("equipement/{interventionId}/{equipmentId}") {
@@ -151,6 +166,11 @@ sealed class Screen(val route: String) {
             existingEquipmentId: String? = null,
             parentEquipmentId: String? = null,
         ) = "equipment_form/$interventionId/$unitId?catalogEquipmentId=${catalogEquipmentId ?: ""}&existingEquipmentId=${existingEquipmentId ?: ""}&parentEquipmentId=${parentEquipmentId ?: ""}"
+    }
+
+    object PlateScan : Screen("plate_scan/{interventionId}/{unitId}") {
+        fun createRoute(interventionId: String, unitId: String) =
+            "plate_scan/$interventionId/$unitId"
     }
 
     object Measure : Screen("measure/{interventionId}/{equipmentOrder}") {

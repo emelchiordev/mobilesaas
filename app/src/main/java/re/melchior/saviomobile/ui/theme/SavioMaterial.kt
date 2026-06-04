@@ -46,6 +46,10 @@ fun savioTopAppBarContentColor(): Color =
     }
 
 @Composable
+fun savioTopAppBarSubtitleColor(): Color =
+    savioTopAppBarContentColor().copy(alpha = 0.75f)
+
+@Composable
 fun savioFieldColors(): TextFieldColors =
     OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onSurface,

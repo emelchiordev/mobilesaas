@@ -12,10 +12,12 @@ data class InterventionHistoryEntity(
     val scheduledAt: String,
     val completedAt: String? = null,
     val report: String? = null,
+    val notes: String? = null,
     val typeCode: String,
     val typeLabel: String,
     val typeColor: String? = null,
     val technicianFirstName: String? = null,
     val technicianLastName: String? = null,
+    val completedAsVe: Boolean = false,
     val photoKeys: String? = null // JSON array stocké comme String
 )

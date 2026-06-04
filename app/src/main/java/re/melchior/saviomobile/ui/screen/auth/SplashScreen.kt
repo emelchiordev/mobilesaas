@@ -39,7 +39,7 @@ fun SplashScreen(
                     token.isNullOrBlank() -> Screen.Welcome.route
                     slug.isNullOrBlank() -> Screen.Welcome.route
                     !onboardingDone -> Screen.Onboarding.route
-                    else -> Screen.Tournee.route
+                    else -> Screen.Main.route
                 }
             onNavigate(route)
         }

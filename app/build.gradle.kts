@@ -39,6 +39,13 @@ val debugBanBaseUrl =
 val sentryDsn =
     localProperties.getProperty("SENTRY_DSN")?.trim()?.takeIf { it.isNotEmpty() } ?: ""
 
+/** Clé x-api-key pour GET sync/catalog — voir local.properties.example */
+val banApiKeyPlaceholder = "change-me-with-a-strong-random-key"
+val banApiKey =
+    localProperties.getProperty("BAN_API_KEY")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv("BAN_API_KEY")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: banApiKeyPlaceholder
+
 android {
     namespace = "re.melchior.saviomobile"
     compileSdk = 36
@@ -52,11 +59,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField(
-            "String",
-            "BAN_API_KEY",
-            "\"change-me-with-a-strong-random-key\"",
-        )
+        buildConfigField("String", "BAN_API_KEY", "\"$banApiKey\"")
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
@@ -93,6 +96,29 @@ android {
     lint {
         // Workaround crash lint AGP + Kotlin UAST (NonNullableMutableLiveDataDetector)
         disable += "NullSafeMutableLiveData"
+    }
+}
+
+/** Release : refuse un APK sans vraie clé BAN (évite HTTP 401 silencieux en prod). */
+fun requireBanApiKeyForRelease(taskName: String) {
+    if (banApiKey == banApiKeyPlaceholder) {
+        throw GradleException(
+            """
+            |$taskName : BAN_API_KEY manquante ou placeholder.
+            |Ajoutez dans local.properties (racine du projet, non versionné) :
+            |  BAN_API_KEY=<même valeur que API_KEY sur https://ban.melchior.re>
+            |Ou exportez la variable d'environnement BAN_API_KEY avant le build.
+            |Test : curl -H "x-api-key: VOTRE_CLE" https://ban.melchior.re/sync/catalog → 200
+            """.trimMargin(),
+        )
+    }
+}
+
+afterEvaluate {
+    listOf("assembleRelease", "bundleRelease").forEach { taskName ->
+        tasks.findByName(taskName)?.doFirst {
+            requireBanApiKeyForRelease(taskName)
+        }
     }
 }
 
@@ -153,6 +179,8 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     implementation("androidx.concurrent:concurrent-futures:1.3.0")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")

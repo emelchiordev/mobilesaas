@@ -4,8 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import re.melchior.saviomobile.data.local.dao.ReferentielDao
+import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 import re.melchior.saviomobile.data.repository.PendingInterventionRepository
 import re.melchior.saviomobile.worker.PendingInterventionSyncWorker
@@ -20,8 +25,13 @@ sealed interface CreateOfflineInterventionEvent {
 @HiltViewModel
 class CreateOfflineInterventionViewModel @Inject constructor(
     private val pendingInterventionRepository: PendingInterventionRepository,
+    private val referentielDao: ReferentielDao,
     private val workManager: WorkManager,
 ) : ViewModel() {
+
+    val interventionTypes: StateFlow<List<InterventionTypeEntity>> =
+        referentielDao.getCreateInterventionTypes()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _events = Channel<CreateOfflineInterventionEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()

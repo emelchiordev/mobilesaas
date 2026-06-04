@@ -12,6 +12,16 @@ interface InterventionHistoryDao {
     @Query("SELECT * FROM intervention_history WHERE unitId = :unitId ORDER BY completedAt DESC LIMIT 10")
     suspend fun getHistoryForUnit(unitId: String): List<InterventionHistoryEntity>
 
+    @Query(
+        """
+        SELECT * FROM intervention_history
+        WHERE unitId = :unitId AND completedAsVe = 1 AND completedAt IS NOT NULL
+        ORDER BY completedAt DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun getLastCompletedVeForUnit(unitId: String): InterventionHistoryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<InterventionHistoryEntity>)
 

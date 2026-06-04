@@ -60,9 +60,28 @@ Optionnel pour le catalogue BAN local :
 
 ```properties
 DEV_BAN_BASE_URL=http://192.168.1.XX:3001
+BAN_API_KEY=votre-cle-x-api-key
 ```
 
-**release** utilise `https://api.savio.re/` et `https://ban.melchior.re/` pour `BAN_API_BASE_URL` (adapter si besoin).
+Sans `BAN_API_KEY` valide (ou avec l’URL BAN incorrecte), la synchro catalogue échoue ou renvoie 0 appareil — la recherche « Choisir un appareil » restera vide.
+
+### Variante **release** (tablette prod)
+
+- API principale : `https://api.savio.re/`
+- Catalogue BAN : `https://ban.melchior.re/sync/catalog` avec header **`x-api-key`**
+- La clé est compilée dans l’APK via **`BAN_API_KEY`** (lue au build depuis `local.properties` ou la variable d’environnement `BAN_API_KEY`).
+- Elle doit être **strictement identique** à `API_KEY` sur le serveur codepoAPI déployé sur `ban.melchior.re` (pas `CATALOG_ADMIN_KEY`).
+- Copier le modèle [`local.properties.example`](local.properties.example) vers `local.properties` et renseigner la clé prod.
+- Le build **`assembleRelease` / `bundleRelease` échoue** si la clé vaut encore le placeholder `change-me-with-a-strong-random-key`.
+- Après changement de clé : **Rebuild release** puis réinstaller l’APK sur la tablette.
+
+Vérification depuis un PC :
+
+```bash
+curl.exe -s -o NUL -w "%{http_code}" -H "x-api-key: VOTRE_CLE" https://ban.melchior.re/sync/catalog
+```
+
+Attendu : **200** (401 = mauvaise clé).
 
 L’URL principale Retrofit est **`BuildConfig.BASE_URL`** (voir `NetworkModule`). Changement d’environnement : **Build > Select Build Variant** (debug vs release).
 
@@ -95,11 +114,29 @@ L’URL principale Retrofit est **`BuildConfig.BASE_URL`** (voir `NetworkModule`
 - Les interventions reçues sont fusionnées en Room avec une logique de **non-régression** : une intervention **déjà terminée ou en validation côté terrain** n’est pas écrasée par le serveur de façon destructive (`insertAllSafe` / règles par statut `syncStatus`).
 - Référentiels (types d’intervention, équipements, etc.), **historique** unité, **équipements** liés aux interventions, **types réels** synchronisés (`intervention_actual_types`) selon les règles métier.
 
-### Push / opérations différées
+### Push / clôture transactionnelle
 
-- Les actions terrain (démarrage, clôture, etc.) passent par **`PushRepository`** / API dédiée selon le modèle du projet.
-- Les **factures** et mises à jour peuvent produire des entrées **`pending_updates`** (Room) pour envoi ultérieur (ex. soumission de facture avec lignes et paiements).
-- **WorkManager** peut enchaîner les tâches de synchro lorsque le réseau est disponible (voir workers et enqueue dans le code).
+- À la **clôture**, une seule opération **`CLOSE_INTERVENTION`** regroupe : mesures, attestations, compte rendu et **facture/devis** de l’intervention.
+- Côté API, tout est appliqué dans **une transaction** (tout ou rien) : échec facture/Hamon → pas de clôture serveur.
+- Pas de push facture immédiat après signature devis ou émission : les changements restent en **Room** (`syncStatus = PENDING` sur la facture) jusqu’à la clôture.
+- **WorkManager** / pull manuel envoient la clôture au retour réseau.
+
+#### Tests manuels recommandés
+
+1. Signer devis → émettre facture (local) → clôturer **hors ligne** → sync : BO = intervention terminée + devis snapshot + facture émise.
+2. Clôture avec Hamon manquant en local : message d’erreur, intervention reste `COMPLETED` (icône rouge).
+3. Coupure réseau après clôture : reprise sync sans demi-état serveur.
+
+#### Icône rouge « sync en attente » (support / prod)
+
+Une intervention **clôturée** reste en `syncStatus = COMPLETED` tant que **`CLOSE_INTERVENTION`** n’a pas réussi. Le badge rouge sur la tournée compte ces interventions.
+
+**Procédure support si le technicien reste bloqué** :
+
+1. Back-office : onglet **Factures** (filtre « Tous ») — les documents `accepted` non émis sont visibles ; ouvrir et **Émettre la facture** si besoin.
+2. Vérifier **Hamon** + signature sur le devis ; sinon repasser par **Signature du devis** sur la tablette.
+3. Déployer **API** (`CLOSE_INTERVENTION` dans `mobile-sync.service.ts`) et **APK** récent.
+4. Tablette : **Réessayer la synchronisation** sur la fiche intervention.
 
 ### Photos & signatures
 

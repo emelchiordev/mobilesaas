@@ -61,7 +61,6 @@ fun PhotosScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },

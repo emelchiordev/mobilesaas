@@ -1,6 +1,7 @@
 package re.melchior.saviomobile.ui.screen.tournee
 
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.util.formatScheduledAtTime
 import java.time.Duration
 import java.time.Instant
 
@@ -22,7 +23,7 @@ fun InterventionEntity.displayTypeLabel(): String =
     actualTypeLabel?.takeIf { it.isNotBlank() } ?: typeLabel
 
 fun InterventionEntity.toInterventionItem(): InterventionItem {
-    val time = scheduledAt.substringAfter("T").take(5)
+    val time = formatScheduledAtTime(scheduledAt)
     val name = listOfNotNull(customerFirstName, customerLastName)
         .joinToString(" ")
         .trim()

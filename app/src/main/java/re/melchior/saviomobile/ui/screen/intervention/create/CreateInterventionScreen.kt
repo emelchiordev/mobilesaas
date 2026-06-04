@@ -56,7 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
-import re.melchior.saviomobile.data.remote.dto.CustomerSearchRowDto
+import re.melchior.saviomobile.ui.screen.client.CustomerSearchField
+import re.melchior.saviomobile.ui.screen.client.CustomerSearchResultsSection
 import androidx.compose.material3.MaterialTheme
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.savioFieldColors
@@ -72,6 +73,7 @@ fun CreateInterventionScreen(
     onBack: () -> Unit,
     onCreated: (scheduledAtMillis: Long) -> Unit,
     onNavigateOffline: () -> Unit,
+    onCreateClient: () -> Unit = {},
     viewModel: CreateInterventionViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -126,7 +128,6 @@ fun CreateInterventionScreen(
                 title = {
                     Text(
                         "Nouvelle intervention",
-                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -135,7 +136,6 @@ fun CreateInterventionScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
@@ -157,30 +157,20 @@ fun CreateInterventionScreen(
 
             val selected = uiState.selectedCustomer
             if (selected == null) {
-                OutlinedTextField(
-                    value = uiState.customerSearchQuery,
-                    onValueChange = viewModel::onCustomerSearchChange,
-                    label = { Text("Rechercher un client") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = fieldColors,
-                    shape = RoundedCornerShape(12.dp),
+                CustomerSearchField(
+                    query = uiState.customerSearchQuery,
+                    onQueryChange = viewModel::onCustomerSearchChange,
                 )
-                if (uiState.customerSearchLoading) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = SavioPalette.Accent,
-                        strokeWidth = 2.dp,
-                    )
-                }
-                uiState.customerSearchError?.let { err ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(err, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                }
-                uiState.customerSearchResults.forEach { row ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    CustomerSearchResultCard(row = row, onClick = { viewModel.selectCustomer(row) })
+                CustomerSearchResultsSection(
+                    query = uiState.customerSearchQuery,
+                    results = uiState.customerSearchResults,
+                    isLoading = uiState.customerSearchLoading,
+                    error = uiState.customerSearchError,
+                    onSelect = viewModel::selectCustomer,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = onCreateClient) {
+                    Text("Client introuvable ? Créer un client", color = SavioPalette.Accent)
                 }
             } else {
                 SelectedCustomerCard(
@@ -309,40 +299,6 @@ private fun SectionLabel(text: String) {
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
     )
-}
-
-@Composable
-private fun CustomerSearchResultCard(
-    row: CustomerSearchRowDto,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = row.customerDisplayName.ifBlank {
-                    "${row.customerFirstName} ${row.customerLastName}".trim()
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = row.formattedAddress(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
 }
 
 @Composable

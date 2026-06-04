@@ -71,7 +71,7 @@ class CreateInterventionViewModel @Inject constructor(
     val uiState: StateFlow<CreateInterventionUiState> = _uiState.asStateFlow()
 
     val interventionTypes: StateFlow<List<InterventionTypeEntity>> =
-        referentielDao.getAllInterventionTypes()
+        referentielDao.getCreateInterventionTypes()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _customerSearchInput = MutableStateFlow("")
@@ -154,10 +154,8 @@ class CreateInterventionViewModel @Inject constructor(
             it.copy(
                 selectedCustomer = SelectedCustomerUi(
                     unitId = row.unitId,
-                    customerId = null,
-                    displayName = row.customerDisplayName.ifBlank {
-                        "${row.customerFirstName} ${row.customerLastName}".trim()
-                    },
+                    customerId = row.customerId,
+                    displayName = row.resolvedDisplayName(),
                     addressLine = row.formattedAddress(),
                 ),
                 customerSearchQuery = "",

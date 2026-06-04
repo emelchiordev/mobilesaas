@@ -52,6 +52,7 @@ class MobileSyncOrchestrator @Inject constructor(
             }
 
             pushResult = runPipelineStepResult(transaction, "sync.push", "sync.step.push") {
+                pushRepository.migrateLegacyPendingInvoiceSubmit()
                 runStepPush(onPushConflict)
             } ?: PushResult.Error("Push interrompu")
 

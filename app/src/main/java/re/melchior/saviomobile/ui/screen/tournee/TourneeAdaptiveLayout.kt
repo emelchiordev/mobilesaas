@@ -31,6 +31,7 @@ fun TourneeAdaptiveLayout(
     detailNavController: NavHostController,
     onStartIntervention: (String) -> Unit,
     onClientClick: (String) -> Unit = {},
+    onNavigateToDevisSignature: (String) -> Unit = {},
     currentDateLabel: String,
     pendingSyncCount: Int,
     pendingOfflineInterventionCount: Int = 0,
@@ -101,6 +102,7 @@ fun TourneeAdaptiveLayout(
                     detailNavController = detailNavController,
                     onStartIntervention = onStartIntervention,
                     onClientClick = onClientClick,
+                    onNavigateToDevisSignature = onNavigateToDevisSignature,
                 )
             }
         }

@@ -4,8 +4,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import re.melchior.saviomobile.data.remote.api.CustomerApi
 import re.melchior.saviomobile.data.remote.api.CustomerSearchApi
 import re.melchior.saviomobile.data.remote.api.DocumentApi
+import re.melchior.saviomobile.data.remote.api.EquipmentApi
 import re.melchior.saviomobile.data.remote.api.InterventionApi
 import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.remote.api.InvoiceApi
@@ -54,6 +56,16 @@ object ApiModule {
     @Singleton
     fun provideCustomerSearchApi(retrofit: Retrofit): CustomerSearchApi =
         retrofit.create(CustomerSearchApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCustomerApi(retrofit: Retrofit): CustomerApi =
+        retrofit.create(CustomerApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideEquipmentApi(retrofit: Retrofit): EquipmentApi =
+        retrofit.create(EquipmentApi::class.java)
 
     @Provides
     @Singleton

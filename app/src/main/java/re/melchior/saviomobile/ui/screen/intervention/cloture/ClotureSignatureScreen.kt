@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.savioTopAppBarSubtitleColor
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureSignatureScreen(
@@ -109,7 +110,7 @@ fun ClotureSignatureScreen(
                         Text(
                             text = "Signatures",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = savioTopAppBarSubtitleColor(),
                         )
                     }
                 },
@@ -179,6 +180,8 @@ fun ClotureSignatureScreen(
                         )
                     }
                 }
+
+                ClosureDgiSummaryBanner(dgiCount = uiState.dgiAnomalyCount)
 
                 Text(
                     text = "Signature du technicien",

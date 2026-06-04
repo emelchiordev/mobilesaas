@@ -49,7 +49,6 @@ fun CerfaScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Retour",
-                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },
