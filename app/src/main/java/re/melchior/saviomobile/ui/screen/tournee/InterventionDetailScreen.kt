@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Assignment
@@ -95,12 +96,23 @@ import re.melchior.saviomobile.util.formatScheduledAtDate
 import re.melchior.saviomobile.util.formatScheduledAtTime
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
+import re.melchior.saviomobile.ui.component.ClientHistoryEmbeddedSection
 import re.melchior.saviomobile.ui.component.HistoriquePage
 import re.melchior.saviomobile.ui.component.SavioEmptyState
 import re.melchior.saviomobile.ui.component.SavioInterventionDetailSkeleton
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.PhotoViewerDialog
 import re.melchior.saviomobile.ui.designsystem.SectionDivider
+import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
+import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
+import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
+import re.melchior.saviomobile.ui.refonte.SavioRefonteOrangeCtaBar
+import re.melchior.saviomobile.ui.refonte.SavioRefonteTabRow
+import re.melchior.saviomobile.ui.refonte.SavioStatusPill
+import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioType
@@ -132,6 +144,7 @@ fun InterventionDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val refonte = useSavioRefonteUi()
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -141,11 +154,42 @@ fun InterventionDetailScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (!embeddedInMasterDetail) {
+                val refonte = useSavioRefonteUi()
+                if (refonte) {
+                    SavioNavyHeader(
+                        title = uiState.intervention?.displayTypeLabel() ?: "Intervention",
+                        style = SavioHeaderStyle.Intervention,
+                        subtitle =
+                            uiState.intervention?.let { intervention ->
+                                val time = formatScheduledAtTime(intervention.scheduledAt)
+                                "Aujourd'hui · $time"
+                            },
+                        leading = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Retour",
+                                    tint = androidx.compose.ui.graphics.Color.White,
+                                )
+                            }
+                        },
+                        trailing = {
+                            uiState.intervention?.let { intervention ->
+                                SavioStatusPill(
+                                    status = intervention.status,
+                                    syncStatus = intervention.syncStatus,
+                                    big = true,
+                                    modifier = Modifier.padding(end = 4.dp),
+                                )
+                            }
+                        },
+                    )
+                } else {
                 TopAppBar(
                     colors = savioTopAppBarColors(),
                     title = {
@@ -234,6 +278,7 @@ fun InterventionDetailScreen(
                         }
                     },
                 )
+                }
             }
         },
         bottomBar = {
@@ -241,16 +286,26 @@ fun InterventionDetailScreen(
                 uiState.intervention?.let { intervention ->
                     val isActionable = intervention.status in listOf("scheduled", "in_progress")
                     if (isActionable) {
+                        val label =
+                            if (intervention.status == "scheduled") {
+                                "Démarrer l'intervention"
+                            } else {
+                                "Reprendre l'intervention"
+                            }
+                        val onPrimary = {
+                            if (intervention.status == "scheduled") viewModel.startIntervention()
+                            onStartIntervention(intervention.id)
+                        }
+                        if (refonte) {
+                            SavioRefonteOrangeCtaBar(text = label, onClick = onPrimary)
+                        } else {
                         Box(
                             modifier = Modifier
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                                 .navigationBarsPadding(),
                         ) {
                             Button(
-                                onClick = {
-                                    if (intervention.status == "scheduled") viewModel.startIntervention()
-                                    onStartIntervention(intervention.id)
-                                },
+                                onClick = onPrimary,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp),
@@ -268,15 +323,12 @@ fun InterventionDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (intervention.status == "scheduled") {
-                                        "DÃ©marrer l'intervention"
-                                    } else {
-                                        "Reprendre l'intervention"
-                                    },
+                                    text = label,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                 )
                             }
+                        }
                         }
                     }
                 }
@@ -316,9 +368,12 @@ fun InterventionDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .background(MaterialTheme.colorScheme.background),
+                        .background(if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background),
                 ) {
                     val actionable = intervention.status in listOf("scheduled", "in_progress")
+                    val contentBottomPad =
+                        if (refonte && actionable && !embeddedInMasterDetail) 96.dp else 0.dp
+                    val pagePadding = if (refonte) 14.dp else 16.dp
                     val pagerModifier =
                         if (embeddedInMasterDetail && actionable) Modifier.weight(1f).fillMaxWidth()
                         else Modifier.fillMaxSize()
@@ -351,6 +406,15 @@ fun InterventionDetailScreen(
                         }
                     }
 
+                    if (refonte) {
+                        SavioRefonteTabRow(
+                            tabs = tabs.map { it.label },
+                            selectedIndex = pagerState.currentPage,
+                            onTabSelected = { index ->
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                        )
+                    } else {
                     TabRow(
                         selectedTabIndex = pagerState.currentPage,
                         containerColor = MaterialTheme.colorScheme.background,
@@ -391,6 +455,7 @@ fun InterventionDetailScreen(
                             )
                         }
                     }
+                    }
 
                     HorizontalPager(state = pagerState, key = { it }, modifier = pagerModifier) { page ->
                         // Si isCompleted, page 0 = Rapport, sinon page 0 = DÃ©tail
@@ -402,24 +467,65 @@ fun InterventionDetailScreen(
                                 interventionId = intervention.id
                             )
                             1 -> Column(
-                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(pagePadding)
+                                        .padding(bottom = contentBottomPad),
+                                verticalArrangement = Arrangement.spacedBy(if (refonte) 14.dp else 12.dp),
                             ) {
-                                DetailPage(
-                                    intervention = intervention,
-                                    onClientClick = onClientClick,
-                                    onCallClick = { phone ->
-                                        context.startActivity(Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$phone") })
-                                    },
-                                    onNavigateClick = {
-                                        val lat = intervention.unitLatitude
-                                        val lng = intervention.unitLongitude
-                                        val address = "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
-                                        val uri = if (lat != null && lng != null) Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
-                                        else Uri.parse("geo:0,0?q=${Uri.encode(address)}")
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                                    }
-                                )
+                                if (refonte) {
+                                    SavioInterventionDetailContent(
+                                        intervention = intervention,
+                                        onClientClick = onClientClick,
+                                        onCallClick = { phone ->
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_DIAL).apply {
+                                                    data = Uri.parse("tel:$phone")
+                                                },
+                                            )
+                                        },
+                                        onNavigateClick = {
+                                            val lat = intervention.unitLatitude
+                                            val lng = intervention.unitLongitude
+                                            val address =
+                                                "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                                            val uri =
+                                                if (lat != null && lng != null) {
+                                                    Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                                                } else {
+                                                    Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                                }
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        },
+                                    )
+                                } else {
+                                    DetailPage(
+                                        intervention = intervention,
+                                        onClientClick = onClientClick,
+                                        onCallClick = { phone ->
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_DIAL).apply {
+                                                    data = Uri.parse("tel:$phone")
+                                                },
+                                            )
+                                        },
+                                        onNavigateClick = {
+                                            val lat = intervention.unitLatitude
+                                            val lng = intervention.unitLongitude
+                                            val address =
+                                                "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                                            val uri =
+                                                if (lat != null && lng != null) {
+                                                    Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                                                } else {
+                                                    Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                                }
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        },
+                                    )
+                                }
                                 if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
                                     SyncStatusCard(
                                         intervention = intervention,
@@ -432,13 +538,19 @@ fun InterventionDetailScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                             2 -> Column(
-                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(pagePadding)
+                                        .padding(bottom = contentBottomPad),
+                                verticalArrangement = Arrangement.spacedBy(if (refonte) 14.dp else 12.dp),
                             ) {
                                 if (uiState.equipments.isNotEmpty()) {
                                     PlanningEquipmentsSection(
                                         interventionId = intervention.id,
                                         equipments = uiState.equipments,
+                                        refonte = refonte,
                                     )
                                 } else {
                                     Box(
@@ -450,17 +562,36 @@ fun InterventionDetailScreen(
                                     ) {
                                         SavioEmptyState(
                                             icon = Icons.Outlined.VpnKey,
-                                            title = "Aucun Ã©quipement enregistrÃ©",
-                                            subtitle = "Aucun appareil n'est associÃ© Ã  cette intervention.",
+                                            title = "Aucun équipement enregistré",
+                                            subtitle = "Aucun appareil n'est associé à cette intervention.",
                                         )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
-                            3 -> HistoriquePage(
-                                history = uiState.history,
-                                photoUrls = uiState.historyPhotoUrls // â† ajoutÃ©
-                            )
+                            3 ->
+                                if (refonte) {
+                                    Column(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxSize()
+                                                .verticalScroll(rememberScrollState())
+                                                .padding(pagePadding)
+                                                .padding(bottom = contentBottomPad),
+                                    ) {
+                                        ClientHistoryEmbeddedSection(
+                                            history = uiState.history,
+                                            photoUrls = uiState.historyPhotoUrls,
+                                            defaultVisibleCount = 3,
+                                            useLazyList = false,
+                                        )
+                                    }
+                                } else {
+                                    HistoriquePage(
+                                        history = uiState.history,
+                                        photoUrls = uiState.historyPhotoUrls,
+                                    )
+                                }
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
@@ -1149,8 +1280,20 @@ private fun RapportPage(
 private fun PlanningEquipmentsSection(
     interventionId: String,
     equipments: List<EquipmentEntity>,
+    refonte: Boolean = false,
 ) {
     val newEquipmentIds = emptySet<String>()
+    if (refonte) {
+        SavioRefonteCard {
+            PlanningEquipmentsSectionBody(
+                interventionId = interventionId,
+                equipments = equipments,
+                newEquipmentIds = newEquipmentIds,
+                refonte = true,
+            )
+        }
+        return
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -1161,49 +1304,65 @@ private fun PlanningEquipmentsSection(
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Build,
-                    contentDescription = null,
-                    tint = SavioUi.BusinessAccent,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Ã‰quipements",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
-                        .clip(CircleShape)
-                        .background(SavioUi.BusinessAccent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = equipments.size.toString(),
-                        fontSize = 11.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                    )
-                }
-            }
+        PlanningEquipmentsSectionBody(
+            interventionId = interventionId,
+            equipments = equipments,
+            newEquipmentIds = newEquipmentIds,
+            refonte = false,
+        )
+    }
+}
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outline,
+@Composable
+private fun PlanningEquipmentsSectionBody(
+    interventionId: String,
+    equipments: List<EquipmentEntity>,
+    newEquipmentIds: Set<String>,
+    refonte: Boolean,
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (refonte) 15.dp else 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Build,
+                contentDescription = null,
+                tint = if (refonte) SavioRefonte.Navy else SavioUi.BusinessAccent,
+                modifier = Modifier.size(20.dp),
             )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Équipements",
+                fontSize = if (refonte) 16.sp else 14.sp,
+                color = if (refonte) SavioRefonte.Ink else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                    .clip(CircleShape)
+                    .background(if (refonte) SavioRefonte.Tint else SavioUi.BusinessAccent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = equipments.size.toString(),
+                    fontSize = 11.sp,
+                    color = if (refonte) SavioRefonte.Navy else Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = if (refonte) 15.dp else 16.dp),
+            thickness = 1.dp,
+            color = if (refonte) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
+        )
 
             val allActive = equipments.filter { it.typeCode != "replaced" }
             val allReplaced = equipments.filter { it.typeCode == "replaced" }
@@ -1275,6 +1434,5 @@ private fun PlanningEquipmentsSection(
                     )
                 }
             }
-        }
     }
 }

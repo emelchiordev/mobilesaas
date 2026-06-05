@@ -61,6 +61,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.component.ClientHistoryEmbeddedSection
+import re.melchior.saviomobile.ui.refonte.SavioClientInfoCard
+import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioRefonteCtaBar
+import re.melchior.saviomobile.ui.refonte.SavioRefonteEditBottomBar
+import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.component.SavioClientDetailSkeleton
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.theme.SavioPalette
@@ -113,49 +120,78 @@ fun ClientDetailScreen(
     val titleName = uiState.titleName
     val showBottomBar = !isTablet && uiState.canShowContent && !uiState.isLoading
 
+    val refonte = useSavioRefonteUi()
     Scaffold(
-        containerColor = SavioUi.PageBackground,
+        containerColor =
+            if (refonte) SavioRefonte.BgPage else SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                colors = savioTopAppBarColors(),
-                title = {
-                    Column {
-                        Text(
-                            text = titleName,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (uiState.updatesRequireValidation) {
-                            Text(
-                                text = "Modifications soumises à validation",
-                                fontSize = 11.sp,
-                                color = savioTopAppBarSubtitleColor(),
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Filled.ArrowBack,
-                            contentDescription = "Retour",
-                        )
-                    }
-                },
-                actions = {
-                    if (!uiState.isEditing) {
-                        IconButton(onClick = viewModel::startEditing) {
+            if (refonte) {
+                SavioNavyHeader(
+                    title = titleName,
+                    style = SavioHeaderStyle.Detail,
+                    leading = {
+                        IconButton(onClick = onBack) {
                             Icon(
-                                Icons.Filled.Edit,
-                                contentDescription = "Modifier",
+                                Icons.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                                tint = Color.White,
                             )
                         }
-                    }
-                },
-            )
+                    },
+                    actions = {
+                        if (!uiState.isEditing) {
+                            IconButton(onClick = viewModel::startEditing) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Modifier",
+                                    tint = Color.White,
+                                )
+                            }
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    colors = savioTopAppBarColors(),
+                    title = {
+                        Column {
+                            Text(
+                                text = titleName,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (uiState.updatesRequireValidation) {
+                                Text(
+                                    text = "Modifications soumises à validation",
+                                    fontSize = 11.sp,
+                                    color = savioTopAppBarSubtitleColor(),
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                            )
+                        }
+                    },
+                    actions = {
+                        if (!uiState.isEditing) {
+                            IconButton(onClick = viewModel::startEditing) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Modifier",
+                                )
+                            }
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
             if (showBottomBar) {
@@ -199,27 +235,29 @@ fun ClientDetailScreen(
                 val resolvedAddress = uiState.addressLine.ifBlank { addressLine }
 
                 if (isTablet) {
+                    val pageBg = if (refonte) SavioRefonte.BgPage else SavioUi.PageBackground
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding)
-                            .background(SavioUi.PageBackground),
+                            .background(pageBg),
                     ) {
                         Column(
                             modifier = Modifier
                                 .weight(0.4f)
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             ClientDetailInfoSections(
                                 uiState = uiState,
                                 addressLine = addressLine,
                                 uriHandler = uriHandler,
                                 viewModel = viewModel,
+                                refonte = refonte,
                             )
-                            if (!uiState.isEditing && uiState.resolvedUnitId.isNotBlank()) {
+                            if (!uiState.isEditing && uiState.resolvedUnitId.isNotBlank() && !refonte) {
                                 ClientNewInterventionButton(
                                     onClick = {
                                         onNewIntervention(
@@ -238,7 +276,35 @@ fun ClientDetailScreen(
                             modifier = Modifier
                                 .weight(0.6f)
                                 .fillMaxSize()
-                                .padding(start = 8.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                                .padding(start = 8.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+                            defaultVisibleCount = null,
+                            useLazyList = true,
+                        )
+                    }
+                } else if (refonte) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .background(SavioRefonte.BgPage)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                            .padding(bottom = if (showBottomBar) 96.dp else 0.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        ClientDetailInfoSections(
+                            uiState = uiState,
+                            addressLine = addressLine,
+                            uriHandler = uriHandler,
+                            viewModel = viewModel,
+                            refonte = true,
+                        )
+                        ClientHistoryEmbeddedSection(
+                            history = uiState.history,
+                            photoUrls = uiState.historyPhotoUrls,
+                            modifier = Modifier.fillMaxWidth(),
+                            defaultVisibleCount = 3,
+                            useLazyList = false,
                         )
                     }
                 } else {
@@ -259,6 +325,7 @@ fun ClientDetailScreen(
                                 addressLine = addressLine,
                                 uriHandler = uriHandler,
                                 viewModel = viewModel,
+                                refonte = false,
                             )
                         }
                         ClientHistoryEmbeddedSection(
@@ -283,9 +350,30 @@ private fun ClientDetailInfoSections(
     addressLine: String,
     uriHandler: androidx.compose.ui.platform.UriHandler,
     viewModel: ClientDetailViewModel,
+    refonte: Boolean,
 ) {
     if (uiState.updatesRequireValidation && uiState.isEditing) {
         ClientValidationBanner()
+    }
+    if (refonte) {
+        SavioClientInfoCard(
+            addressLine = addressLine,
+            addressLine2 = uiState.addressLine2,
+            floor = uiState.floor,
+            doorCode = uiState.doorCode,
+            phone = uiState.phone,
+            email = uiState.email,
+            notes = uiState.notes,
+            isEditing = uiState.isEditing,
+            emailError = uiState.emailError,
+            onAddressLine2Change = viewModel::onAddressLine2Change,
+            onFloorChange = viewModel::onFloorChange,
+            onDoorCodeChange = viewModel::onDoorCodeChange,
+            onPhoneChange = viewModel::onPhoneChange,
+            onEmailChange = viewModel::onEmailChange,
+            onNotesChange = viewModel::onNotesChange,
+        )
+        return
     }
     ClientAccessSection(
         addressLine = addressLine,
@@ -317,11 +405,41 @@ private fun ClientDetailBottomBar(
     onSave: () -> Unit,
     onCancel: () -> Unit,
 ) {
+    val refonte = useSavioRefonteUi()
     val intervention = uiState.intervention
     val addressLine = intervention?.let {
         "${it.unitStreet}, ${it.unitPostalCode} ${it.unitCity}"
     } ?: uiState.addressLine
     val resolvedAddress = uiState.addressLine.ifBlank { addressLine }
+
+    if (refonte) {
+        if (uiState.isEditing) {
+            SavioRefonteEditBottomBar(
+                saveLabel =
+                    if (uiState.updatesRequireValidation) {
+                        "Soumettre les modifications"
+                    } else {
+                        "Enregistrer"
+                    },
+                onSave = onSave,
+                onCancel = onCancel,
+                isSaving = uiState.isSaving,
+            )
+        } else if (uiState.resolvedUnitId.isNotBlank()) {
+            SavioRefonteCtaBar(
+                text = "Nouvelle intervention",
+                onClick = {
+                    onNewIntervention(
+                        uiState.resolvedUnitId,
+                        uiState.customerId,
+                        uiState.titleName,
+                        resolvedAddress,
+                    )
+                },
+            )
+        }
+        return
+    }
 
     Column(
         modifier = Modifier

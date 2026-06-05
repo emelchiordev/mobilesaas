@@ -12,8 +12,17 @@ data class GenerateReportRequestDto(
     @SerializedName("invoiceLines") val invoiceLines: List<String>? = null,
     @SerializedName("anomalySummaries") val anomalySummaries: List<String>? = null,
     @SerializedName("lastVisitSummary") val lastVisitSummary: String? = null,
+    @SerializedName("interventionDate") val interventionDate: String? = null,
+    @SerializedName("establishedDocuments") val establishedDocuments: List<String>? = null,
 )
 
-data class GenerateReportResponseDto(
-    @SerializedName("report") val report: String,
+data class GenerateReportEnqueueResponseDto(
+    @SerializedName("jobId") val jobId: String,
+    @SerializedName("status") val status: String,
+)
+
+data class ReportStatusResponseDto(
+    @SerializedName("status") val status: String?,
+    @SerializedName("report") val report: String? = null,
+    @SerializedName("fallback_used") val fallbackUsed: Boolean? = null,
 )

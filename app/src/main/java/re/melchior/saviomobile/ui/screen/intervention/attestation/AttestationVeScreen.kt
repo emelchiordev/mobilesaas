@@ -65,7 +65,9 @@ import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
 import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -101,59 +103,51 @@ fun AttestationVeScreen(
         else -> type
     }
 
+    val refonte = useSavioRefonteUi()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("Attestation $typeLabel") },
-                navigationIcon = {
-                    IconButton(onClick = ::leave) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour",
+            if (refonte) {
+                SavioNavyHeader(
+                    title = "Attestation $typeLabel",
+                    leading = {
+                        IconButton(onClick = ::leave) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                                tint = Color.White,
+                            )
+                        }
+                    },
+                    actions = {
+                        AttestationTopBarBadges(
+                            nonValidatedCount = nonValidatedCount,
+                            validatedCount = validatedCount,
+                            lightOnNavy = true,
                         )
-                    }
-                },
-                colors = savioTopAppBarColors(),
-                actions = {
-                    if (nonValidatedCount > 0) {
-                        Surface(
-                            color = Color(0xFFD32F2F),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.padding(end = 8.dp),
-                        ) {
-                            Text(
-                                text = "⚠ $nonValidatedCount",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(
-                                    horizontal = 8.dp,
-                                    vertical = 4.dp,
-                                ),
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Attestation $typeLabel") },
+                    navigationIcon = {
+                        IconButton(onClick = ::leave) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Retour",
                             )
                         }
-                    }
-                    if (validatedCount > 0) {
-                        Surface(
-                            color = Color(0xFF388E3C),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.padding(end = 8.dp),
-                        ) {
-                            Text(
-                                text = "✓ $validatedCount",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(
-                                    horizontal = 8.dp,
-                                    vertical = 4.dp,
-                                ),
-                            )
-                        }
-                    }
-                },
-            )
+                    },
+                    colors = savioTopAppBarColors(),
+                    actions = {
+                        AttestationTopBarBadges(
+                            nonValidatedCount = nonValidatedCount,
+                            validatedCount = validatedCount,
+                            lightOnNavy = false,
+                        )
+                    },
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -238,6 +232,46 @@ fun AttestationVeScreen(
                         },
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttestationTopBarBadges(
+    nonValidatedCount: Int,
+    validatedCount: Int,
+    lightOnNavy: Boolean,
+) {
+    Row(modifier = Modifier.padding(end = if (lightOnNavy) 4.dp else 0.dp)) {
+        if (nonValidatedCount > 0) {
+            Surface(
+                color = Color(0xFFD32F2F),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(end = 8.dp),
+            ) {
+                Text(
+                    text = "⚠ $nonValidatedCount",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        if (validatedCount > 0) {
+            Surface(
+                color = Color(0xFF388E3C),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(end = 8.dp),
+            ) {
+                Text(
+                    text = "✓ $validatedCount",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
             }
         }
     }

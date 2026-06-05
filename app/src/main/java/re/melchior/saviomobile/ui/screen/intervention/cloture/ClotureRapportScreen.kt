@@ -14,8 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,7 +32,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
-import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -50,15 +50,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
+import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.refonte.SavioClotureAiButton
+import re.melchior.saviomobile.ui.refonte.SavioClotureClientCard
+import re.melchior.saviomobile.ui.refonte.SavioClotureHeader
+import re.melchior.saviomobile.ui.refonte.SavioClotureNextCtaBar
+import re.melchior.saviomobile.ui.refonte.SavioClotureNoticeCard
+import re.melchior.saviomobile.ui.refonte.SavioClotureProgressBar
+import re.melchior.saviomobile.ui.refonte.SavioClotureReportField
+import re.melchior.saviomobile.ui.refonte.SavioFormSection
+import re.melchior.saviomobile.ui.refonte.SavioTypeChipGrid
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.savioTopAppBarSubtitleColor
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ClotureRapportScreen(
     onBack: () -> Unit,
     onNext: (interventionId: String, preselectedActualTypeKeys: String) -> Unit,
-    viewModel: ClotureRapportViewModel = hiltViewModel()
+    viewModel: ClotureRapportViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -71,7 +83,210 @@ fun ClotureRapportScreen(
         }
     }
 
+    val refonte = useSavioRefonteUi()
+
+    if (refonte) {
+        Scaffold(
+            containerColor = SavioRefonte.BgPage,
+            snackbarHost = { SavioSnackbarHost(snackbarHostState) },
+            topBar = {
+                SavioClotureHeader(
+                    title = "Clôture",
+                    subtitle = "Compte-rendu",
+                    step = 1,
+                    totalSteps = 2,
+                    onBack = onBack,
+                )
+            },
+            bottomBar = {
+                SavioClotureNextCtaBar(
+                    text = "Suivant — Signature",
+                    onClick = {
+                        scope.launch {
+                            val saved = viewModel.saveReport()
+                            if (saved) {
+                                uiState.intervention?.id?.let { id ->
+                                    onNext(id, viewModel.preselectedKeysForNavigation())
+                                }
+                            }
+                        }
+                    },
+                    enabled = uiState.canProceed,
+                    loading = uiState.isLoading,
+                )
+            },
+        ) { padding ->
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+            ) {
+                SavioClotureProgressBar(currentStep = 1, totalSteps = 2)
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    uiState.intervention?.let { intervention ->
+                        SavioClotureClientCard(
+                            clientName =
+                                "${intervention.customerFirstName.orEmpty()} ${intervention.customerLastName.orEmpty()}"
+                                    .trim()
+                                    .ifEmpty { "Client non renseigné" },
+                            address = "${intervention.unitStreet}, ${intervention.unitCity}",
+                            typeLabel = intervention.typeLabel,
+                        )
+                    }
+
+                    if (uiState.closeTypesLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    } else if (uiState.closeTypesError != null) {
+                        SavioClotureNoticeCard(
+                            text = uiState.closeTypesError!!,
+                            isError = true,
+                        )
+                    } else {
+                        SavioFormSection(
+                            title = "Type(s) réel(s) de l'intervention",
+                            help = "Sélectionnez ce qui a réellement été fait sur place",
+                        ) {
+                            SavioTypeChipGrid(
+                                labels = uiState.closeTypes.map { it.label },
+                                selectedLabels =
+                                    uiState.selectedCloseTypes.map { it.label }.toSet(),
+                                onToggle = { label ->
+                                    uiState.closeTypes
+                                        .find { it.label == label }
+                                        ?.let(viewModel::toggleCloseType)
+                                },
+                            )
+                            if (uiState.selectedCloseTypes.isEmpty()) {
+                                Text(
+                                    text = "Sélectionnez au moins un type",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFC0392B),
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    if (uiState.isVeChanged) {
+                        SavioClotureNoticeCard(
+                            text =
+                                "Attention : cette intervention était planifiée comme une " +
+                                    "Visite d'entretien. Changer le type annulera la couverture VE du contrat.",
+                            isError = true,
+                        )
+                    }
+
+                    if (!uiState.showReport) {
+                        SavioClotureNoticeCard(
+                            text = "Aucun compte-rendu requis pour les types sélectionnés.",
+                        )
+                    }
+
+                    if (uiState.isAbsent) {
+                        SavioClotureNoticeCard(
+                            text =
+                                "Absence : le compte-rendu et la signature client peuvent être non requis selon les types.",
+                        )
+                    }
+
+                    ContractVeSummaryCard(
+                        contractInfo = uiState.contractInfo,
+                        lastVe = uiState.lastVe,
+                        nextVe = uiState.nextVe,
+                    )
+
+                    ClosureConsequencesCard(consequences = uiState.consequences)
+
+                    ClosureAnomaliesSection(
+                        drafts = buildAnomalyDraftDisplays(uiState.anomalyDrafts, uiState.anomalyCatalog),
+                        onAddClick = viewModel::openAddAnomalySheet,
+                    )
+
+                    if (uiState.showReport) {
+                        SavioFormSection(
+                            title = "Compte-rendu d'intervention",
+                            trailing = {
+                                SavioClotureAiButton(
+                                    text = uiState.reportGenerateButtonText,
+                                    onClick = viewModel::generateReport,
+                                    enabled =
+                                        uiState.canGenerateReport &&
+                                            !uiState.isReportGenerationBusy &&
+                                            !uiState.isLoading,
+                                    loading = uiState.isReportGenerationBusy,
+                                )
+                            },
+                        ) {
+                            if (!uiState.canGenerateReport) {
+                                Text(
+                                    text = "Ajoutez des observations, pièces ou anomalies pour activer la génération.",
+                                    fontSize = 12.5.sp,
+                                    color = SavioRefonte.Muted,
+                                    modifier = Modifier.padding(bottom = 10.dp),
+                                )
+                            }
+                            SavioClotureReportField(
+                                value = uiState.report,
+                                onValueChange = viewModel::onReportChange,
+                                placeholder =
+                                    "Décrivez l'intervention réalisée, les pièces remplacées, " +
+                                        "les réglages effectués…",
+                            )
+                            if (uiState.reportFallbackUsed) {
+                                Text(
+                                    text = "Généré via assistant de secours",
+                                    fontSize = 11.5.sp,
+                                    color = SavioRefonte.Muted,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    } else {
+        ClotureRapportScreenLegacy(
+            uiState = uiState,
+            snackbarHostState = snackbarHostState,
+            onBack = onBack,
+            onNext = onNext,
+            viewModel = viewModel,
+        )
+    }
+
+    if (uiState.showAddAnomalySheet) {
+        AddAnomalyBottomSheet(
+            catalogTypes = uiState.anomalyCatalog,
+            rootEquipments = uiState.rootEquipments,
+            onDismiss = viewModel::dismissAddAnomalySheet,
+            onConfirm = viewModel::addAnomalyDraft,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun ClotureRapportScreenLegacy(
+    uiState: ClotureRapportUiState,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onNext: (interventionId: String, preselectedActualTypeKeys: String) -> Unit,
+    viewModel: ClotureRapportViewModel,
+) {
+    val scope = rememberCoroutineScope()
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -80,7 +295,7 @@ fun ClotureRapportScreen(
                     Column {
                         Text(
                             text = "Clôture — étape 1 / 2",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
                             text = "Compte-rendu",
@@ -91,21 +306,22 @@ fun ClotureRapportScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
         ) {
-            // Barre de progression étape 1/2
             LinearProgressIndicator(
                 progress = { 0.5f },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
 
             Column(
@@ -113,33 +329,32 @@ fun ClotureRapportScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Infos intervention
                 uiState.intervention?.let { intervention ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column {
                             Text(
                                 text = "${intervention.customerFirstName ?: ""} " +
-                                        "${intervention.customerLastName ?: ""}".trim()
-                                            .ifEmpty { "Client non renseigné" },
+                                    "${intervention.customerLastName ?: ""}".trim()
+                                        .ifEmpty { "Client non renseigné" },
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 text = "${intervention.unitStreet}, ${intervention.unitCity}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Text(
                             text = intervention.typeLabel,
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -150,55 +365,46 @@ fun ClotureRapportScreen(
                     Text(
                         text = uiState.closeTypesError!!,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 } else {
                     ActualTypeChips(
                         types = uiState.closeTypes,
                         selectedTypes = uiState.selectedCloseTypes,
-                        onToggle = viewModel::toggleCloseType
+                        onToggle = viewModel::toggleCloseType,
                     )
                 }
 
                 if (uiState.isVeChanged) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFFFEBEE)
-                    ) {
+                    Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFFFEBEE)) {
                         Text(
                             text = "Attention : cette intervention était planifiée comme une " +
-                                    "Visite d'entretien. Changer le type annulera la couverture VE du contrat.",
+                                "Visite d'entretien. Changer le type annulera la couverture VE du contrat.",
                             modifier = Modifier.padding(12.dp),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFB71C1C)
+                            color = Color(0xFFB71C1C),
                         )
                     }
                 }
 
                 if (!uiState.showReport) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFE3F2FD)
-                    ) {
+                    Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFE3F2FD)) {
                         Text(
                             text = "Aucun compte-rendu requis pour les types sélectionnés.",
                             modifier = Modifier.padding(12.dp),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
 
                 if (uiState.isAbsent) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFE3F2FD)
-                    ) {
+                    Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFFE3F2FD)) {
                         Text(
                             text = "Absence : le compte-rendu et la signature client peuvent être non requis selon les types.",
                             modifier = Modifier.padding(12.dp),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -221,26 +427,27 @@ fun ClotureRapportScreen(
                         onClick = viewModel::generateReport,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = uiState.canGenerateReport &&
-                            !uiState.isGeneratingReport &&
+                            !uiState.isReportGenerationBusy &&
                             !uiState.isLoading,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            if (uiState.isGeneratingReport) {
+                            if (uiState.isReportGenerationBusy) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
                                 )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.AutoAwesome,
+                                    contentDescription = "Génération assistée",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                            Text(
-                                text = if (uiState.isGeneratingReport) {
-                                    "Génération…"
-                                } else {
-                                    "Générer le compte rendu"
-                                },
-                            )
+                            Text(text = uiState.reportGenerateButtonText)
                         }
                     }
                     if (!uiState.canGenerateReport) {
@@ -257,8 +464,8 @@ fun ClotureRapportScreen(
                         placeholder = {
                             Text(
                                 text = "Décrivez les opérations effectuées, " +
-                                        "les observations, les pièces remplacées...",
-                                style = MaterialTheme.typography.bodySmall
+                                    "les observations, les pièces remplacées...",
+                                style = MaterialTheme.typography.bodySmall,
                             )
                         },
                         modifier = Modifier
@@ -269,15 +476,14 @@ fun ClotureRapportScreen(
                             Text(
                                 text = "${uiState.report.length} caractères",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
+                        },
                     )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Bouton suivant
                 Button(
                     onClick = {
                         scope.launch {
@@ -296,18 +502,18 @@ fun ClotureRapportScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    ),
                 ) {
                     if (uiState.isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.dp,
                         )
                     } else {
                         Text(
                             text = "Suivant — Signature →",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
                 }
@@ -316,15 +522,6 @@ fun ClotureRapportScreen(
             }
         }
     }
-
-    if (uiState.showAddAnomalySheet) {
-        AddAnomalyBottomSheet(
-            catalogTypes = uiState.anomalyCatalog,
-            rootEquipments = uiState.rootEquipments,
-            onDismiss = viewModel::dismissAddAnomalySheet,
-            onConfirm = viewModel::addAnomalyDraft,
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -332,18 +529,18 @@ fun ClotureRapportScreen(
 fun ActualTypeChips(
     types: List<InterventionTypeDto>,
     selectedTypes: List<InterventionTypeDto>,
-    onToggle: (InterventionTypeDto) -> Unit
+    onToggle: (InterventionTypeDto) -> Unit,
 ) {
     Column {
         Text(
             text = "Type(s) réel(s) de l'intervention",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             types.forEach { type ->
                 val isSelected = selectedTypes.any {
@@ -368,7 +565,7 @@ fun ActualTypeChips(
                             Icon(
                                 Icons.Filled.Check,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                         }
                     } else {
@@ -377,8 +574,8 @@ fun ActualTypeChips(
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = typeColor.copy(alpha = 0.15f),
                         selectedLabelColor = typeColor,
-                        selectedLeadingIconColor = typeColor
-                    )
+                        selectedLeadingIconColor = typeColor,
+                    ),
                 )
             }
         }
@@ -388,7 +585,7 @@ fun ActualTypeChips(
                 text = "Sélectionnez au moins un type",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

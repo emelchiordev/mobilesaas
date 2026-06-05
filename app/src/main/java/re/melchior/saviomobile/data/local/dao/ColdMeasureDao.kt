@@ -33,6 +33,9 @@ interface ColdMeasureDao {
     @Query("DELETE FROM cold_measures WHERE interventionId = :interventionId")
     suspend fun deleteByInterventionId(interventionId: String)
 
+    @Query("SELECT COUNT(*) FROM cold_measures WHERE interventionId = :interventionId")
+    suspend fun countForIntervention(interventionId: String): Int
+
     @Query(
         """
         UPDATE cold_measures SET equipmentId = :newEquipmentId

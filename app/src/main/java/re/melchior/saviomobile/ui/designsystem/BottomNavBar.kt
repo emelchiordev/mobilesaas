@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
@@ -21,7 +22,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioDimens
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioType
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 data class BottomNavItem(
     val icon: ImageVector,
@@ -35,22 +38,28 @@ fun BottomNavBar(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    val refonte = useSavioRefonteUi()
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+    ) {
         HorizontalDivider(
             thickness = SavioDimens.BorderThin,
-            color = MaterialTheme.colorScheme.outline,
+            color = if (refonte) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
         )
         Surface(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .height(SavioDimens.BottomNavHeight),
-            color = MaterialTheme.colorScheme.background,
+            color = if (refonte) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
             shadowElevation = 0.dp,
             tonalElevation = 0.dp,
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -69,9 +78,9 @@ fun BottomNavBar(
                             contentDescription = item.label,
                             tint =
                                 if (selected) {
-                                    SavioPalette.Accent
+                                    if (refonte) SavioRefonte.OrangeAction else SavioPalette.Accent
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (refonte) SavioRefonte.NavInactive else MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                             modifier = Modifier.size(24.dp),
                         )
@@ -80,9 +89,9 @@ fun BottomNavBar(
                             style = SavioType.NavLabel,
                             color =
                                 if (selected) {
-                                    SavioPalette.Accent
+                                    if (refonte) SavioRefonte.OrangeAction else SavioPalette.Accent
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (refonte) SavioRefonte.NavInactive else MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                         )
                     }

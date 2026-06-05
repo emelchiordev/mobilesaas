@@ -43,10 +43,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.ui.component.SavioEmptyState
@@ -56,8 +59,18 @@ import re.melchior.saviomobile.ui.screen.invoice.mobileStatus
 import re.melchior.saviomobile.ui.component.SavioPhotosTabSkeleton
 import re.melchior.saviomobile.ui.theme.SavioInterventionColors
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+import re.melchior.saviomobile.ui.refonte.SavioActiveInterventionDetailBody
+import re.melchior.saviomobile.ui.refonte.SavioEquipListHeader
+import re.melchior.saviomobile.ui.refonte.SavioEquipListItem
+import re.melchior.saviomobile.ui.refonte.SavioEquipNavRow
+import re.melchior.saviomobile.ui.refonte.SavioEquipStatusBadge
+import re.melchior.saviomobile.ui.refonte.SavioInfoIconBox
+import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
+import re.melchior.saviomobile.ui.refonte.SavioRefonteTimerBlock
 import re.melchior.saviomobile.ui.utils.equipmentIcon
 
 internal enum class EquipmentBadge {
@@ -79,8 +92,57 @@ internal fun badgeFor(
 fun InterventionDetailTab(
     uiState: InterventionActiveUiState,
     onClientClick: (customerId: String) -> Unit,
+    elapsedLabel: String = "",
+    startTimeLabel: String = "",
 ) {
     val intervention = uiState.intervention ?: return
+    val refonte = useSavioRefonteUi()
+    val context = LocalContext.current
+
+    if (refonte) {
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 15.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SavioRefonteTimerBlock(
+                    elapsedLabel = elapsedLabel,
+                    startTimeLabel = startTimeLabel,
+                )
+            }
+            item {
+                SavioActiveInterventionDetailBody(
+                    intervention = intervention,
+                    onClientClick = onClientClick,
+                    onCallClick = { phone ->
+                        context.startActivity(
+                            Intent(Intent.ACTION_DIAL).apply {
+                                data = Uri.parse("tel:$phone")
+                            },
+                        )
+                    },
+                    onNavigateClick = {
+                        val lat = intervention.unitLatitude
+                        val lng = intervention.unitLongitude
+                        val address =
+                            "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                        val uri =
+                            if (lat != null && lng != null) {
+                                Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                            } else {
+                                Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                            }
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    },
+                )
+            }
+        }
+        return
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -318,13 +380,40 @@ fun InterventionEquipementsTab(
     onAddEquipment: (interventionId: String, unitId: String, parentEquipmentId: String?) -> Unit,
 ) {
     val intervention = uiState.intervention ?: return
+    val refonte = useSavioRefonteUi()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = if (refonte) 15.dp else 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (refonte) 12.dp else 12.dp),
     ) {
+        if (refonte) {
+            SavioEquipListHeader(
+                count = uiState.equipments.size,
+                onAddClick = { onAddEquipment(intervention.id, intervention.unitId, null) },
+            )
+            if (uiState.equipments.isEmpty()) {
+                SavioEmptyState(
+                    icon = Icons.Outlined.VpnKey,
+                    title = "Aucun équipement enregistré",
+                    subtitle = "Ajoutez l'appareil installé chez le client.",
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    primaryActionLabel = "+ Ajouter un équipement",
+                    onPrimaryAction = {
+                        onAddEquipment(intervention.id, intervention.unitId, null)
+                    },
+                )
+            } else {
+                InterventionEquipmentsRefonteList(
+                    equipments = uiState.equipments,
+                    newEquipmentIds = newEquipmentIds,
+                    interventionId = intervention.id,
+                    onEquipementClick = onEquipementClick,
+                )
+            }
+            return@Column
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -500,6 +589,79 @@ fun InterventionEquipementsTab(
 }
 
 @Composable
+private fun InterventionEquipmentsRefonteList(
+    equipments: List<EquipmentEntity>,
+    newEquipmentIds: Set<String>,
+    interventionId: String,
+    onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
+) {
+    val allActive = equipments.filter { it.typeCode != "replaced" }
+    val allReplaced = equipments.filter { it.typeCode == "replaced" }
+    val rootEquipments =
+        allActive
+            .filter { it.parentEquipmentId == null }
+            .sortedWith(
+                compareByDescending<EquipmentEntity> { it.isPrimary }.thenBy { it.order },
+            )
+    val childrenByParent =
+        allActive
+            .filter { it.parentEquipmentId != null }
+            .groupBy { it.parentEquipmentId }
+            .mapValues { (_, list) ->
+                list.sortedWith(compareBy<EquipmentEntity> { it.order }.thenBy { it.id })
+            }
+    val orphans =
+        allActive.filter { eq ->
+            eq.parentEquipmentId != null &&
+                rootEquipments.none { it.id == eq.parentEquipmentId }
+        }
+    val rootReplaced =
+        allReplaced
+            .filter { it.parentEquipmentId == null }
+            .sortedWith(compareBy<EquipmentEntity> { it.order }.thenBy { it.id })
+    val hybrideGroups =
+        computeHybrideGroups(
+            equipmentRoots = rootEquipments,
+            allEquipments = allActive,
+            childrenByParent = childrenByParent,
+        )
+    val hybrideIds = hybrideEquipmentIds(hybrideGroups)
+    val normalRootAndOrphans = (rootEquipments + orphans).filter { it.id !in hybrideIds }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        hybrideGroups.forEach { group ->
+            HybrideGroupCard(
+                group = group,
+                newEquipmentIds = newEquipmentIds,
+                interventionId = interventionId,
+                interactive = true,
+                onEquipementClick = onEquipementClick,
+            )
+        }
+        normalRootAndOrphans.forEach { parent ->
+            InterventionEquipmentGroupCard(
+                parent = parent,
+                children = childrenByParent[parent.id].orEmpty(),
+                newEquipmentIds = newEquipmentIds,
+                interventionId = interventionId,
+                interactive = true,
+                onEquipementClick = onEquipementClick,
+            )
+        }
+        rootReplaced.forEach { parent ->
+            InterventionEquipmentGroupCard(
+                parent = parent,
+                children = childrenByParent[parent.id].orEmpty(),
+                newEquipmentIds = newEquipmentIds,
+                interventionId = interventionId,
+                interactive = true,
+                onEquipementClick = onEquipementClick,
+            )
+        }
+    }
+}
+
+@Composable
 fun InterventionPhotosTab(
     uiState: InterventionActiveUiState,
     onOpenCamera: (unitId: String, customerId: String) -> Unit,
@@ -544,6 +706,95 @@ fun InterventionFactureTab(
 ) {
     val intervention = uiState.intervention ?: return
     val invoice = uiState.invoice
+    val refonte = useSavioRefonteUi()
+
+    if (refonte) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 15.dp, vertical = 12.dp),
+        ) {
+            if (invoice != null) {
+                val summaryText =
+                    when {
+                        uiState.invoiceLineCount == 0 -> "Aucune ligne"
+                        else ->
+                            "${uiState.invoiceLineCount} ligne(s) — %.2f € TTC".format(
+                                invoice.totalTtc,
+                            )
+                    }
+                val subtitle =
+                    buildString {
+                        invoice.number?.takeIf { it.isNotBlank() }?.let { append("$it · ") }
+                        append(summaryText)
+                    }
+                SavioRefonteCard {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 15.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SavioInfoIconBox(icon = Icons.Filled.Receipt, size = 34.dp)
+                        Text(
+                            text = "Facturation",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SavioRefonte.Ink,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    SavioEquipNavRow(
+                        icon = Icons.Filled.Receipt,
+                        title = "Facture",
+                        subtitle = subtitle,
+                        onClick = { onFactureClick(intervention.id) },
+                        showDivider = false,
+                    )
+                }
+            } else {
+                SavioRefonteCard {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 15.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SavioInfoIconBox(icon = Icons.Filled.Receipt, size = 34.dp)
+                        Text(
+                            text = "Facturation",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SavioRefonte.Ink,
+                        )
+                    }
+                }
+                SavioEmptyState(
+                    icon = Icons.Outlined.Description,
+                    title = "Aucune facture créée",
+                    subtitle = "Créez une facture pour cette intervention.",
+                    primaryActionLabel = "+ Créer une facture",
+                    primaryEnabled = true,
+                    onPrimaryAction = {
+                        viewModel.createAndNavigateToInvoice(
+                            interventionId = intervention.id,
+                            unitId = intervention.unitId,
+                            technicianId = "",
+                        )
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -702,6 +953,40 @@ internal fun InterventionEquipmentGroupCard(
     interactive: Boolean = true,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
 ) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        SavioRefonteCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                EquipmentRowItem(
+                    equipment = parent,
+                    isChild = false,
+                    badge = badgeFor(parent, newEquipmentIds),
+                    roleLabel =
+                        parent.pacClimRoleLabel(
+                            isChild = false,
+                            hasChildren = children.isNotEmpty(),
+                        ),
+                    interactive = interactive,
+                    onClick = { onEquipementClick(interventionId, parent.id) },
+                )
+                children.forEach { child ->
+                    EquipmentRowItem(
+                        equipment = child,
+                        isChild = true,
+                        badge = badgeFor(child, newEquipmentIds),
+                        roleLabel =
+                            child.pacClimRoleLabel(
+                                isChild = true,
+                                hasChildren = false,
+                            ),
+                        interactive = interactive,
+                        onClick = { onEquipementClick(interventionId, child.id) },
+                    )
+                }
+            }
+        }
+        return
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -755,6 +1040,36 @@ internal fun EquipmentRowItem(
     interactive: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        val name =
+            listOfNotNull(equipment.brand, equipment.model)
+                .joinToString(" ")
+                .ifEmpty { "Équipement sans nom" }
+        SavioEquipListItem(
+            name = name,
+            subtitle = equipment.typeCode?.let { formatEquipmentTypeLabel(it) },
+            unitBadge = roleLabel,
+            catalogBrandId = equipment.catalogBrandId,
+            typeCode = equipment.typeCode,
+            isChild = isChild,
+            isReplaced = equipment.typeCode == "replaced",
+            onClick = onClick,
+            interactive = interactive,
+            statusBadge =
+                if (badge != EquipmentBadge.NONE) {
+                    {
+                        SavioEquipStatusBadge(
+                            text = if (badge == EquipmentBadge.NEW) "+ Nouveau" else "Remplacé",
+                            isNew = badge == EquipmentBadge.NEW,
+                        )
+                    }
+                } else {
+                    null
+                },
+        )
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()

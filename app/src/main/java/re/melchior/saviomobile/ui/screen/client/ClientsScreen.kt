@@ -29,9 +29,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.remote.dto.CustomerSearchRowDto
 import re.melchior.saviomobile.ui.designsystem.BottomNavBar
 import re.melchior.saviomobile.ui.designsystem.BottomNavItem
+import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioRefonteFab
+import re.melchior.saviomobile.ui.refonte.SavioSearchField
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,27 +51,37 @@ fun ClientsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val refonte = useSavioRefonteUi()
     Scaffold(
-        containerColor = SavioUi.PageBackground,
+        containerColor =
+            if (refonte) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
         topBar = {
-            TopAppBar(
-                colors = savioTopAppBarColors(),
-                title = {
-                    Text(
-                        "Clients",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                },
-            )
+            if (refonte) {
+                SavioNavyHeader(title = "Clients", style = SavioHeaderStyle.Primary)
+            } else {
+                TopAppBar(
+                    colors = savioTopAppBarColors(),
+                    title = {
+                        Text(
+                            "Clients",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                )
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onCreateClient,
-                containerColor = SavioPalette.Accent,
-                contentColor = SavioPalette.OnAccent,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Nouveau client")
+            if (refonte) {
+                SavioRefonteFab(onClick = onCreateClient, contentDescription = "Nouveau client")
+            } else {
+                FloatingActionButton(
+                    onClick = onCreateClient,
+                    containerColor = SavioPalette.Accent,
+                    contentColor = SavioPalette.OnAccent,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Nouveau client")
+                }
             }
         },
         bottomBar = {
@@ -85,12 +101,33 @@ fun ClientsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-            CustomerSearchField(
-                query = uiState.searchQuery,
-                onQueryChange = viewModel::onSearchChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            if (refonte) {
+                SavioSearchField(
+                    query = uiState.searchQuery,
+                    onQueryChange = viewModel::onSearchChange,
+                )
+                if (uiState.searchQuery.isNotBlank()) {
+                    Text(
+                        text =
+                            when (uiState.results.size) {
+                                0 -> "Aucun résultat"
+                                1 -> "1 résultat"
+                                else -> "${uiState.results.size} résultats"
+                            },
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SavioRefonte.Muted,
+                        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 2.dp),
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+                CustomerSearchField(
+                    query = uiState.searchQuery,
+                    onQueryChange = viewModel::onSearchChange,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             CustomerSearchResultsSection(
                 query = uiState.searchQuery,
                 results = uiState.results,

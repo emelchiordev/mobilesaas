@@ -2,9 +2,11 @@ package re.melchior.saviomobile.data.remote.api
 
 import re.melchior.saviomobile.data.remote.dto.CreateInterventionRequestDto
 import re.melchior.saviomobile.data.remote.dto.CreateInterventionResponseDto
+import re.melchior.saviomobile.data.remote.dto.GenerateReportEnqueueResponseDto
 import re.melchior.saviomobile.data.remote.dto.GenerateReportRequestDto
-import re.melchior.saviomobile.data.remote.dto.GenerateReportResponseDto
+import re.melchior.saviomobile.data.remote.dto.ReportStatusResponseDto
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -16,5 +18,10 @@ interface InterventionApi {
     suspend fun generateReport(
         @Path("id") interventionId: String,
         @Body body: GenerateReportRequestDto,
-    ): GenerateReportResponseDto
+    ): GenerateReportEnqueueResponseDto
+
+    @GET("api/interventions/{id}/report-status")
+    suspend fun getReportStatus(
+        @Path("id") interventionId: String,
+    ): ReportStatusResponseDto
 }

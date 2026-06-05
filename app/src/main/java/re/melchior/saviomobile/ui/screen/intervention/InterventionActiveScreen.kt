@@ -5,19 +5,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -26,16 +23,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,16 +42,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.collect
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.refonte.SavioInterventionTabBar
+import re.melchior.saviomobile.ui.refonte.SavioInterventionTabItem
+import re.melchior.saviomobile.ui.refonte.SavioNavyStatusBarEffect
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
-import re.melchior.saviomobile.ui.theme.SavioUi
-import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
-import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
-@OptIn(
-    ExperimentalMaterial3Api::class,
-    ExperimentalMaterial3AdaptiveNavigationSuiteApi::class,
-)
+import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InterventionActiveScreen(
     onQuit: () -> Unit,
@@ -97,61 +91,41 @@ fun InterventionActiveScreen(
     }
 
     var selectedTab by rememberSaveable { mutableStateOf(InterventionTab.DETAIL) }
-
-    NavigationSuiteScaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        navigationSuiteColors =
-            NavigationSuiteDefaults.colors(
-                navigationBarContainerColor = MaterialTheme.colorScheme.background,
-                navigationBarContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        navigationSuiteItems = {
-            InterventionTab.entries.forEach { tab ->
-                item(
-                    icon = {
-                        Icon(
-                            imageVector =
-                                if (selectedTab == tab) tab.selectedIcon else tab.icon,
-                            contentDescription = tab.label,
-                            tint =
-                                if (selectedTab == tab) {
-                                    savioTabSelectedColor()
-                                } else {
-                                    savioTabUnselectedColor()
-                                },
-                            modifier = Modifier.size(24.dp),
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = tab.label,
-                            fontSize = 10.sp,
-                            fontWeight =
-                                if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
-                            color =
-                                if (selectedTab == tab) {
-                                    savioTabSelectedColor()
-                                } else {
-                                    savioTabUnselectedColor()
-                                },
-                        )
-                    },
-                    selected = selectedTab == tab,
-                    onClick = { selectedTab = tab },
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        SavioNavyStatusBarEffect()
+    }
+    val interventionTabs =
+        remember {
+            InterventionTab.entries.map { tab ->
+                SavioInterventionTabItem(
+                    label = tab.label,
+                    icon = tab.icon,
+                    selectedIcon = tab.selectedIcon,
                 )
             }
+        }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor =
+            if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background,
+        bottomBar = {
+            SavioInterventionTabBar(
+                tabs = interventionTabs,
+                selectedIndex = selectedTab.ordinal,
+                onSelect = { index -> selectedTab = InterventionTab.entries[index] },
+            )
         },
-    ) {
+    ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .navigationBarsPadding(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             uiState.intervention?.let { intervention ->
                 InterventionActiveTopBar(
-                    startTimeLabel = uiState.startTimeLabel,
-                    elapsedLabel = uiState.elapsedSeconds.toElapsedLabel(),
                     intervention = intervention,
                     onCloseClick = viewModel::onCloseClick,
                     onClotureClick = { onCloture(intervention.id) },
@@ -166,16 +140,21 @@ fun InterventionActiveScreen(
             }
 
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(
+                            if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background,
+                        ),
             ) {
                 when (selectedTab) {
                     InterventionTab.DETAIL ->
                         InterventionDetailTab(
                             uiState = uiState,
                             onClientClick = onClientClick,
+                            elapsedLabel = uiState.elapsedSeconds.toElapsedLabel(),
+                            startTimeLabel = uiState.startTimeLabel,
                         )
 
                     InterventionTab.EQUIPEMENTS ->
@@ -206,66 +185,79 @@ fun InterventionActiveScreen(
 
 @Composable
 private fun InterventionActiveTopBar(
-    startTimeLabel: String,
-    elapsedLabel: String,
     intervention: InterventionEntity,
     onCloseClick: () -> Unit,
     onClotureClick: () -> Unit,
 ) {
-    Column(
+    val refonte = useSavioRefonteUi()
+    Box(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary)
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .background(if (refonte) SavioRefonte.Navy else MaterialTheme.colorScheme.primary),
     ) {
-        val onBar = MaterialTheme.colorScheme.onPrimary
+        Column(Modifier.statusBarsPadding()) {
+        val onBar = Color.White
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(
+                    start = if (refonte) 16.dp else 16.dp,
+                    end = if (refonte) 16.dp else 16.dp,
+                    top = if (refonte) 6.dp else 14.dp,
+                    bottom = if (refonte) 16.dp else 14.dp,
+                ),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                if (refonte) {
+                    Icon(
+                        imageVector = Icons.Filled.Build,
+                        contentDescription = null,
+                        tint = onBar,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
                 Text(
                     text = intervention.displayTypeLabel(),
                     color = onBar,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "Début $startTimeLabel · $elapsedLabel",
-                    color = onBar.copy(alpha = 0.65f),
-                    fontSize = 11.sp,
+                    fontSize = if (refonte) 23.sp else 20.sp,
+                    fontWeight = if (refonte) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = if (refonte) (-0.01).sp else 0.sp,
                 )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
                     onClick = onClotureClick,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onPrimary,
-                        contentColor = MaterialTheme.colorScheme.primary,
+                        containerColor =
+                            if (refonte) Color.White else MaterialTheme.colorScheme.onPrimary,
+                        contentColor =
+                            if (refonte) SavioRefonte.Navy else MaterialTheme.colorScheme.primary,
                     ),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .padding(end = 4.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(999.dp)),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                 ) {
                     Text(
                         "Clôturer",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = if (refonte) 15.sp else 12.sp,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
                 IconButton(onClick = onCloseClick) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = "Quitter l'intervention",
-                        tint = onBar.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp),
+                        tint = onBar,
+                        modifier = Modifier.size(if (refonte) 24.dp else 20.dp),
                     )
                 }
             }
@@ -298,6 +290,6 @@ private fun InterventionActiveTopBar(
                 }
             }
         }
+        }
     }
 }
-

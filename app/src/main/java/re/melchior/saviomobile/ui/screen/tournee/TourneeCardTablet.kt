@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,9 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.MaterialTheme
+import re.melchior.saviomobile.ui.refonte.SavioPlanningCard
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @Composable
 fun TourneeCardTablet(
@@ -34,6 +36,18 @@ fun TourneeCardTablet(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
+    if (useSavioRefonteUi()) {
+        SavioPlanningCard(
+            item = intervention,
+            onClick = onClick,
+            selected = isSelected,
+            modifier =
+                Modifier
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .alpha(if (intervention.isCompleted) 0.65f else 1f),
+        )
+        return
+    }
     val accentColor =
         when (intervention.status) {
             "completed" -> SavioPalette.Success

@@ -1,5 +1,6 @@
 package re.melchior.saviomobile.ui.screen.client
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +14,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import re.melchior.saviomobile.ui.refonte.SavioClientRow
+import re.melchior.saviomobile.ui.theme.SavioDimens
+import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -72,9 +78,29 @@ fun CustomerSearchResultsSection(
         Spacer(modifier = Modifier.height(4.dp))
         Text(err, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
     }
-    results.forEach { row ->
+    if (useSavioRefonteUi() && results.isNotEmpty()) {
         Spacer(modifier = Modifier.height(8.dp))
-        CustomerSearchResultCard(row = row, onClick = { onSelect(row) })
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(SavioDimens.RadiusCard),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, SavioRefonte.Line),
+        ) {
+            Column {
+                results.forEachIndexed { index, row ->
+                    CustomerSearchResultCard(
+                        row = row,
+                        onClick = { onSelect(row) },
+                        showDivider = index < results.lastIndex,
+                    )
+                }
+            }
+        }
+    } else {
+        results.forEach { row ->
+            Spacer(modifier = Modifier.height(8.dp))
+            CustomerSearchResultCard(row = row, onClick = { onSelect(row) })
+        }
     }
 }
 
@@ -82,7 +108,29 @@ fun CustomerSearchResultsSection(
 fun CustomerSearchResultCard(
     row: CustomerSearchRowDto,
     onClick: () -> Unit,
+    showDivider: Boolean = true,
 ) {
+    if (useSavioRefonteUi()) {
+        val initials =
+            row.resolvedDisplayName()
+                .split(" ")
+                .mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }
+                .take(2)
+                .joinToString("")
+                .ifBlank { "?" }
+        val incomplete = row.phone.isNullOrBlank() && row.email.isNullOrBlank()
+        SavioClientRow(
+            name = row.resolvedDisplayName(),
+            subtitle = row.formattedAddress(),
+            initials = initials,
+            onClick = onClick,
+            phone = row.phone,
+            incomplete = incomplete,
+            tag = if (incomplete) "Fiche à compléter" else null,
+            showDivider = showDivider,
+        )
+        return
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()

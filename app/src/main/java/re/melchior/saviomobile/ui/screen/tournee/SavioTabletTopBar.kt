@@ -29,14 +29,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioStatusPill
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.interventionStatusBadge
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @Composable
 fun SavioTabletTopBar(
@@ -53,6 +59,50 @@ fun SavioTabletTopBar(
     isNetworkOnline: Boolean = true,
     onLogout: (() -> Unit)? = null,
 ) {
+    if (useSavioRefonteUi()) {
+        SavioNavyHeader(
+            title = "Planning",
+            style = SavioHeaderStyle.Primary,
+            actions = {
+                TabletTopBarActions(
+                    contentColor = Color.White,
+                    pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+                    onPendingOfflineClick = onPendingOfflineClick,
+                    pendingSyncCount = pendingSyncCount,
+                    onSyncCatalog = onSyncCatalog,
+                    isCatalogSyncing = isCatalogSyncing,
+                    onRefresh = onRefresh,
+                    isRefreshing = isRefreshing,
+                    isNetworkOnline = isNetworkOnline,
+                    onLogout = onLogout,
+                )
+            },
+        )
+        selectedIntervention?.let { intervention ->
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SavioRefonte.Tint)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = intervention.typeLabel,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SavioRefonte.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                SavioStatusPill(status = intervention.status, syncStatus = intervention.syncStatus)
+            }
+        }
+        return
+    }
     val topBarBackground =
         if (isSystemInDarkTheme()) {
             MaterialTheme.colorScheme.background
@@ -75,24 +125,24 @@ fun SavioTabletTopBar(
         Modifier
             .fillMaxWidth()
             .background(topBarBackground)
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(0.28f)) {
                 Text(
                     text = "Ma tournée",
                     color = topBarContent,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = "$remainingCount restantes",
                     color = topBarMuted,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
                 )
             }
             Text(
@@ -100,98 +150,30 @@ fun SavioTabletTopBar(
                 color = topBarMuted,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(0.44f)
-                    .padding(horizontal = 8.dp),
+                modifier =
+                    Modifier
+                        .weight(0.44f)
+                        .padding(horizontal = 8.dp),
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Row(
                 modifier = Modifier.weight(0.28f),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (pendingOfflineInterventionCount > 0 && onPendingOfflineClick != null) {
-                    BadgedBox(
-                        badge = {
-                            Badge(
-                                containerColor = SavioPalette.Accent,
-                                contentColor = SavioPalette.OnAccent,
-                            ) { Text(pendingOfflineInterventionCount.toString()) }
-                        },
-                    ) {
-                        IconButton(onClick = onPendingOfflineClick) {
-                            Text("☁️", fontSize = 20.sp)
-                        }
-                    }
-                    Spacer(Modifier.width(4.dp))
-                }
-                if (pendingSyncCount > 0) {
-                    BadgedBox(
-                        badge = {
-                            Badge(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            ) { Text(pendingSyncCount.toString()) }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Sync,
-                            contentDescription = "Sync en attente",
-                            tint = topBarContent,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                }
-                IconButton(
-                    onClick = onSyncCatalog,
-                    enabled = !isCatalogSyncing && !isRefreshing,
-                ) {
-                    if (isCatalogSyncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = topBarContent,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Filled.LibraryBooks,
-                            contentDescription = "Synchroniser le catalogue",
-                            tint = topBarContent,
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = isNetworkOnline && !isRefreshing,
-                ) {
-                    if (isRefreshing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = topBarContent,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Rafraîchir",
-                            tint = topBarContent,
-                        )
-                    }
-                }
-                onLogout?.let { logout ->
-                    IconButton(
-                        onClick = logout,
-                        enabled = !isRefreshing && !isCatalogSyncing,
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "Se déconnecter",
-                            tint = topBarContent,
-                        )
-                    }
-                }
+                TabletTopBarActions(
+                    contentColor = topBarContent,
+                    pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+                    onPendingOfflineClick = onPendingOfflineClick,
+                    pendingSyncCount = pendingSyncCount,
+                    onSyncCatalog = onSyncCatalog,
+                    isCatalogSyncing = isCatalogSyncing,
+                    onRefresh = onRefresh,
+                    isRefreshing = isRefreshing,
+                    isNetworkOnline = isNetworkOnline,
+                    onLogout = onLogout,
+                )
                 if (selectedIntervention != null) {
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -201,11 +183,109 @@ fun SavioTabletTopBar(
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.width(120.dp)
+                        modifier = Modifier.width(120.dp),
                     )
                     Spacer(Modifier.width(8.dp))
                     TabletInterventionStatusBadge(intervention = selectedIntervention)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletTopBarActions(
+    contentColor: Color,
+    pendingOfflineInterventionCount: Int,
+    onPendingOfflineClick: (() -> Unit)?,
+    pendingSyncCount: Int,
+    onSyncCatalog: () -> Unit,
+    isCatalogSyncing: Boolean,
+    onRefresh: () -> Unit,
+    isRefreshing: Boolean,
+    isNetworkOnline: Boolean,
+    onLogout: (() -> Unit)?,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (pendingOfflineInterventionCount > 0 && onPendingOfflineClick != null) {
+            BadgedBox(
+                badge = {
+                    Badge(
+                        containerColor = SavioPalette.Accent,
+                        contentColor = SavioPalette.OnAccent,
+                    ) { Text(pendingOfflineInterventionCount.toString()) }
+                },
+            ) {
+                IconButton(onClick = onPendingOfflineClick) {
+                    Text("☁️", fontSize = 20.sp)
+                }
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        if (pendingSyncCount > 0) {
+            BadgedBox(
+                badge = {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ) { Text(pendingSyncCount.toString()) }
+                },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Sync,
+                    contentDescription = "Sync en attente",
+                    tint = contentColor,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        IconButton(
+            onClick = onSyncCatalog,
+            enabled = !isCatalogSyncing && !isRefreshing,
+        ) {
+            if (isCatalogSyncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.LibraryBooks,
+                    contentDescription = "Synchroniser le catalogue",
+                    tint = contentColor,
+                )
+            }
+        }
+        IconButton(
+            onClick = onRefresh,
+            enabled = isNetworkOnline && !isRefreshing,
+        ) {
+            if (isRefreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Rafraîchir",
+                    tint = contentColor,
+                )
+            }
+        }
+        onLogout?.let { logout ->
+            IconButton(
+                onClick = logout,
+                enabled = !isRefreshing && !isCatalogSyncing,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = "Se déconnecter",
+                    tint = contentColor,
+                )
             }
         }
     }
@@ -222,17 +302,19 @@ private fun TabletInterventionStatusBadge(intervention: InterventionItem) {
     val fg = badge.foreground
     val label = badge.label
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(bg)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(fg)
+            modifier =
+                Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(fg),
         )
         Spacer(Modifier.width(6.dp))
         Text(
@@ -241,7 +323,7 @@ private fun TabletInterventionStatusBadge(intervention: InterventionItem) {
             color = fg,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

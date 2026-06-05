@@ -25,24 +25,24 @@ private val SavioDarkSecondary = Color(0xFF8A8F9E)
 private val SavioDarkOutline = Color(0xFF2A3050)
 private val SavioDarkError = Color(0xFFCF6679)
 
-private val SavioLightBackground = Color(0xFFF0F4F8)
-private val SavioLightOnBackground = Color(0xFF1A1A1A)
+private val SavioLightBackground = Color(0xFFEFF3F7)
+private val SavioLightOnBackground = Color(0xFF1C2430)
 private val SavioLightSurface = Color(0xFFFFFFFF)
-private val SavioLightOnSurface = Color(0xFF1A1A1A)
-private val SavioLightSurfaceVariant = Color(0xFFE8EFF7)
-private val SavioLightOnSurfaceVariant = Color(0xFF444444)
-private val SavioLightPrimary = Color(0xFF1B4F8A)
+private val SavioLightOnSurface = Color(0xFF1C2430)
+private val SavioLightSurfaceVariant = Color(0xFFEAF1F8)
+private val SavioLightOnSurfaceVariant = Color(0xFF8893A2)
+private val SavioLightPrimary = Color(0xFF1B4E80)
 private val SavioLightOnPrimary = Color(0xFFFFFFFF)
 private val SavioLightPrimaryContainer = Color(0xFFD6E4F5)
 private val SavioLightOnPrimaryContainer = Color(0xFF1B4F8A)
-private val SavioLightSecondary = Color(0xFFF5A623)
+private val SavioLightSecondary = Color(0xFFEC971F)
 private val SavioLightOnSecondary = Color(0xFF000000)
 private val SavioLightSecondaryContainer = Color(0xFFFFE0A0)
 private val SavioLightOnSecondaryContainer = Color(0xFF1A1A1A)
 private val SavioLightTertiary = Color(0xFF2E6DB4)
 private val SavioLightOnTertiary = Color(0xFFFFFFFF)
-private val SavioLightOutline = Color(0xFFBFD0E5)
-private val SavioLightOutlineVariant = Color(0xFFDDE8F4)
+private val SavioLightOutline = Color(0xFFE6EBF1)
+private val SavioLightOutlineVariant = Color(0xFFEDF1F6)
 private val SavioLightError = Color(0xFFB00020)
 private val SavioLightOnError = Color(0xFFFFFFFF)
 
@@ -146,13 +146,10 @@ val unspecified_scheme =
 fun SavioTheme(
     content: @Composable () -> Unit,
 ) {
-    val darkTheme = isSystemInDarkTheme()
-    val colorScheme =
-        if (darkTheme) {
-            SavioDarkColorScheme
-        } else {
-            SavioLightColorScheme
-        }
+    // Refonte SAVIO MOBILITE : shell métier en thème clair (maquette handoff).
+    // Welcome / auth gardent leur fond sombre via composants dédiés.
+    val darkTheme = false
+    val colorScheme = SavioLightColorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {

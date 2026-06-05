@@ -26,18 +26,25 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.theme.SavioAccent
 import re.melchior.saviomobile.ui.theme.SavioDimens
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioType
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 @Composable
 fun SectionCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val refonte = useSavioRefonteUi()
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(SavioDimens.RadiusLG),
+        shape = RoundedCornerShape(if (refonte) SavioDimens.RadiusCard else SavioDimens.RadiusLG),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(SavioDimens.BorderThin, MaterialTheme.colorScheme.outline),
+        border =
+            BorderStroke(
+                SavioDimens.BorderThin,
+                if (refonte) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
+            ),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
     ) {

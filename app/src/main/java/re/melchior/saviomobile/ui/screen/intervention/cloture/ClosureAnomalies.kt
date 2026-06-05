@@ -39,6 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import re.melchior.saviomobile.ui.refonte.SavioClotureDashedAddButton
+import re.melchior.saviomobile.ui.refonte.SavioFormSection
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
 import re.melchior.saviomobile.data.local.entity.AnomalyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
@@ -80,6 +83,37 @@ fun ClosureAnomaliesSection(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        SavioFormSection(
+            title = "Anomalies constatées",
+            help = "Optionnel — non-conformités ou défauts observés",
+            modifier = modifier,
+        ) {
+            if (drafts.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
+                    drafts.forEach { item ->
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text("${item.levelEmoji} ${item.levelTag} — ${item.label}")
+                            },
+                        )
+                    }
+                }
+            }
+            SavioClotureDashedAddButton(
+                text = "Ajouter une anomalie",
+                onClick = onAddClick,
+            )
+        }
+        return
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "Anomalies constatées",

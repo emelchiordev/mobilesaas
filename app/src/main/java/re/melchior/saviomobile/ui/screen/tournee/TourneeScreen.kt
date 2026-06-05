@@ -76,7 +76,13 @@ import java.util.Locale
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import re.melchior.saviomobile.ui.designsystem.BottomNavBar
+import re.melchior.saviomobile.ui.refonte.SavioDateNavigator
+import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
+import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioPlanningCard
+import re.melchior.saviomobile.ui.refonte.SavioRefonteFab
 import re.melchior.saviomobile.ui.screen.client.mainBottomNavItems
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import kotlinx.coroutines.launch
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -151,10 +157,33 @@ fun TourneeScreen(
         }
     }
 
+    val refonte = useSavioRefonteUi()
     Scaffold(
-        containerColor = SavioUi.PageBackground,
+        containerColor =
+            if (refonte) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         topBar = {
+            if (refonte) {
+                SavioNavyHeader(
+                    title = "Planning",
+                    style = SavioHeaderStyle.Primary,
+                    actions = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PlanningTopBarActions(
+                                uiState = uiState,
+                                isOnline = isOnline,
+                                pendingOfflineInterventionCount = pendingOfflineInterventionCount,
+                                pendingSyncCount = pendingSyncCount,
+                                onLogout = onLogout,
+                                onPendingOfflineList = onPendingOfflineList,
+                                onSyncCatalog = viewModel::syncCatalog,
+                                onRefresh = { viewModel.pull(force = true) },
+                                contentColor = androidx.compose.ui.graphics.Color.White,
+                            )
+                        }
+                    },
+                )
+            } else {
             TopAppBar(
                 title = {
                     Text(
@@ -249,14 +278,19 @@ fun TourneeScreen(
                     }
                 }
             )
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewIntervention,
-                containerColor = SavioPalette.Accent,
-                contentColor = SavioPalette.OnAccent,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+            if (refonte) {
+                SavioRefonteFab(onClick = onNewIntervention)
+            } else {
+                FloatingActionButton(
+                    onClick = onNewIntervention,
+                    containerColor = SavioPalette.Accent,
+                    contentColor = SavioPalette.OnAccent,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+                }
             }
         },
         bottomBar = {
@@ -316,17 +350,43 @@ fun TourneeScreen(
                     SavioOfflineBannerSurface()
                 }
 
-                // Sélecteur de date
-                DateSelector(
-                    selectedDate = uiState.selectedDate,
-                    isRefreshing = uiState.isDatePullRefreshing,
-                    onPreviousDay = {
-                        viewModel.selectDate(uiState.selectedDate.minusDays(1))
-                    },
-                    onNextDay = {
-                        viewModel.selectDate(uiState.selectedDate.plusDays(1))
-                    },
-                )
+                if (refonte) {
+                    val totalCount = interventions.size + pendingCreating.size
+                    val inProgressCount =
+                        interventions.count {
+                            it.status == "in_progress" || it.syncStatus == "IN_PROGRESS"
+                        }
+                    val dateSubtitle =
+                        when {
+                            totalCount == 0 -> "Aucune intervention"
+                            inProgressCount > 0 ->
+                                "$totalCount interventions · $inProgressCount en cours"
+                            totalCount == 1 -> "1 intervention"
+                            else -> "$totalCount interventions"
+                        }
+                    SavioDateNavigator(
+                        selectedDate = uiState.selectedDate,
+                        isRefreshing = uiState.isDatePullRefreshing,
+                        subtitle = dateSubtitle,
+                        onPreviousDay = {
+                            viewModel.selectDate(uiState.selectedDate.minusDays(1))
+                        },
+                        onNextDay = {
+                            viewModel.selectDate(uiState.selectedDate.plusDays(1))
+                        },
+                    )
+                } else {
+                    DateSelector(
+                        selectedDate = uiState.selectedDate,
+                        isRefreshing = uiState.isDatePullRefreshing,
+                        onPreviousDay = {
+                            viewModel.selectDate(uiState.selectedDate.minusDays(1))
+                        },
+                        onNextDay = {
+                            viewModel.selectDate(uiState.selectedDate.plusDays(1))
+                        },
+                    )
+                }
 
                 resumeCandidate?.let { entity ->
                     ResumeBanner(
@@ -383,10 +443,17 @@ fun TourneeScreen(
                             items = interventions,
                             key = { it.id }
                         ) { intervention ->
-                            InterventionCard(
-                                intervention = intervention,
-                                onClick = { onInterventionClick(intervention.id) }
-                            )
+                            if (refonte) {
+                                SavioPlanningCard(
+                                    intervention = intervention,
+                                    onClick = { onInterventionClick(intervention.id) },
+                                )
+                            } else {
+                                InterventionCard(
+                                    intervention = intervention,
+                                    onClick = { onInterventionClick(intervention.id) },
+                                )
+                            }
                         }
                         items(
                             items = pendingCreating,
@@ -636,5 +703,95 @@ private fun InterventionCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlanningTopBarActions(
+    uiState: TourneeUiState,
+    isOnline: Boolean,
+    pendingOfflineInterventionCount: Int,
+    pendingSyncCount: Int,
+    onLogout: () -> Unit,
+    onPendingOfflineList: () -> Unit,
+    onSyncCatalog: () -> Unit,
+    onRefresh: () -> Unit,
+    contentColor: androidx.compose.ui.graphics.Color,
+) {
+    if (pendingOfflineInterventionCount > 0) {
+        BadgedBox(
+            badge = {
+                Badge(
+                    containerColor = SavioPalette.Accent,
+                    contentColor = SavioPalette.OnAccent,
+                ) { Text(pendingOfflineInterventionCount.toString()) }
+            },
+        ) {
+            IconButton(onClick = onPendingOfflineList) {
+                Text("☁️", fontSize = 20.sp)
+            }
+        }
+    }
+    if (pendingSyncCount > 0) {
+        BadgedBox(
+            badge = {
+                Badge(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ) { Text(pendingSyncCount.toString()) }
+            },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Sync,
+                contentDescription = "Sync en attente",
+                tint = contentColor,
+            )
+        }
+    }
+    IconButton(
+        onClick = onSyncCatalog,
+        enabled = isOnline && !uiState.isCatalogSyncing && !uiState.isSyncing,
+    ) {
+        if (uiState.isCatalogSyncing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = contentColor,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.LibraryBooks,
+                contentDescription = "Synchroniser le catalogue",
+                tint = contentColor,
+            )
+        }
+    }
+    IconButton(
+        onClick = onRefresh,
+        enabled = isOnline && !uiState.isSyncing,
+    ) {
+        if (uiState.isSyncing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = contentColor,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = "Rafraîchir",
+                tint = contentColor,
+            )
+        }
+    }
+    IconButton(
+        onClick = onLogout,
+        enabled = !uiState.isSyncing && !uiState.isCatalogSyncing,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Logout,
+            contentDescription = "Se déconnecter",
+            tint = contentColor,
+        )
     }
 }

@@ -39,7 +39,10 @@ import re.melchior.saviomobile.ui.component.SavioOfflineBannerSurface
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
 import re.melchior.saviomobile.ui.component.SavioTourneeListSkeleton
 import re.melchior.saviomobile.ui.navigation.Screen
+import androidx.compose.material3.MaterialTheme
+import re.melchior.saviomobile.ui.refonte.SavioRefonteFab
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import java.time.Instant
 import java.time.ZoneId
@@ -132,15 +135,20 @@ fun TourneeTabletScreen(
     }
 
     Scaffold(
-        containerColor = SavioUi.PageBackground,
+        containerColor =
+            if (useSavioRefonteUi()) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewIntervention,
-                containerColor = SavioPalette.Accent,
-                contentColor = SavioPalette.OnAccent,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+            if (useSavioRefonteUi()) {
+                SavioRefonteFab(onClick = onNewIntervention)
+            } else {
+                FloatingActionButton(
+                    onClick = onNewIntervention,
+                    containerColor = SavioPalette.Accent,
+                    contentColor = SavioPalette.OnAccent,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Nouvelle intervention")
+                }
             }
         },
         bottomBar = {
@@ -273,6 +281,23 @@ fun TourneeTabletScreen(
                             )
                         },
                         currentDateLabel = currentDateLabel,
+                        selectedDate = uiState.selectedDate,
+                        dateSubtitle =
+                            run {
+                                val total = items.size + pendingCreating.size
+                                val inProgress =
+                                    items.count {
+                                        it.status == "in_progress" || it.syncStatus == "IN_PROGRESS"
+                                    }
+                                when {
+                                    total == 0 -> "Aucune intervention"
+                                    inProgress > 0 -> "$total interventions · $inProgress en cours"
+                                    total == 1 -> "1 intervention"
+                                    else -> "$total interventions"
+                                }
+                            },
+                        onPreviousDay = { viewModel.selectDate(uiState.selectedDate.minusDays(1)) },
+                        onNextDay = { viewModel.selectDate(uiState.selectedDate.plusDays(1)) },
                         pendingSyncCount = pendingSyncCount,
                         pendingOfflineInterventionCount = pendingOfflineInterventionCount,
                         onPendingOfflineList = onPendingOfflineList,

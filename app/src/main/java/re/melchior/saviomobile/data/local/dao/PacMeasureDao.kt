@@ -44,6 +44,9 @@ interface PacMeasureDao {
     @Query("DELETE FROM pac_measures WHERE interventionId = :interventionId")
     suspend fun deleteByInterventionId(interventionId: String)
 
+    @Query("SELECT COUNT(*) FROM pac_measures WHERE interventionId = :interventionId")
+    suspend fun countForIntervention(interventionId: String): Int
+
     @Query("SELECT * FROM pac_measures WHERE interventionId = :interventionId")
     fun observeByInterventionId(interventionId: String): Flow<List<PacMeasureEntity>>
 }

@@ -7,15 +7,19 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
+import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InvoiceDao
 import re.melchior.saviomobile.data.local.dao.InvoiceLineDao
+import re.melchior.saviomobile.data.local.dao.MeasureDao
+import re.melchior.saviomobile.data.local.dao.PacMeasureDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
@@ -32,6 +36,7 @@ import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.utils.NetworkUtils
+import re.melchior.saviomobile.util.formatScheduledAtDateReadable
 import retrofit2.HttpException
 import javax.inject.Inject
 
@@ -54,6 +59,8 @@ data class ClotureRapportUiState(
     val invoiceLines: List<InvoiceLineEntity> = emptyList(),
     val showAddAnomalySheet: Boolean = false,
     val isGeneratingReport: Boolean = false,
+    val reportGenerationStatus: String? = null,
+    val reportFallbackUsed: Boolean = false,
 ) {
     val isAbsent: Boolean get() = selectedCloseTypes.any { it.code == "ABS" }
 
@@ -84,10 +91,31 @@ data class ClotureRapportUiState(
             if (rootEquipments.isNotEmpty()) return true
             return false
         }
+
+    val isReportGenerationBusy: Boolean
+        get() =
+            isGeneratingReport ||
+                reportGenerationStatus in REPORT_GENERATION_BUSY_STATUSES
+
+    val reportGenerateButtonText: String
+        get() =
+            when {
+                isReportGenerationBusy -> "Génération en cours…"
+                reportGenerationStatus == "done" -> "Régénérer"
+                else -> "Générer le compte rendu"
+            }
 }
 
 private const val CLOSE_TYPES_SYNC_REQUIRED =
     "Types d'intervention non disponibles. Une synchronisation est requise."
+
+private val REPORT_GENERATION_BUSY_STATUSES = setOf("queued", "processing", "retrying")
+private const val REPORT_GENERATION_POLL_MS = 3_000L
+private const val REPORT_GENERATION_TIMEOUT_MS = 180_000L
+private const val REPORT_GENERATION_ERROR =
+    "Génération impossible, saisissez manuellement"
+private const val REPORT_GENERATION_OFFLINE =
+    "Réseau requis pour cette fonctionnalité"
 
 @HiltViewModel
 class ClotureRapportViewModel @Inject constructor(
@@ -100,6 +128,9 @@ class ClotureRapportViewModel @Inject constructor(
     private val interventionApi: InterventionApi,
     private val referentielDao: ReferentielDao,
     private val attestationVeDao: AttestationVeDao,
+    private val measureDao: MeasureDao,
+    private val coldMeasureDao: ColdMeasureDao,
+    private val pacMeasureDao: PacMeasureDao,
     private val settingsDao: SettingsDao,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -277,7 +308,7 @@ class ClotureRapportViewModel @Inject constructor(
         viewModelScope.launch {
             if (!NetworkUtils.isOnline(context)) {
                 _uiState.update {
-                    it.copy(errorMessage = "Connexion requise pour générer le compte rendu")
+                    it.copy(errorMessage = REPORT_GENERATION_OFFLINE)
                 }
                 return@launch
             }
@@ -292,18 +323,63 @@ class ClotureRapportViewModel @Inject constructor(
                 return@launch
             }
             val intervention = state.intervention ?: return@launch
-            _uiState.update { it.copy(isGeneratingReport = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isGeneratingReport = true,
+                    reportGenerationStatus = "queued",
+                    reportFallbackUsed = false,
+                    errorMessage = null,
+                )
+            }
             try {
                 val body = buildGenerateReportRequest(state, intervention)
-                val response = interventionApi.generateReport(interventionId, body)
-                _uiState.update {
-                    it.copy(report = response.report.trim(), isGeneratingReport = false)
+                interventionApi.generateReport(interventionId, body)
+                val deadline = System.currentTimeMillis() + REPORT_GENERATION_TIMEOUT_MS
+                var finished = false
+                while (System.currentTimeMillis() < deadline) {
+                    delay(REPORT_GENERATION_POLL_MS)
+                    val statusResponse = interventionApi.getReportStatus(interventionId)
+                    val status = statusResponse.status?.trim().orEmpty()
+                    when (status) {
+                        "done" -> {
+                            val report = statusResponse.report?.trim().orEmpty()
+                            if (report.isBlank()) {
+                                throw IllegalStateException(REPORT_GENERATION_ERROR)
+                            }
+                            _uiState.update {
+                                it.copy(
+                                    report = report,
+                                    reportGenerationStatus = "done",
+                                    reportFallbackUsed = statusResponse.fallbackUsed == true,
+                                    isGeneratingReport = false,
+                                )
+                            }
+                            finished = true
+                            break
+                        }
+                        "error" -> throw IllegalStateException(REPORT_GENERATION_ERROR)
+                        "queued", "processing", "retrying", "pending" -> {
+                            _uiState.update {
+                                it.copy(reportGenerationStatus = status)
+                            }
+                        }
+                    }
+                }
+                if (!finished) {
+                    throw IllegalStateException(REPORT_GENERATION_ERROR)
                 }
             } catch (e: Exception) {
+                val message =
+                    if (e is IllegalStateException && e.message == REPORT_GENERATION_ERROR) {
+                        REPORT_GENERATION_ERROR
+                    } else {
+                        humanReadableApiError(e)
+                    }
                 _uiState.update {
                     it.copy(
                         isGeneratingReport = false,
-                        errorMessage = humanReadableApiError(e),
+                        reportGenerationStatus = "error",
+                        errorMessage = message,
                     )
                 }
             }
@@ -330,6 +406,61 @@ class ClotureRapportViewModel @Inject constructor(
     fun preselectedKeysForNavigation(): String {
         val keys = _uiState.value.selectedCloseTypes.joinToString("\u001F") { it.stableKey() }
         return if (keys.isEmpty()) "_" else keys
+    }
+
+    private suspend fun buildEstablishedDocuments(): List<String> {
+        val docs = mutableListOf<String>()
+        if (attestationVeDao.countForIntervention(interventionId) > 0) {
+            docs.add("Attestation d'entretien")
+        }
+        if (hasLocalMeasures()) {
+            docs.add("Prises de mesures")
+        }
+        return docs
+    }
+
+    private suspend fun hasLocalMeasures(): Boolean =
+        measureDao.getByIntervention(interventionId).isNotEmpty() ||
+            coldMeasureDao.countForIntervention(interventionId) > 0 ||
+            pacMeasureDao.countForIntervention(interventionId) > 0
+
+    private suspend fun buildGenerateReportRequest(
+        state: ClotureRapportUiState,
+        intervention: InterventionEntity,
+    ): GenerateReportRequestDto {
+        val customerName = listOfNotNull(
+            intervention.customerFirstName?.trim()?.takeIf { it.isNotEmpty() },
+            intervention.customerLastName?.trim()?.takeIf { it.isNotEmpty() },
+        ).joinToString(" ").ifBlank { null }
+
+        val address = buildString {
+            append(intervention.unitStreet.trim())
+            append(", ")
+            append(intervention.unitPostalCode.trim())
+            append(' ')
+            append(intervention.unitCity.trim())
+        }.trim().trim(',').ifBlank { null }
+
+        val actualLabels = state.selectedCloseTypes.map { it.label }.ifEmpty { null }
+        val equipments = state.rootEquipments.map(::formatEquipment).ifEmpty { null }
+        val invoiceLineLabels = billableInvoiceLines(state.invoiceLines).map(::formatInvoiceLine)
+        val anomalySummaries = buildAnomalySummaries(state.anomalyDrafts, state.anomalyCatalog)
+            .ifEmpty { null }
+        val establishedDocuments = buildEstablishedDocuments().ifEmpty { null }
+
+        return GenerateReportRequestDto(
+            plannedTypeLabel = intervention.typeLabel,
+            actualTypeLabels = actualLabels,
+            customerName = customerName,
+            address = address,
+            equipments = equipments,
+            technicianObservations = intervention.notes?.trim()?.takeIf { it.isNotEmpty() },
+            invoiceLines = invoiceLineLabels.ifEmpty { null },
+            anomalySummaries = anomalySummaries,
+            lastVisitSummary = buildLastVisitSummary(state.lastVe),
+            interventionDate = formatInterventionDate(intervention),
+            establishedDocuments = establishedDocuments,
+        )
     }
 }
 
@@ -394,40 +525,12 @@ private fun buildLastVisitSummary(lastVe: LastVeSummary?): String? {
     return if (tech != null) "$datePart par $tech" else datePart
 }
 
-private fun buildGenerateReportRequest(
-    state: ClotureRapportUiState,
-    intervention: InterventionEntity,
-): GenerateReportRequestDto {
-    val customerName = listOfNotNull(
-        intervention.customerFirstName?.trim()?.takeIf { it.isNotEmpty() },
-        intervention.customerLastName?.trim()?.takeIf { it.isNotEmpty() },
-    ).joinToString(" ").ifBlank { null }
-
-    val address = buildString {
-        append(intervention.unitStreet.trim())
-        append(", ")
-        append(intervention.unitPostalCode.trim())
-        append(' ')
-        append(intervention.unitCity.trim())
-    }.trim().trim(',').ifBlank { null }
-
-    val actualLabels = state.selectedCloseTypes.map { it.label }.ifEmpty { null }
-    val equipments = state.rootEquipments.map(::formatEquipment).ifEmpty { null }
-    val invoiceLineLabels = billableInvoiceLines(state.invoiceLines).map(::formatInvoiceLine)
-    val anomalySummaries = buildAnomalySummaries(state.anomalyDrafts, state.anomalyCatalog)
-        .ifEmpty { null }
-
-    return GenerateReportRequestDto(
-        plannedTypeLabel = intervention.typeLabel,
-        actualTypeLabels = actualLabels,
-        customerName = customerName,
-        address = address,
-        equipments = equipments,
-        technicianObservations = intervention.notes?.trim()?.takeIf { it.isNotEmpty() },
-        invoiceLines = invoiceLineLabels.ifEmpty { null },
-        anomalySummaries = anomalySummaries,
-        lastVisitSummary = buildLastVisitSummary(state.lastVe),
-    )
+private fun formatInterventionDate(intervention: InterventionEntity): String? {
+    val iso = intervention.startedAt?.takeIf { it.isNotBlank() }
+        ?: intervention.scheduledAt.takeIf { it.isNotBlank() }
+        ?: return null
+    val readable = formatScheduledAtDateReadable(iso)
+    return readable.takeIf { it != "—" }
 }
 
 private fun humanReadableApiError(e: Throwable): String {

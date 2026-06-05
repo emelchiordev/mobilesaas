@@ -1,5 +1,6 @@
 package re.melchior.saviomobile.ui.screen.tournee
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,11 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import re.melchior.saviomobile.ui.refonte.SavioDateNavigator
+import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+import java.time.LocalDate
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
@@ -33,6 +38,10 @@ fun TourneeAdaptiveLayout(
     onClientClick: (String) -> Unit = {},
     onNavigateToDevisSignature: (String) -> Unit = {},
     currentDateLabel: String,
+    selectedDate: LocalDate = LocalDate.now(),
+    dateSubtitle: String? = null,
+    onPreviousDay: () -> Unit = {},
+    onNextDay: () -> Unit = {},
     pendingSyncCount: Int,
     pendingOfflineInterventionCount: Int = 0,
     onPendingOfflineList: (() -> Unit)? = null,
@@ -72,25 +81,42 @@ fun TourneeAdaptiveLayout(
                 .fillMaxWidth()
                 .fillMaxHeight()
         ) {
-            TourneeSidebar(
-                modifier = Modifier
-                    .width(280.dp)
-                    .fillMaxHeight(),
-                interventions = interventions,
-                pendingCreating = pendingCreating,
-                selectedId = selectedId,
-                onSelect = { id ->
-                    detailNavController.navigate(Screen.InterventionDetail.createRoute(id)) {
-                        launchSingleTop = true
-                    }
-                },
-                onPendingCreatingClick = onPendingCreatingClick,
-            )
+            Column(
+                modifier =
+                    Modifier
+                        .width(if (useSavioRefonteUi()) 320.dp else 280.dp)
+                        .fillMaxHeight()
+                        .background(
+                            if (useSavioRefonteUi()) SavioRefonte.BgPage else MaterialTheme.colorScheme.surface,
+                        ),
+            ) {
+                if (useSavioRefonteUi()) {
+                    SavioDateNavigator(
+                        selectedDate = selectedDate,
+                        subtitle = dateSubtitle,
+                        onPreviousDay = onPreviousDay,
+                        onNextDay = onNextDay,
+                        isRefreshing = isRefreshing,
+                    )
+                }
+                TourneeSidebar(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    interventions = interventions,
+                    pendingCreating = pendingCreating,
+                    selectedId = selectedId,
+                    onSelect = { id ->
+                        detailNavController.navigate(Screen.InterventionDetail.createRoute(id)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onPendingCreatingClick = onPendingCreatingClick,
+                )
+            }
             HorizontalDivider(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(0.5.dp),
-                color = Color(0xFFE8E8E8)
+                    .width(1.dp),
+                color = if (useSavioRefonteUi()) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
             )
             Box(
                 modifier = Modifier

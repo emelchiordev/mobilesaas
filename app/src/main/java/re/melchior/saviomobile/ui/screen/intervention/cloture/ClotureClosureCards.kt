@@ -18,6 +18,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import re.melchior.saviomobile.ui.refonte.SavioClotureBlockCard
+import re.melchior.saviomobile.ui.refonte.SavioClotureInfoCard
+import re.melchior.saviomobile.ui.refonte.SavioClotureKvRow
+import re.melchior.saviomobile.ui.refonte.SavioClotureWillRow
+import re.melchior.saviomobile.ui.refonte.parseClosureConsequence
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import java.time.LocalDate
 
 @Composable
@@ -28,6 +34,75 @@ fun ContractVeSummaryCard(
     today: LocalDate = LocalDate.now(),
     modifier: Modifier = Modifier,
 ) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        SavioClotureBlockCard(
+            title = "Contrat & entretien",
+            modifier = modifier,
+        ) {
+            if (contractInfo != null) {
+                SavioClotureKvRow(
+                    label = "Contrat",
+                    value = "${contractTypeLabel(contractInfo.type)} · ${contractStatusLabel(contractInfo.status)}",
+                    showDivider = true,
+                )
+                contractInfo.renewalDate?.let { renewal ->
+                    val expired = renewal.isBefore(today)
+                    SavioClotureKvRow(
+                        label = "Renouvellement",
+                        value =
+                            if (expired) {
+                                "Expiré le ${formatClosureDate(renewal)}"
+                            } else {
+                                formatClosureDate(renewal)
+                            },
+                        isWarning = expired,
+                        showDivider = true,
+                    )
+                }
+            } else {
+                SavioClotureKvRow(
+                    label = "Contrat",
+                    value = "Pas de contrat enregistré",
+                    isMuted = true,
+                    showDivider = true,
+                )
+            }
+
+            if (lastVe != null) {
+                val tech = lastVe.technicianFirstName?.let { " · $it" }.orEmpty()
+                SavioClotureKvRow(
+                    label = "Dernier entretien",
+                    value = "${formatClosureDate(lastVe.completedAt)}$tech",
+                    showDivider = nextVe != null,
+                )
+            } else {
+                SavioClotureKvRow(
+                    label = "Dernier entretien",
+                    value = "Aucun enregistré",
+                    isMuted = true,
+                    showDivider = nextVe != null,
+                )
+            }
+
+            nextVe?.let { next ->
+                val suffix =
+                    when (next.urgency) {
+                        VeDueUrgency.OVERDUE -> " · Dépassé"
+                        VeDueUrgency.SOON -> " · Bientôt"
+                        VeDueUrgency.OK -> ""
+                    }
+                SavioClotureKvRow(
+                    label = "Prochain entretien",
+                    value = formatClosureDate(next.date) + suffix,
+                    isWarning = next.urgency == VeDueUrgency.OVERDUE,
+                    showDivider = false,
+                )
+            }
+        }
+        return
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -76,13 +151,6 @@ fun ContractVeSummaryCard(
                     label = "Dernier entretien",
                     value = "${formatClosureDate(lastVe.completedAt)}$tech",
                 )
-            } else if (contractInfo == null) {
-                Text(
-                    text = "Aucun entretien enregistré",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontStyle = FontStyle.Italic,
-                )
             } else {
                 Text(
                     text = "Aucun entretien enregistré",
@@ -119,6 +187,25 @@ fun ClosureConsequencesCard(
     modifier: Modifier = Modifier,
 ) {
     if (consequences.isEmpty()) return
+    val refonte = useSavioRefonteUi()
+
+    if (refonte) {
+        SavioClotureInfoCard(
+            title = "Ce qui va se passer",
+            modifier = modifier,
+        ) {
+            consequences.forEach { item ->
+                val (headline, bullets) = parseClosureConsequence(item.text)
+                SavioClotureWillRow(
+                    icon = item.icon,
+                    headline = if (bullets.isEmpty()) item.text else headline,
+                    bullets = bullets,
+                    isWarning = item.isWarning,
+                )
+            }
+        }
+        return
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),

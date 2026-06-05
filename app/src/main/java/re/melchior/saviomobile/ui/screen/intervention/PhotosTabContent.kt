@@ -19,6 +19,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.component.PhotoGrid
 import re.melchior.saviomobile.ui.component.SavioEmptyState
+import re.melchior.saviomobile.ui.refonte.SavioPhotosListHeader
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 
 @Composable
@@ -31,6 +33,7 @@ fun PhotosTabContent(
     viewModel: PhotoViewModel = hiltViewModel(),
 ) {
     val photos by viewModel.photos.collectAsStateWithLifecycle()
+    val refonte = useSavioRefonteUi()
 
     LaunchedEffect(interventionId) {
         viewModel.loadPhotos(interventionId)
@@ -40,7 +43,7 @@ fun PhotosTabContent(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(if (refonte) 15.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (photos.isEmpty()) {
@@ -67,6 +70,12 @@ fun PhotosTabContent(
                 }
             }
         } else {
+            if (refonte) {
+                SavioPhotosListHeader(
+                    count = photos.size,
+                    onAddClick = { onOpenCamera(unitId, customerId) },
+                )
+            }
             PhotoGrid(
                 photos = photos,
                 onAddPhotoClick = { onOpenCamera(unitId, customerId) },

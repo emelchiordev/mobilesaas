@@ -25,7 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
+import re.melchior.saviomobile.ui.refonte.SavioEquipSubLabel
+import re.melchior.saviomobile.ui.refonte.SavioHybridNote
+import re.melchior.saviomobile.ui.refonte.SavioHybridSystemHeader
+import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
 import re.melchior.saviomobile.ui.theme.SavioPalette
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 
 data class HybrideGroup(
     val chaudiere: EquipmentEntity,
@@ -76,6 +81,73 @@ fun HybrideGroupCard(
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        SavioRefonteCard(modifier = modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                SavioHybridSystemHeader(
+                    title = "Système ${group.label}",
+                    badge = "Hybride",
+                )
+                SavioEquipSubLabel(text = "Chaudière")
+                EquipmentRowItem(
+                    equipment = group.chaudiere,
+                    isChild = false,
+                    badge = badgeFor(group.chaudiere, newEquipmentIds),
+                    roleLabel =
+                        group.chaudiere.pacClimRoleLabel(
+                            isChild = false,
+                            hasChildren = group.chaudiereChildren.isNotEmpty(),
+                        ),
+                    interactive = interactive,
+                    onClick = { onEquipementClick(interventionId, group.chaudiere.id) },
+                )
+                SavioHybridNote(text = "Point de départ attestation hybride")
+                group.chaudiereChildren.forEach { child ->
+                    EquipmentRowItem(
+                        equipment = child,
+                        isChild = true,
+                        badge = badgeFor(child, newEquipmentIds),
+                        roleLabel =
+                            child.pacClimRoleLabel(
+                                isChild = true,
+                                hasChildren = false,
+                            ),
+                        interactive = interactive,
+                        onClick = { onEquipementClick(interventionId, child.id) },
+                    )
+                }
+                SavioEquipSubLabel(text = "Pompe à chaleur")
+                EquipmentRowItem(
+                    equipment = group.pac,
+                    isChild = false,
+                    badge = badgeFor(group.pac, newEquipmentIds),
+                    roleLabel =
+                        group.pac.pacClimRoleLabel(
+                            isChild = false,
+                            hasChildren = group.pacChildren.isNotEmpty(),
+                        ),
+                    interactive = interactive,
+                    onClick = { onEquipementClick(interventionId, group.pac.id) },
+                )
+                group.pacChildren.forEach { child ->
+                    EquipmentRowItem(
+                        equipment = child,
+                        isChild = true,
+                        badge = badgeFor(child, newEquipmentIds),
+                        roleLabel =
+                            child.pacClimRoleLabel(
+                                isChild = true,
+                                hasChildren = false,
+                            ),
+                        interactive = interactive,
+                        onClick = { onEquipementClick(interventionId, child.id) },
+                    )
+                }
+            }
+        }
+        return
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),

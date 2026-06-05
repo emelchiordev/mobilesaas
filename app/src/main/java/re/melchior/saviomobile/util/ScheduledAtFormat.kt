@@ -9,6 +9,8 @@ private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 private val readableDateFormatter =
     DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH)
+private val shortDateFormatter =
+    DateTimeFormatter.ofPattern("d MMMM", Locale.FRENCH)
 
 /** Heure locale métier (Europe/Paris) à partir d’un ISO UTC stocké en Room. */
 fun formatScheduledAtTime(
@@ -33,6 +35,19 @@ fun formatScheduledAtDate(
         Instant.parse(scheduledAtIso).atZone(zone).format(dateFormatter)
     } catch (_: Exception) {
         scheduledAtIso.take(10).ifBlank { "—" }
+    }
+}
+
+/** Date courte (ex. « 4 juin ») à partir d’un ISO UTC. */
+fun formatScheduledAtDateShort(
+    scheduledAtIso: String?,
+    zone: ZoneId = SavioTimeZone.appZone,
+): String {
+    if (scheduledAtIso.isNullOrBlank()) return "—"
+    return try {
+        Instant.parse(scheduledAtIso).atZone(zone).format(shortDateFormatter)
+    } catch (_: Exception) {
+        formatScheduledAtDate(scheduledAtIso, zone)
     }
 }
 

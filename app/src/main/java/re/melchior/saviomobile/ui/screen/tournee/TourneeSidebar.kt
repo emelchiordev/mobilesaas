@@ -23,8 +23,7 @@ fun TourneeSidebar(
     LazyColumn(
         modifier
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surface)
-            .fillMaxWidth()
+            .fillMaxWidth(),
     ) {
         items(
             items = interventions,

@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,12 +50,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
+import re.melchior.saviomobile.ui.refonte.SavioHistoryFilterChips
+import re.melchior.saviomobile.ui.refonte.SavioHistoryMonthHeader
+import re.melchior.saviomobile.ui.refonte.SavioHistoryRow
+import re.melchior.saviomobile.ui.refonte.SavioHistorySectionHeader
+import re.melchior.saviomobile.ui.refonte.SavioHistoryShowMoreRow
+import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
+import re.melchior.saviomobile.ui.refonte.SavioRowLine
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioInterventionColors
+import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioType
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+import java.time.YearMonth
 import re.melchior.saviomobile.util.formatScheduledAtDate
 import re.melchior.saviomobile.util.formatScheduledAtDateReadable
+import re.melchior.saviomobile.util.formatScheduledAtDateShort
+import re.melchior.saviomobile.util.SavioTimeZone
 
 @Composable
 fun ClientHistoryEmbeddedSection(
@@ -62,51 +75,277 @@ fun ClientHistoryEmbeddedSection(
     photoUrls: Map<String, List<String>>,
     modifier: Modifier = Modifier,
     compact: Boolean = true,
+    defaultVisibleCount: Int? = null,
+    useLazyList: Boolean = true,
 ) {
     var expandedIds by remember { mutableStateOf(setOf<String>()) }
+    var typeFilter by remember { mutableStateOf<String?>(null) }
+    var historyExpanded by remember { mutableStateOf(false) }
+    val refonte = useSavioRefonteUi()
+    val filteredHistory =
+        remember(history, typeFilter) {
+            val base =
+                if (typeFilter == null) {
+                    history
+                } else {
+                    history.filter { it.typeLabel.equals(typeFilter, ignoreCase = true) }
+                }
+            base.sortedByDescending { it.scheduledAt }
+        }
+    val filterOptions =
+        listOf("Tout") +
+            history.map { it.typeLabel }.distinct().sorted()
+    val latestItemId = filteredHistory.firstOrNull()?.id
+
+    LaunchedEffect(typeFilter) {
+        historyExpanded = false
+    }
 
     Column(modifier = modifier) {
-        Text(
-            text = "Historique",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 0.dp, end = 0.dp, bottom = 8.dp),
-        )
+        if (refonte) {
+            SavioHistorySectionHeader(count = history.size)
+            if (history.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                SavioHistoryFilterChips(
+                    filters = filterOptions,
+                    selected = typeFilter ?: "Tout",
+                    onSelect = { typeFilter = it },
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+        } else {
+            Text(
+                text = "Historique",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         if (history.isEmpty()) {
             Text(
                 text = "Aucune intervention passée enregistrée pour ce logement.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
+        } else if (refonte) {
+            RefonteHistoryList(
+                filteredHistory = filteredHistory,
+                photoUrls = photoUrls,
+                expandedIds = expandedIds,
+                onToggleItem = { id ->
+                    expandedIds =
+                        if (id in expandedIds) {
+                            expandedIds - id
+                        } else {
+                            expandedIds + id
+                        }
+                },
+                latestItemId = latestItemId,
+                defaultVisibleCount = defaultVisibleCount,
+                historyExpanded = historyExpanded,
+                onShowMore = { historyExpanded = true },
+                useLazyList = useLazyList,
+            )
+        } else if (useLazyList) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceSM),
             ) {
-                items(history, key = { it.id }) { item ->
-                    if (compact) {
-                        HistoriqueCompactItemCard(
-                            item = item,
-                            signedUrls = photoUrls[item.id] ?: emptyList(),
-                            expanded = item.id in expandedIds,
-                            onToggle = {
-                                expandedIds =
-                                    if (item.id in expandedIds) {
-                                        expandedIds - item.id
-                                    } else {
-                                        expandedIds + item.id
-                                    }
-                            },
-                        )
-                    } else {
-                        HistoriqueItemCard(
-                            item = item,
-                            signedUrls = photoUrls[item.id] ?: emptyList(),
-                        )
-                    }
+                items(filteredHistory, key = { it.id }) { item ->
+                    LegacyHistoryItem(
+                        item = item,
+                        photoUrls = photoUrls,
+                        compact = compact,
+                        expandedIds = expandedIds,
+                        onToggle = { id ->
+                            expandedIds =
+                                if (id in expandedIds) {
+                                    expandedIds - id
+                                } else {
+                                    expandedIds + id
+                                }
+                        },
+                    )
                 }
             }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(SavioDimens.SpaceSM)) {
+                filteredHistory.forEach { item ->
+                    LegacyHistoryItem(
+                        item = item,
+                        photoUrls = photoUrls,
+                        compact = compact,
+                        expandedIds = expandedIds,
+                        onToggle = { id ->
+                            expandedIds =
+                                if (id in expandedIds) {
+                                    expandedIds - id
+                                } else {
+                                    expandedIds + id
+                                }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyHistoryItem(
+    item: InterventionHistoryEntity,
+    photoUrls: Map<String, List<String>>,
+    compact: Boolean,
+    expandedIds: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    if (compact) {
+        HistoriqueCompactItemCard(
+            item = item,
+            signedUrls = photoUrls[item.id] ?: emptyList(),
+            expanded = item.id in expandedIds,
+            onToggle = { onToggle(item.id) },
+        )
+    } else {
+        HistoriqueItemCard(
+            item = item,
+            signedUrls = photoUrls[item.id] ?: emptyList(),
+        )
+    }
+}
+
+@Composable
+private fun RefonteHistoryList(
+    filteredHistory: List<InterventionHistoryEntity>,
+    photoUrls: Map<String, List<String>>,
+    expandedIds: Set<String>,
+    onToggleItem: (String) -> Unit,
+    latestItemId: String?,
+    defaultVisibleCount: Int?,
+    historyExpanded: Boolean,
+    onShowMore: () -> Unit,
+    useLazyList: Boolean,
+) {
+    val showLimited =
+        defaultVisibleCount != null && !historyExpanded && filteredHistory.size > defaultVisibleCount
+    val visibleItems =
+        if (showLimited) {
+            filteredHistory.take(defaultVisibleCount!!)
+        } else {
+            filteredHistory
+        }
+
+    val content: @Composable () -> Unit = {
+        if (showLimited) {
+            val monthLabel = monthLabelForItem(visibleItems.first())
+            if (monthLabel != null) {
+                SavioHistoryMonthHeader(monthLabel = monthLabel)
+            }
+            SavioRefonteHistoryCard(
+                items = visibleItems,
+                photoUrls = photoUrls,
+                expandedIds = expandedIds,
+                onToggleItem = onToggleItem,
+                latestItemId = latestItemId,
+                showMore = true,
+                onShowMore = onShowMore,
+            )
+        } else {
+            val grouped =
+                visibleItems.groupBy { item ->
+                    runCatching {
+                        YearMonth.from(
+                            java.time.Instant.parse(item.scheduledAt)
+                                .atZone(SavioTimeZone.appZone)
+                                .toLocalDate(),
+                        )
+                    }.getOrNull()
+                }
+            grouped.entries.sortedByDescending { it.key }.forEach { (month, items) ->
+                SavioHistoryMonthHeader(
+                    monthLabel =
+                        month?.let {
+                            it.format(
+                                java.time.format.DateTimeFormatter.ofPattern(
+                                    "MMMM yyyy",
+                                    java.util.Locale.FRENCH,
+                                ),
+                            ).replaceFirstChar { c -> c.uppercase() }
+                        } ?: "Date inconnue",
+                )
+                SavioRefonteHistoryCard(
+                    items = items,
+                    photoUrls = photoUrls,
+                    expandedIds = expandedIds,
+                    onToggleItem = onToggleItem,
+                    latestItemId = latestItemId,
+                    showMore = false,
+                    onShowMore = onShowMore,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+
+    if (useLazyList) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            item { content() }
+        }
+    } else {
+        content()
+    }
+}
+
+private fun monthLabelForItem(item: InterventionHistoryEntity): String? {
+    return runCatching {
+        YearMonth.from(
+            java.time.Instant.parse(item.scheduledAt)
+                .atZone(SavioTimeZone.appZone)
+                .toLocalDate(),
+        ).format(
+            java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.FRENCH),
+        ).replaceFirstChar { c -> c.uppercase() }
+    }.getOrNull()
+}
+
+@Composable
+private fun SavioRefonteHistoryCard(
+    items: List<InterventionHistoryEntity>,
+    photoUrls: Map<String, List<String>>,
+    expandedIds: Set<String>,
+    onToggleItem: (String) -> Unit,
+    latestItemId: String?,
+    showMore: Boolean,
+    onShowMore: () -> Unit,
+) {
+    SavioRefonteCard {
+        items.forEachIndexed { index, item ->
+            if (index > 0) {
+                SavioRowLine()
+            }
+            val dateIso = item.completedAt ?: item.scheduledAt
+            SavioHistoryRow(
+                typeLabel = item.typeLabel,
+                typeCode = item.typeCode,
+                dateLabel = formatScheduledAtDateShort(dateIso),
+                isLast = item.id == latestItemId,
+                expanded = item.id in expandedIds,
+                onClick = { onToggleItem(item.id) },
+                expandedContent = {
+                    HistoriqueItemCardBody(
+                        item = item,
+                        signedUrls = photoUrls[item.id] ?: emptyList(),
+                    )
+                },
+            )
+        }
+        if (showMore) {
+            SavioRowLine()
+            SavioHistoryShowMoreRow(onClick = onShowMore)
         }
     }
 }
