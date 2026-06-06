@@ -14,6 +14,8 @@ data class GenerateReportRequestDto(
     @SerializedName("lastVisitSummary") val lastVisitSummary: String? = null,
     @SerializedName("interventionDate") val interventionDate: String? = null,
     @SerializedName("establishedDocuments") val establishedDocuments: List<String>? = null,
+    @SerializedName("structuredFacts") val structuredFacts: List<String>? = null,
+    @SerializedName("technicalFactsCount") val technicalFactsCount: Int? = null,
 )
 
 data class GenerateReportEnqueueResponseDto(

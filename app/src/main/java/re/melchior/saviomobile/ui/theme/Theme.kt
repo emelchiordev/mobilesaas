@@ -148,23 +148,8 @@ fun SavioTheme(
 ) {
     // Refonte SAVIO MOBILITE : shell métier en thème clair (maquette handoff).
     // Welcome / auth gardent leur fond sombre via composants dédiés.
-    val darkTheme = false
+    // Barre système : MainActivity.enableEdgeToEdge + SavioNavyStatusBarEffect (SavioApp).
     val colorScheme = SavioLightColorScheme
-
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as? Activity)?.window ?: return@SideEffect
-            val statusBarColor =
-                if (darkTheme) {
-                    SavioDarkBackground
-                } else {
-                    SavioLightPrimary
-                }
-            window.statusBarColor = statusBarColor.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
-        }
-    }
 
     MaterialTheme(
         colorScheme = colorScheme,

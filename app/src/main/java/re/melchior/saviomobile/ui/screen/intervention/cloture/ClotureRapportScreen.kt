@@ -17,8 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -51,6 +53,7 @@ import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.ui.component.SavioSnackbarHost
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioClotureAiButton
 import re.melchior.saviomobile.ui.refonte.SavioClotureClientCard
 import re.melchior.saviomobile.ui.refonte.SavioClotureHeader
@@ -89,6 +92,7 @@ fun ClotureRapportScreen(
         Scaffold(
             containerColor = SavioRefonte.BgPage,
             snackbarHost = { SavioSnackbarHost(snackbarHostState) },
+            contentWindowInsets = SavioEdgeToEdgeScaffoldInsets,
             topBar = {
                 SavioClotureHeader(
                     title = "Clôture",
@@ -208,6 +212,8 @@ fun ClotureRapportScreen(
                     ClosureAnomaliesSection(
                         drafts = buildAnomalyDraftDisplays(uiState.anomalyDrafts, uiState.anomalyCatalog),
                         onAddClick = viewModel::openAddAnomalySheet,
+                        onCorrectedChange = viewModel::setAnomalyCorrected,
+                        onDeleteDraft = viewModel::removeAnomalyDraft,
                     )
 
                     if (uiState.showReport) {
@@ -227,7 +233,7 @@ fun ClotureRapportScreen(
                         ) {
                             if (!uiState.canGenerateReport) {
                                 Text(
-                                    text = "Ajoutez des observations, pièces ou anomalies pour activer la génération.",
+                                    text = "Saisissez des observations, mesures, attestation, pièces, anomalies ou contrôle installation pour activer la génération.",
                                     fontSize = 12.5.sp,
                                     color = SavioRefonte.Muted,
                                     modifier = Modifier.padding(bottom = 10.dp),
@@ -236,6 +242,7 @@ fun ClotureRapportScreen(
                             SavioClotureReportField(
                                 value = uiState.report,
                                 onValueChange = viewModel::onReportChange,
+                                onClear = viewModel::clearReport,
                                 placeholder =
                                     "Décrivez l'intervention réalisée, les pièces remplacées, " +
                                         "les réglages effectués…",
@@ -250,6 +257,14 @@ fun ClotureRapportScreen(
                             }
                         }
                     }
+
+                    ClosureFollowUpSection(
+                        followUpRequired = uiState.followUpRequired,
+                        followUpNote = uiState.followUpNote,
+                        onFollowUpRequiredChange = viewModel::onFollowUpRequiredChange,
+                        onFollowUpNoteChange = viewModel::onFollowUpNoteChange,
+                        useRefonte = true,
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -420,6 +435,8 @@ private fun ClotureRapportScreenLegacy(
                 ClosureAnomaliesSection(
                     drafts = buildAnomalyDraftDisplays(uiState.anomalyDrafts, uiState.anomalyCatalog),
                     onAddClick = viewModel::openAddAnomalySheet,
+                    onCorrectedChange = viewModel::setAnomalyCorrected,
+                    onDeleteDraft = viewModel::removeAnomalyDraft,
                 )
 
                 if (uiState.showReport) {
@@ -452,7 +469,7 @@ private fun ClotureRapportScreenLegacy(
                     }
                     if (!uiState.canGenerateReport) {
                         Text(
-                            text = "Ajoutez des observations, pièces ou anomalies pour activer la génération.",
+                            text = "Saisissez des observations, mesures, attestation, pièces, anomalies ou contrôle installation pour activer la génération.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -472,6 +489,16 @@ private fun ClotureRapportScreenLegacy(
                             .fillMaxWidth()
                             .height(240.dp),
                         maxLines = Int.MAX_VALUE,
+                        trailingIcon = {
+                            if (uiState.report.isNotEmpty()) {
+                                IconButton(onClick = viewModel::clearReport) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Clear,
+                                        contentDescription = "Vider le compte rendu",
+                                    )
+                                }
+                            }
+                        },
                         supportingText = {
                             Text(
                                 text = "${uiState.report.length} caractères",
@@ -481,6 +508,14 @@ private fun ClotureRapportScreenLegacy(
                         },
                     )
                 }
+
+                ClosureFollowUpSection(
+                    followUpRequired = uiState.followUpRequired,
+                    followUpNote = uiState.followUpNote,
+                    onFollowUpRequiredChange = viewModel::onFollowUpRequiredChange,
+                    onFollowUpNoteChange = viewModel::onFollowUpNoteChange,
+                    useRefonte = false,
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -587,6 +622,66 @@ fun ActualTypeChips(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun ClosureFollowUpSection(
+    followUpRequired: Boolean,
+    followUpNote: String,
+    onFollowUpRequiredChange: (Boolean) -> Unit,
+    onFollowUpNoteChange: (String) -> Unit,
+    useRefonte: Boolean,
+) {
+    val content: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = followUpRequired,
+                onCheckedChange = onFollowUpRequiredChange,
+            )
+            Text(
+                text = "Intervention à revoir",
+                fontSize = if (useRefonte) 14.sp else 15.sp,
+                fontWeight = if (useRefonte) FontWeight.Medium else FontWeight.Normal,
+            )
+        }
+        if (followUpRequired) {
+            OutlinedTextField(
+                value = followUpNote,
+                onValueChange = onFollowUpNoteChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Note de suivi") },
+                placeholder = {
+                    Text(
+                        text = "Devis à faire, pièce à commander…",
+                        fontSize = if (useRefonte) 13.sp else 14.sp,
+                    )
+                },
+                minLines = 2,
+                maxLines = 5,
+            )
+        }
+    }
+
+    if (useRefonte) {
+        SavioFormSection(title = "Suivi") {
+            content()
+        }
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Suivi",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            content()
         }
     }
 }

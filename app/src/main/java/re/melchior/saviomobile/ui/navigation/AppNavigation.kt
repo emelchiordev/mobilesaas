@@ -321,7 +321,10 @@ fun AppNavigation(
                         set("pending_snackbar", "Intervention créée ✅")
                         set("pending_focus_date_millis", scheduledAtMillis)
                     }
-                    navController.popBackStack()
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Main.route) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateOffline = {
                     navController.navigate(Screen.CreateOfflineIntervention.route) {
@@ -449,7 +452,12 @@ fun AppNavigation(
                     )
                 },
                 onClientClick = { customerId ->
-                    navController.navigate(Screen.ClientDetail.createRoute(customerId))
+                    navController.navigate(
+                        Screen.ClientDetail.createRouteFromIntervention(
+                            customerId = customerId,
+                            interventionId = interventionId,
+                        ),
+                    )
                 },
                 onOpenCamera = { unitId, customerId ->
                     navController.navigate(
@@ -780,6 +788,10 @@ fun AppNavigation(
                     defaultValue = ""
                 },
                 navArgument("addressLine") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("contextInterventionId") {
                     type = NavType.StringType
                     defaultValue = ""
                 },

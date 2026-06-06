@@ -39,7 +39,6 @@ fun SavioNavyHeader(
     actions: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    SavioNavyStatusBarEffect()
     Box(
         modifier =
             modifier

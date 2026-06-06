@@ -1,8 +1,10 @@
 package re.melchior.saviomobile
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.MutableState
@@ -38,11 +40,19 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var deepLinkIntentState: MutableState<Intent?>
 
+    /** Aligné sur SavioRefonte.Navy (#1B4E80). */
+    private companion object {
+        const val SAVIO_NAVY_STATUS_BAR = 0xFF1B4E80.toInt()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         deepLinkIntentState = mutableStateOf(intent)
-        // Edge-to-edge : équivalent à WindowCompat.setDecorFitsSystemWindows(window, false)
-        enableEdgeToEdge()
+        // Edge-to-edge : barre statut navy (icônes claires), barre nav claire
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(SAVIO_NAVY_STATUS_BAR),
+            navigationBarStyle = SystemBarStyle.light(Color.WHITE, Color.WHITE),
+        )
 
         // Enregistrer les workers périodiques
         scheduleSyncWorker()

@@ -73,6 +73,14 @@ class PhotoRepository @Inject constructor(
         return photoDao.getPhotosForIntervention(interventionId)
     }
 
+    suspend fun deleteAllForIntervention(interventionId: String) = withContext(Dispatchers.IO) {
+        val photos = photoDao.getAllForInterventionOnce(interventionId)
+        photos.forEach { photo ->
+            File(photo.localPath).takeIf { it.exists() }?.delete()
+        }
+        photoDao.deleteAllForIntervention(interventionId)
+    }
+
     /**
      * Soft delete — supprime localement, marque pour suppression distante si synced.
      */

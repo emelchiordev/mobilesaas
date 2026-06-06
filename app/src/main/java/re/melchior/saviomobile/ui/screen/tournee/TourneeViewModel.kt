@@ -16,7 +16,6 @@ import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 import re.melchior.saviomobile.data.repository.CatalogSyncRepository
 import re.melchior.saviomobile.data.repository.TenantArticleSyncRepository
-import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.PendingInterventionRepository
 import re.melchior.saviomobile.data.repository.MobileSyncOrchestrator
 import re.melchior.saviomobile.data.repository.SyncRepository
@@ -42,7 +41,6 @@ class TourneeViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val catalogSyncRepository: CatalogSyncRepository,
     private val tenantArticleSyncRepository: TenantArticleSyncRepository,
-    private val invoiceRepository: InvoiceRepository,
     private val mobileSyncOrchestrator: MobileSyncOrchestrator,
     private val pendingInterventionRepository: PendingInterventionRepository,
 ) : ViewModel() {
@@ -130,7 +128,6 @@ class TourneeViewModel @Inject constructor(
         viewModelScope.launch {
             val entity = _resumeCandidate.value ?: return@launch
             syncRepository.abandonInterventionLocally(entity.id)
-            invoiceRepository.deleteDraftByIntervention(entity.id)
             _resumeCandidate.value = null
         }
     }

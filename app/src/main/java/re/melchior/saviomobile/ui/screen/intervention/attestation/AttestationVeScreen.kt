@@ -65,6 +65,7 @@ import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
 import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
@@ -106,6 +107,7 @@ fun AttestationVeScreen(
     val refonte = useSavioRefonteUi()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (refonte) {
                 SavioNavyHeader(

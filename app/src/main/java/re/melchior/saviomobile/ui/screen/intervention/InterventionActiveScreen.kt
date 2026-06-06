@@ -43,9 +43,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioInterventionTabBar
 import re.melchior.saviomobile.ui.refonte.SavioInterventionTabItem
-import re.melchior.saviomobile.ui.refonte.SavioNavyStatusBarEffect
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
 import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
@@ -92,9 +92,6 @@ fun InterventionActiveScreen(
 
     var selectedTab by rememberSaveable { mutableStateOf(InterventionTab.DETAIL) }
     val refonte = useSavioRefonteUi()
-    if (refonte) {
-        SavioNavyStatusBarEffect()
-    }
     val interventionTabs =
         remember {
             InterventionTab.entries.map { tab ->
@@ -110,6 +107,7 @@ fun InterventionActiveScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor =
             if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background,
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
             SavioInterventionTabBar(
                 tabs = interventionTabs,

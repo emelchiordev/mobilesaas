@@ -63,10 +63,16 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_49_50
 import re.melchior.saviomobile.data.local.database.MIGRATION_50_51
 import re.melchior.saviomobile.data.local.database.MIGRATION_51_52
 import re.melchior.saviomobile.data.local.database.MIGRATION_52_53
+import re.melchior.saviomobile.data.local.database.MIGRATION_53_54
+import re.melchior.saviomobile.data.local.database.MIGRATION_54_55
+import re.melchior.saviomobile.data.local.database.MIGRATION_55_56
+import re.melchior.saviomobile.data.local.database.MIGRATION_56_57
+import re.melchior.saviomobile.data.local.database.MIGRATION_57_58
 import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
 import re.melchior.saviomobile.data.local.dao.AnomalyDraftDao
+import re.melchior.saviomobile.data.local.dao.InstallationCheckDao
 import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
 import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
@@ -130,6 +136,11 @@ object DatabaseModule {
             MIGRATION_50_51,
             MIGRATION_51_52,
             MIGRATION_52_53,
+            MIGRATION_53_54,
+            MIGRATION_54_55,
+            MIGRATION_55_56,
+            MIGRATION_56_57,
+            MIGRATION_57_58,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -231,4 +242,8 @@ object DatabaseModule {
     @Provides
     fun provideAnomalyDraftDao(db: SavioDatabase): AnomalyDraftDao =
         db.anomalyDraftDao()
+
+    @Provides
+    fun provideInstallationCheckDao(db: SavioDatabase): InstallationCheckDao =
+        db.installationCheckDao()
 }

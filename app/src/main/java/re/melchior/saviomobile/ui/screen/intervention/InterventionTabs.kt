@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronRight
@@ -37,8 +38,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,7 +77,9 @@ import re.melchior.saviomobile.ui.refonte.SavioEquipNavRow
 import re.melchior.saviomobile.ui.refonte.SavioEquipStatusBadge
 import re.melchior.saviomobile.ui.refonte.SavioInfoIconBox
 import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
+import re.melchior.saviomobile.ui.refonte.SavioRefonteTabRow
 import re.melchior.saviomobile.ui.refonte.SavioRefonteTimerBlock
+import re.melchior.saviomobile.ui.screen.intervention.installation.InstallationCheckTab
 import re.melchior.saviomobile.ui.utils.equipmentIcon
 
 internal enum class EquipmentBadge {
@@ -374,6 +383,55 @@ fun InterventionDetailTab(
 
 @Composable
 fun InterventionEquipementsTab(
+    uiState: InterventionActiveUiState,
+    newEquipmentIds: Set<String>,
+    onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
+    onAddEquipment: (interventionId: String, unitId: String, parentEquipmentId: String?) -> Unit,
+) {
+    val intervention = uiState.intervention ?: return
+    var subTab by remember { mutableIntStateOf(0) }
+    val refonte = useSavioRefonteUi()
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (refonte) {
+            SavioRefonteTabRow(
+                tabs = listOf("Appareils", "Installation"),
+                selectedIndex = subTab,
+                onTabSelected = { subTab = it },
+            )
+        } else {
+            TabRow(selectedTabIndex = subTab) {
+                Tab(
+                    selected = subTab == 0,
+                    onClick = { subTab = 0 },
+                    text = { Text("Appareils") },
+                )
+                Tab(
+                    selected = subTab == 1,
+                    onClick = { subTab = 1 },
+                    text = { Text("Installation") },
+                )
+            }
+        }
+        Box(modifier = Modifier.padding(top = 8.dp)) {
+            when (subTab) {
+                0 ->
+                    InterventionAppareilsTab(
+                        uiState = uiState,
+                        newEquipmentIds = newEquipmentIds,
+                        onEquipementClick = onEquipementClick,
+                        onAddEquipment = onAddEquipment,
+                    )
+                1 ->
+                    InstallationCheckTab(
+                        interventionId = intervention.id,
+                    )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterventionAppareilsTab(
     uiState: InterventionActiveUiState,
     newEquipmentIds: Set<String>,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,

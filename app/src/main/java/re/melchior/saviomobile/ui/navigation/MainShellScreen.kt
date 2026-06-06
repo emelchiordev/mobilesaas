@@ -2,6 +2,7 @@ package re.melchior.saviomobile.ui.navigation
 
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +34,10 @@ fun MainShellScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
     val savioWindowSize = rememberSavioWindowSize(windowSizeClass)
+
+    LaunchedEffect(pendingFocusDateMillis) {
+        if (pendingFocusDateMillis != null) selectedTab = 0
+    }
 
     val onNewIntervention: () -> Unit = {
         if (NetworkUtils.isOnline(context)) {

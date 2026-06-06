@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
@@ -63,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,7 +86,9 @@ import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
+import re.melchior.saviomobile.ui.refonte.SavioGhostButton
 import re.melchior.saviomobile.ui.refonte.SavioEquipActionButtons
 import re.melchior.saviomobile.ui.refonte.SavioEquipBrandCard
 import re.melchior.saviomobile.ui.refonte.SavioEquipInfoBlock
@@ -97,6 +101,7 @@ import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
 import re.melchior.saviomobile.ui.screen.intervention.attestation.attestationTypeLabel
+import re.melchior.saviomobile.ui.screen.intervention.diagnostic.DiagnosticAideSheet
 import re.melchior.saviomobile.ui.utils.equipmentIcon
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -120,11 +125,13 @@ fun EquipementDetailScreen(
     viewModel: EquipementDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val interventionInProgress by viewModel.interventionInProgress.collectAsStateWithLifecycle()
     val catalogEquipment by viewModel.catalogEquipment.collectAsStateWithLifecycle()
     val interventionEquipments by viewModel.interventionEquipments.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showDiagnosticAide by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.navigateBack.collect {
@@ -173,6 +180,7 @@ fun EquipementDetailScreen(
     Scaffold(
         containerColor =
             if (refonte) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (refonte) {
                 SavioNavyHeader(
@@ -242,6 +250,15 @@ fun EquipementDetailScreen(
             else -> {
                 val equipment = uiState.equipment!!
                 val isReplaced = equipment.typeCode == "replaced"
+
+                if (showDiagnosticAide) {
+                    DiagnosticAideSheet(
+                        interventionId = viewModel.currentInterventionId,
+                        equipment = equipment,
+                        onDismiss = { showDiagnosticAide = false },
+                    )
+                }
+
                 val isBruleur = remember(equipment.typeCode) {
                     equipment.typeCode?.uppercase() == "BRULEUR"
                 }
@@ -542,6 +559,14 @@ fun EquipementDetailScreen(
                             }
                         }
                     }
+                    }
+
+                    if (interventionInProgress && !isReplaced) {
+                        SavioGhostButton(
+                            text = "Aide au diagnostic (Beta)",
+                            icon = Icons.Outlined.Search,
+                            onClick = { showDiagnosticAide = true },
+                        )
                     }
 
                     val energyUc = (equipment.energyCode ?: "").uppercase(Locale.getDefault())

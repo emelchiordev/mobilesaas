@@ -21,6 +21,7 @@ import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.observability.SavioSyncSentry
 import re.melchior.saviomobile.worker.SyncWorker
 import androidx.work.WorkManager
 import java.io.File
@@ -202,6 +203,7 @@ class ClotureSignatureViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 android.util.Log.i(SAVIO_PUSH_LOG, "clôture: début interventionId=$interventionId")
+                SavioSyncSentry.onClosureStarted(interventionId)
                 val state = _uiState.value
                 val selectedTypes = state.selectedCloseTypes
                 if (selectedTypes.isEmpty()) {
@@ -265,9 +267,14 @@ class ClotureSignatureViewModel @Inject constructor(
                         isPendingValidation = requiresValidation,
                     )
                 }
+                SavioSyncSentry.onClosureCompleted(interventionId)
                 SyncWorker.enqueueNow(workManager)
             } catch (e: Exception) {
                 android.util.Log.e(SAVIO_PUSH_LOG, "clôture échouée avant/après push: ${e.message}", e)
+                SavioSyncSentry.onClosureFailed(
+                    interventionId = interventionId,
+                    reason = e.message ?: "Erreur lors de la clôture",
+                )
                 _uiState.update {
                     it.copy(
                         isLoading = false,

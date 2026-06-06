@@ -7,6 +7,7 @@ import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
 import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
 import re.melchior.saviomobile.data.local.entity.AnomalyTypeEntity
+import re.melchior.saviomobile.util.GAS_PIPE_EXPIRED_ANOMALY_CODE
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -26,6 +27,23 @@ class AnomalyDraftRepository @Inject constructor(
 
     suspend fun getCatalogTypesOnce(): List<AnomalyTypeEntity> =
         anomalyTypeDao.getAllActiveOnce()
+
+    suspend fun hasDraftWithCode(interventionId: String, code: String): Boolean =
+        anomalyDraftDao.countByInterventionAndCode(interventionId, code) > 0
+
+    suspend fun ensureGasPipeExpiredDraft(interventionId: String, unitId: String): Boolean {
+        if (hasDraftWithCode(interventionId, GAS_PIPE_EXPIRED_ANOMALY_CODE)) return false
+        addDraft(
+            interventionId = interventionId,
+            unitId = unitId,
+            equipmentId = null,
+            scope = "installation",
+            anomalyTypeCode = GAS_PIPE_EXPIRED_ANOMALY_CODE,
+            customDescription = null,
+            action = null,
+        )
+        return true
+    }
 
     suspend fun addDraft(
         interventionId: String,
@@ -52,6 +70,15 @@ class AnomalyDraftRepository @Inject constructor(
         )
     }
 
+    suspend fun setCorrected(localId: String, corrected: Boolean) {
+        anomalyDraftDao.updateCorrected(localId, corrected)
+    }
+
+    suspend fun deleteDraft(localId: String) {
+        pendingOperationDao.deleteById(localId)
+        anomalyDraftDao.deleteByLocalId(localId)
+    }
+
     suspend fun enqueuePendingPushOps(interventionId: String, completedAt: String) {
         val drafts = anomalyDraftDao.getPendingByInterventionOnce(interventionId)
         if (drafts.isEmpty()) return
@@ -67,6 +94,7 @@ class AnomalyDraftRepository @Inject constructor(
                 "customDescription" to draft.customDescription,
                 "reportedAt" to draft.reportedAt,
                 "action" to draft.action,
+                "corrected" to draft.corrected,
                 "source" to "intervention",
             )
             pendingOperationDao.insert(

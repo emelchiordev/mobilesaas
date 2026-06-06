@@ -152,6 +152,15 @@ abstract class InterventionDao {
     @Query("UPDATE interventions SET report = :report WHERE id = :id")
     abstract suspend fun saveReport(id: String, report: String)
 
+    @Query(
+        """
+        UPDATE interventions
+        SET followUpRequired = :required, followUpNote = :note
+        WHERE id = :id
+        """,
+    )
+    abstract suspend fun saveFollowUp(id: String, required: Boolean, note: String?)
+
     @Query("UPDATE interventions SET syncStatus = 'SYNCED' WHERE id = :id")
     abstract suspend fun markAsSynced(id: String)
 
@@ -244,7 +253,13 @@ abstract class InterventionDao {
             status = 'scheduled',
             syncStatus = 'SYNCED',
             startedAt = NULL,
-            report = NULL
+            completedAt = NULL,
+            report = NULL,
+            signaturePath = NULL,
+            techSignaturePath = NULL,
+            followUpRequired = 0,
+            followUpNote = NULL,
+            hasLocalChanges = 0
         WHERE id = :id
         """
     )

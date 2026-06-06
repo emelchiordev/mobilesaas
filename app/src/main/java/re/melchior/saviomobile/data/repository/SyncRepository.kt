@@ -2,10 +2,14 @@ package re.melchior.saviomobile.data.repository
 
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
+import re.melchior.saviomobile.data.local.dao.AnomalyDraftDao
+import re.melchior.saviomobile.data.local.dao.AttestationVeDao
+import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.CatalogEquipmentDao
 import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.EquipmentSnapshotDao
+import re.melchior.saviomobile.data.local.dao.InstallationCheckDao
 import re.melchior.saviomobile.data.local.dao.InterventionActualTypeDao
 import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InterventionHistoryDao
@@ -53,8 +57,15 @@ class SyncRepository @Inject constructor(
     private val coldMeasureDao: ColdMeasureDao,
     private val equipmentSnapshotDao: EquipmentSnapshotDao,
     private val anomalyTypeDao: AnomalyTypeDao,
+    private val anomalyDraftDao: AnomalyDraftDao,
+    private val installationCheckDao: InstallationCheckDao,
+    private val attestationVeDao: AttestationVeDao,
+    private val attestationVePointControleDao: AttestationVePointControleDao,
     private val measureRepository: MeasureRepository,
     private val pacMeasureRepository: PacMeasureRepository,
+    private val installationCheckRepository: InstallationCheckRepository,
+    private val photoRepository: PhotoRepository,
+    private val invoiceRepository: InvoiceRepository,
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
@@ -93,6 +104,8 @@ class SyncRepository @Inject constructor(
                 parentEquipmentId = eq.parentEquipmentId,
                 order = eq.order,
                 unitId = eq.unitId,
+                evacuationMode = eq.evacuationMode,
+                hybridePacEquipmentId = eq.hybridePacEquipmentId,
                 createdAt = java.time.Instant.now().toString(),
             )
         }
@@ -145,6 +158,16 @@ class SyncRepository @Inject constructor(
 
     suspend fun saveReport(interventionId: String, report: String) {
         interventionDao.saveReport(interventionId, report)
+    }
+
+    suspend fun saveFollowUp(
+        interventionId: String,
+        required: Boolean,
+        note: String?,
+    ) {
+        val trimmedNote =
+            if (required) note?.trim()?.takeIf { it.isNotEmpty() } else null
+        interventionDao.saveFollowUp(interventionId, required, trimmedNote)
     }
 
     // Méthode au niveau de la classe — pas à l'intérieur de pull()
@@ -392,6 +415,12 @@ class SyncRepository @Inject constructor(
                 if (!blockLocalSync && intervention.pacMeasures.isNotEmpty()) {
                     pacMeasureRepository.mergeFromPull(intervention.pacMeasures, intervention.id)
                 }
+                if (!blockLocalSync && intervention.installationCheck != null) {
+                    installationCheckRepository.mergeFromPull(
+                        intervention.installationCheck,
+                        intervention.id,
+                    )
+                }
             }
 
             val rootTypes = response.interventionTypes
@@ -514,6 +543,16 @@ class SyncRepository @Inject constructor(
     suspend fun abandonInterventionLocally(interventionId: String) {
         pendingOperationDao.deleteByInterventionId(interventionId)
 
+        anomalyDraftDao.deleteByInterventionId(interventionId)
+        installationCheckDao.deleteByInterventionId(interventionId)
+        attestationVePointControleDao.deleteByInterventionId(interventionId)
+        attestationVeDao.deleteByInterventionId(interventionId)
+        coldMeasureDao.deleteByInterventionId(interventionId)
+        measureRepository.deleteByInterventionId(interventionId)
+        pacMeasureRepository.deleteByInterventionId(interventionId)
+        photoRepository.deleteAllForIntervention(interventionId)
+        invoiceRepository.deleteDraftByIntervention(interventionId)
+
         val intervention = interventionDao.getInterventionByIdOnce(interventionId)
         if (intervention != null) {
             val toDelete = equipmentDao
@@ -525,7 +564,10 @@ class SyncRepository @Inject constructor(
         }
 
         val snapshots = equipmentSnapshotDao.getByInterventionId(interventionId)
+        val currentById =
+            equipmentDao.getEquipmentsByInterventionOnce(interventionId).associateBy { it.id }
         val restored = snapshots.map { snap ->
+            val current = currentById[snap.equipmentId]
             EquipmentEntity(
                 interventionId = snap.interventionId.ifBlank { interventionId },
                 order = snap.order ?: 0,
@@ -542,19 +584,14 @@ class SyncRepository @Inject constructor(
                 catalogBrandId = snap.catalogBrandId,
                 parentEquipmentId = snap.parentEquipmentId,
                 powerKw = null,
-                evacuationMode = null,
-                hybridePacEquipmentId = null,
+                evacuationMode = snap.evacuationMode ?: current?.evacuationMode,
+                hybridePacEquipmentId =
+                    snap.hybridePacEquipmentId ?: current?.hybridePacEquipmentId,
             )
         }
         if (restored.isNotEmpty()) {
             equipmentDao.insertAll(restored)
         }
-
-        coldMeasureDao.deleteByInterventionId(interventionId)
-
-        measureRepository.deleteByInterventionId(interventionId)
-
-        pacMeasureRepository.deleteByInterventionId(interventionId)
 
         equipmentSnapshotDao.deleteByInterventionId(interventionId)
 
@@ -628,4 +665,6 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     pulledAt = pulledAt,
     isChantier = isChantier == true,
     version = version,
+    followUpRequired = followUpRequired == true,
+    followUpNote = followUpNote,
 )

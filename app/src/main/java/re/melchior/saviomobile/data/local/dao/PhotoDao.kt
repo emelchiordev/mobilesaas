@@ -73,6 +73,9 @@ interface PhotoDao {
     @Query("DELETE FROM photos WHERE id = :id")
     suspend fun hardDelete(id: String)
 
+    @Query("SELECT * FROM photos WHERE interventionId = :interventionId")
+    suspend fun getAllForInterventionOnce(interventionId: String): List<PhotoEntity>
+
     // Suppression physique de toutes les photos locales d'une intervention
     // (ex. si intervention supprimée)
     @Query("DELETE FROM photos WHERE interventionId = :interventionId")

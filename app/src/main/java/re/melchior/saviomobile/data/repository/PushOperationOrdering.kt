@@ -24,6 +24,7 @@ object PushOperationOrdering {
         "UPDATE_INTERVENTION" to 2,
         "SAVE_MEASURE" to 2,
         "SAVE_PAC_MEASURE" to 2,
+        "SAVE_INSTALLATION_CHECK" to 2,
         "CREATE_INVOICE" to 2,
         "ADD_INVOICE_LINE" to 2,
         "REMOVE_INVOICE_LINE" to 2,

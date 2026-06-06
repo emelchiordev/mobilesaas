@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -47,11 +48,13 @@ fun SavioInterventionTabBar(
     modifier: Modifier = Modifier,
 ) {
     val refonte = useSavioRefonteUi()
+    val barColor =
+        if (refonte) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .navigationBarsPadding(),
+                .background(barColor),
     ) {
         HorizontalDivider(
             thickness = SavioDimens.BorderThin,
@@ -62,7 +65,7 @@ fun SavioInterventionTabBar(
                 Modifier
                     .fillMaxWidth()
                     .height(SavioDimens.BottomNavHeight),
-            color = if (refonte) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
+            color = barColor,
             shadowElevation = 0.dp,
             tonalElevation = 0.dp,
         ) {
@@ -86,6 +89,7 @@ fun SavioInterventionTabBar(
                 }
             }
         }
+        Spacer(modifier = Modifier.navigationBarsPadding())
     }
 }
 

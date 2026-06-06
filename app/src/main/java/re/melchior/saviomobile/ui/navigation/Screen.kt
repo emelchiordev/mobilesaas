@@ -76,18 +76,35 @@ sealed class Screen(val route: String) {
 
     object ClientDetail :
         Screen(
-            "client/{customerId}?unitId={unitId}&displayName={displayName}&addressLine={addressLine}",
+            "client/{customerId}?unitId={unitId}&displayName={displayName}&addressLine={addressLine}&contextInterventionId={contextInterventionId}",
         ) {
         fun createRoute(
             customerId: String,
             unitId: String = "",
             displayName: String = "",
             addressLine: String = "",
+            contextInterventionId: String = "",
         ): String =
             "client/${Uri.encode(customerId)}?" +
                 "unitId=${Uri.encode(unitId)}&" +
                 "displayName=${Uri.encode(displayName)}&" +
-                "addressLine=${Uri.encode(addressLine)}"
+                "addressLine=${Uri.encode(addressLine)}&" +
+                "contextInterventionId=${Uri.encode(contextInterventionId)}"
+
+        fun createRouteFromIntervention(
+            customerId: String,
+            interventionId: String,
+            unitId: String = "",
+            displayName: String = "",
+            addressLine: String = "",
+        ): String =
+            createRoute(
+                customerId = customerId,
+                unitId = unitId,
+                displayName = displayName,
+                addressLine = addressLine,
+                contextInterventionId = interventionId,
+            )
     }
 
     object EquipementDetail : Screen("equipement/{interventionId}/{equipmentId}") {

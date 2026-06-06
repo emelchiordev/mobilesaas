@@ -39,6 +39,7 @@ data class ClientDetailUiState(
     val doorCode: String = "",
     val addressLine2: String = "",
     val updatesRequireValidation: Boolean = false,
+    val contextInterventionId: String = "",
 ) {
     val titleName: String
         get() {
@@ -55,6 +56,12 @@ data class ClientDetailUiState(
 
     val canShowContent: Boolean
         get() = intervention != null || displayName.isNotBlank()
+
+    val showNewInterventionCta: Boolean
+        get() =
+            contextInterventionId.isBlank() &&
+                resolvedUnitId.isNotBlank() &&
+                !isEditing
 }
 
 @HiltViewModel
@@ -71,6 +78,8 @@ class ClientDetailViewModel @Inject constructor(
     private val navUnitId: String = savedStateHandle.navArg("unitId").orEmpty()
     private val navDisplayName: String = savedStateHandle.navArg("displayName").orEmpty()
     private val navAddressLine: String = savedStateHandle.navArg("addressLine").orEmpty()
+    private val contextInterventionId: String =
+        savedStateHandle.navArg("contextInterventionId").orEmpty()
 
     private val _uiState = MutableStateFlow(
         ClientDetailUiState(
@@ -78,6 +87,7 @@ class ClientDetailViewModel @Inject constructor(
             unitId = navUnitId,
             displayName = navDisplayName,
             addressLine = navAddressLine,
+            contextInterventionId = contextInterventionId,
         ),
     )
     val uiState: StateFlow<ClientDetailUiState> = _uiState.asStateFlow()

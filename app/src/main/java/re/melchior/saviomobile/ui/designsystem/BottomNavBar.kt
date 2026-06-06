@@ -2,10 +2,12 @@ package re.melchior.saviomobile.ui.designsystem
 
 import androidx.compose.material3.MaterialTheme
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -39,11 +41,13 @@ fun BottomNavBar(
     modifier: Modifier = Modifier,
 ) {
     val refonte = useSavioRefonteUi()
+    val barColor =
+        if (refonte) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .navigationBarsPadding(),
+                .background(barColor),
     ) {
         HorizontalDivider(
             thickness = SavioDimens.BorderThin,
@@ -54,7 +58,7 @@ fun BottomNavBar(
                 Modifier
                     .fillMaxWidth()
                     .height(SavioDimens.BottomNavHeight),
-            color = if (refonte) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background,
+            color = barColor,
             shadowElevation = 0.dp,
             tonalElevation = 0.dp,
         ) {
@@ -98,5 +102,6 @@ fun BottomNavBar(
                 }
             }
         }
+        Spacer(modifier = Modifier.navigationBarsPadding())
     }
 }

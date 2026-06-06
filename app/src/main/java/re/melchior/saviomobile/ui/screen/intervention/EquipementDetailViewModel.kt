@@ -84,6 +84,16 @@ class EquipementDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val interventionInProgress: StateFlow<Boolean> =
+        syncRepository
+            .getInterventionById(interventionId)
+            .map { it?.status == "in_progress" }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = false,
+            )
+
     /** Tous les équipements de l'intervention (ex. détection PAC hybride). */
     val interventionEquipments: StateFlow<List<EquipmentEntity>> =
         equipmentDao

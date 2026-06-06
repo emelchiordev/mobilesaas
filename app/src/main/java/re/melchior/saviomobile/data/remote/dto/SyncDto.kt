@@ -66,6 +66,10 @@ data class InterventionDto(
     val history: List<HistoryItemDto> = emptyList(),
     @SerializedName("notes")
     val notes: String? = null,
+    @SerializedName("followUpRequired")
+    val followUpRequired: Boolean? = null,
+    @SerializedName("followUpNote")
+    val followUpNote: String? = null,
     @SerializedName("actualTypeId")
     val actualTypeId: String? = null,
     @SerializedName("actualTypeCode")
@@ -76,6 +80,21 @@ data class InterventionDto(
     val actualTypes: List<InterventionActualTypeItemDto> = emptyList(),
     @SerializedName("pacMeasures")
     val pacMeasures: List<PacMeasurePullDto> = emptyList(),
+    @SerializedName("installationCheck")
+    val installationCheck: InstallationCheckPullDto? = null,
+)
+
+data class InstallationCheckPullDto(
+    @SerializedName("interventionId") val interventionId: String = "",
+    @SerializedName("turbidityTested") val turbidityTested: Boolean? = null,
+    @SerializedName("turbidityNtu") val turbidityNtu: Double? = null,
+    @SerializedName("turbidityState") val turbidityState: String? = null,
+    @SerializedName("gasPipeType") val gasPipeType: String? = null,
+    @SerializedName("gasPipeValidityDate") val gasPipeValidityDate: String? = null,
+    @SerializedName("gasPipeReplaced") val gasPipeReplaced: Boolean? = null,
+    @SerializedName("gasTapCompliant") val gasTapCompliant: String? = null,
+    @SerializedName("notes") val notes: String? = null,
+    @SerializedName("updatedAt") val updatedAt: String? = null,
 )
 
 data class PacMeasurePullDto(

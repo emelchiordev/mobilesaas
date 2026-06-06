@@ -29,9 +29,27 @@ interface AnomalyDraftDao {
     )
     suspend fun getPendingByInterventionOnce(interventionId: String): List<AnomalyDraftEntity>
 
+    @Query(
+        """
+        SELECT COUNT(*) FROM anomaly_draft
+        WHERE interventionId = :interventionId
+        AND anomalyTypeCode = :code
+        """,
+    )
+    suspend fun countByInterventionAndCode(interventionId: String, code: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(draft: AnomalyDraftEntity)
 
     @Query("UPDATE anomaly_draft SET syncStatus = :status WHERE localId = :localId")
     suspend fun updateSyncStatus(localId: String, status: String)
+
+    @Query("UPDATE anomaly_draft SET corrected = :corrected WHERE localId = :localId")
+    suspend fun updateCorrected(localId: String, corrected: Boolean)
+
+    @Query("DELETE FROM anomaly_draft WHERE localId = :localId")
+    suspend fun deleteByLocalId(localId: String)
+
+    @Query("DELETE FROM anomaly_draft WHERE interventionId = :interventionId")
+    suspend fun deleteByInterventionId(interventionId: String)
 }

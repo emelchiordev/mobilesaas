@@ -35,6 +35,10 @@ sealed class SubmitInvoiceFullPayloadResult {
     data class HamonMissing(val invoiceId: String) : SubmitInvoiceFullPayloadResult()
 
     data object InvoiceNotFound : SubmitInvoiceFullPayloadResult()
+
+    /** Total facturable = 0 : pas de facture, lignes techniques pour le rapport. */
+    data class ConsumptionOnly(val consumptionLines: List<Map<String, Any?>>) :
+        SubmitInvoiceFullPayloadResult()
 }
 
 data class InvoiceBillingSummary(
@@ -512,8 +516,16 @@ class InvoiceRepository @Inject constructor(
         unitId: String,
         technicianId: String,
     ): SubmitInvoiceFullPayloadResult {
-        val invoice = invoiceDao.getByInterventionId(interventionId)
-            ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        val invoice =
+            invoiceDao.getByInterventionId(interventionId)
+                ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        recalcTotals(invoice.id)
+        val refreshed = invoiceDao.getById(invoice.id) ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
+        if (refreshed.totalTtc <= 0.005) {
+            return SubmitInvoiceFullPayloadResult.ConsumptionOnly(
+                consumptionLines = buildConsumptionLinesPayload(invoice.id),
+            )
+        }
         return buildSubmitInvoiceFullPayloadForPush(
             invoiceId = invoice.id,
             interventionId = interventionId,
@@ -522,6 +534,23 @@ class InvoiceRepository @Inject constructor(
             requireLocalHamonFile = true,
         )
     }
+
+    private suspend fun buildConsumptionLinesPayload(invoiceId: String): List<Map<String, Any?>> =
+        invoiceLineDao
+            .getByInvoiceIdOnce(invoiceId)
+            .sortedBy { it.order }
+            .filter {
+                !it.isTextBlock && it.type != "subtotal" && it.type != "text_block"
+            }.map { line ->
+                mapOf(
+                    "type" to line.type,
+                    "reference" to line.reference,
+                    "label" to line.label,
+                    "quantity" to line.quantity,
+                    "billingType" to line.billingType,
+                    "order" to line.order,
+                )
+            }
 
     private suspend fun markInvoiceSyncPending(invoiceId: String) {
         invoiceDao.markAsPending(invoiceId)

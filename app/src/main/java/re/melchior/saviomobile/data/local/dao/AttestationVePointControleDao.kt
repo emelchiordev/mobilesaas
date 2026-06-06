@@ -74,4 +74,9 @@ interface AttestationVePointControleDao {
     suspend fun deleteLocalForIntervention(
         interventionId: String,
     )
+
+    @Query(
+        "DELETE FROM attestation_ve_point_controle WHERE interventionId = :interventionId",
+    )
+    suspend fun deleteByInterventionId(interventionId: String)
 }

@@ -20,6 +20,7 @@ import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.local.entity.AttestationVePointControleEntity
 import re.melchior.saviomobile.data.local.entity.ColdMeasureEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InstallationCheckEntity
 import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
@@ -70,6 +71,7 @@ class PushRepository @Inject constructor(
     private val measureRepository: MeasureRepository,
     private val pacMeasureRepository: PacMeasureRepository,
     private val attestationVeRepository: AttestationVeRepository,
+    private val installationCheckRepository: InstallationCheckRepository,
     private val attestationVePointControleDao: AttestationVePointControleDao,
     private val anomalyDraftRepository: AnomalyDraftRepository,
     private val settingsDao: SettingsDao,
@@ -101,6 +103,7 @@ class PushRepository @Inject constructor(
         val dirtyMeasures: List<MeasureEntity>,
         val dirtyPacMeasures: List<PacMeasureEntity>,
         val dirtyAttestations: List<AttestationVeEntity>,
+        val dirtyInstallationChecks: List<InstallationCheckEntity>,
     )
 
     private data class TierPushOutcome(
@@ -154,6 +157,10 @@ class PushRepository @Inject constructor(
                     attestationVeRepository.getDirty().filter { attestation ->
                         attestation.interventionId in pushableInterventionIds
                     }
+                val dirtyInstallationChecks =
+                    installationCheckRepository.getDirty().filter { row ->
+                        row.interventionId in pushableInterventionIds
+                    }
 
                 if (pendingInterventions.isEmpty() &&
                     pendingUpdates.isEmpty() &&
@@ -161,7 +168,8 @@ class PushRepository @Inject constructor(
                     dirtyColdMeasures.isEmpty() &&
                     dirtyMeasures.isEmpty() &&
                     dirtyPacMeasures.isEmpty() &&
-                    dirtyAttestations.isEmpty()
+                    dirtyAttestations.isEmpty() &&
+                    dirtyInstallationChecks.isEmpty()
                 ) {
                     android.util.Log.i(
                         LOG_TAG,
@@ -219,6 +227,10 @@ class PushRepository @Inject constructor(
                                     },
                                 attestations =
                                     dirtyAttestations.filter {
+                                        it.interventionId == intervention.id
+                                    },
+                                installationCheck =
+                                    dirtyInstallationChecks.firstOrNull {
                                         it.interventionId == intervention.id
                                     },
                             ),
@@ -279,6 +291,7 @@ class PushRepository @Inject constructor(
                     dirtyMeasures = dirtyMeasures,
                     dirtyPacMeasures = dirtyPacMeasures,
                     dirtyAttestations = dirtyAttestations,
+                    dirtyInstallationChecks = dirtyInstallationChecks,
                 )
 
                 val tiers = PushOperationOrdering.partitionIntoTiers(operations)
@@ -468,6 +481,7 @@ class PushRepository @Inject constructor(
         measures: List<MeasureEntity>,
         pacMeasures: List<PacMeasureEntity>,
         attestations: List<AttestationVeEntity>,
+        installationCheck: InstallationCheckEntity? = null,
     ): PushOperationDto {
         val storedActualTypes =
             interventionActualTypeDao.getActualTypesForInterventionOnce(intervention.id)
@@ -506,6 +520,15 @@ class PushRepository @Inject constructor(
                     buildAttestationPayload(attestation, points)
                 }
         }
+        installationCheck?.let {
+            payload["installationCheck"] = installationCheckRepository.buildPayload(it)
+        }
+        if (intervention.followUpRequired) {
+            payload["followUpRequired"] = true
+            intervention.followUpNote?.trim()?.takeIf { it.isNotEmpty() }?.let { note ->
+                payload["followUpNote"] = note
+            }
+        }
         when (
             val invoiceBuilt =
                 invoiceRepository.buildInvoicePayloadForClosure(
@@ -516,6 +539,8 @@ class PushRepository @Inject constructor(
         ) {
             is SubmitInvoiceFullPayloadResult.Ok ->
                 payload["invoice"] = invoiceBuilt.payload
+            is SubmitInvoiceFullPayloadResult.ConsumptionOnly ->
+                payload["consumptionLines"] = invoiceBuilt.consumptionLines
             is SubmitInvoiceFullPayloadResult.HamonMissing ->
                 error(
                     "Signature Hamon introuvable — repassez par la signature du devis avant de clôturer.",
@@ -841,6 +866,11 @@ class PushRepository @Inject constructor(
         }?.let {
             attestationVeRepository.markClean(it.interventionId, it.equipmentOrder, it.type)
         }
+        ctx.dirtyInstallationChecks.find {
+            result.operationId == InstallationCheckRepository.pendingOpId(it.interventionId)
+        }?.let {
+            installationCheckRepository.markClean(it.interventionId)
+        }
 
         when {
             result.operationId.startsWith("op-close-") -> {
@@ -868,6 +898,9 @@ class PushRepository @Inject constructor(
                             it.type,
                         )
                     }
+                ctx.dirtyInstallationChecks
+                    .filter { it.interventionId == interventionId }
+                    .forEach { installationCheckRepository.markClean(it.interventionId) }
                 applyInvoiceCloseResult(interventionId, result.resultPayload())
             }
             result.operationId.startsWith("op-complete-") -> {
@@ -1034,6 +1067,8 @@ class PushRepository @Inject constructor(
             pacMeasureRepository.getDirty().filter { it.interventionId in pushableInterventionIds }
         val dirtyAttestations =
             attestationVeRepository.getDirty().filter { it.interventionId in pushableInterventionIds }
+        val dirtyInstallationChecks =
+            installationCheckRepository.getDirty().filter { it.interventionId in pushableInterventionIds }
         val closeOps = pendingInterventions.mapNotNull { intervention ->
             val completedAt = intervention.completedAt ?: return@mapNotNull null
             buildCloseInterventionOperation(
@@ -1043,6 +1078,9 @@ class PushRepository @Inject constructor(
                 measures = dirtyMeasures.filter { it.interventionId == intervention.id },
                 pacMeasures = dirtyPacMeasures.filter { it.interventionId == intervention.id },
                 attestations = dirtyAttestations.filter { it.interventionId == intervention.id },
+                installationCheck = dirtyInstallationChecks.firstOrNull {
+                    it.interventionId == intervention.id
+                },
             )
         }
         return withoutClose + closeOps

@@ -19,6 +19,7 @@ fun computeClosureConsequences(
     plannedTypeCode: String?,
     hasLocalAttestationVe: Boolean,
     updatesRequireValidation: Boolean,
+    gasPipeExpiredWithoutAnomaly: Boolean = false,
 ): List<ClosureConsequence> {
     if (selectedTypes.isEmpty()) return emptyList()
 
@@ -70,6 +71,14 @@ fun computeClosureConsequences(
         result += ClosureConsequence(
             icon = Icons.Default.HourglassTop,
             text = "Le rapport sera envoyé après validation du bureau",
+        )
+    }
+
+    if (gasPipeExpiredWithoutAnomaly) {
+        result += ClosureConsequence(
+            icon = Icons.Default.Warning,
+            text = "Tuyau gaz hors validité — anomalie manquante",
+            isWarning = true,
         )
     }
 

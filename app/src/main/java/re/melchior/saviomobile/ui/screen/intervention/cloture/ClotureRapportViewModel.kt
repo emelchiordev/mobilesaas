@@ -8,6 +8,7 @@ import com.google.gson.JsonParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,7 @@ import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
 import re.melchior.saviomobile.data.local.entity.AnomalyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.data.local.entity.InstallationCheckEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.toDto
 import re.melchior.saviomobile.data.remote.api.InterventionApi
@@ -33,10 +35,16 @@ import re.melchior.saviomobile.data.remote.dto.GenerateReportRequestDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
+import re.melchior.saviomobile.observability.SavioSyncSentry
+import re.melchior.saviomobile.data.repository.InstallationCheckRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.utils.NetworkUtils
+import re.melchior.saviomobile.util.GAS_PIPE_EXPIRED_ANOMALY_CODE
+import re.melchior.saviomobile.util.SavioTimeZone
 import re.melchior.saviomobile.util.formatScheduledAtDateReadable
+import re.melchior.saviomobile.util.isGasPipeExpiredWithoutAnomaly
+import java.time.LocalDate
 import retrofit2.HttpException
 import javax.inject.Inject
 
@@ -61,6 +69,9 @@ data class ClotureRapportUiState(
     val isGeneratingReport: Boolean = false,
     val reportGenerationStatus: String? = null,
     val reportFallbackUsed: Boolean = false,
+    val canGenerateReport: Boolean = false,
+    val followUpRequired: Boolean = false,
+    val followUpNote: String = "",
 ) {
     val isAbsent: Boolean get() = selectedCloseTypes.any { it.code == "ABS" }
 
@@ -80,16 +91,6 @@ data class ClotureRapportUiState(
             if (selectedCloseTypes.isEmpty() || closeTypes.isEmpty()) return false
             if (!showReport) return true
             return report.isNotBlank()
-        }
-
-    val canGenerateReport: Boolean
-        get() {
-            if (intervention == null) return false
-            if (hasText(intervention.notes)) return true
-            if (billableInvoiceLines(invoiceLines).isNotEmpty()) return true
-            if (anomalyDrafts.isNotEmpty()) return true
-            if (rootEquipments.isNotEmpty()) return true
-            return false
         }
 
     val isReportGenerationBusy: Boolean
@@ -122,6 +123,7 @@ class ClotureRapportViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val syncRepository: SyncRepository,
     private val anomalyDraftRepository: AnomalyDraftRepository,
+    private val installationCheckRepository: InstallationCheckRepository,
     private val equipmentDao: EquipmentDao,
     private val invoiceDao: InvoiceDao,
     private val invoiceLineDao: InvoiceLineDao,
@@ -142,17 +144,54 @@ class ClotureRapportViewModel @Inject constructor(
 
     private var updatesRequireValidation: Boolean = false
     private var hasLocalAttestationVe: Boolean = false
+    private var installationCheck: InstallationCheckEntity? = null
+    private var reportTechnicalFactsCount: Int = 0
 
     init {
         viewModelScope.launch {
             updatesRequireValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
             hasLocalAttestationVe = attestationVeDao.countForIntervention(interventionId) > 0
             refreshDerivedState()
+            refreshReportGenerationGate()
         }
         loadIntervention()
         loadCloseTypes()
         loadAnomalyContext()
         loadInvoiceLines()
+        viewModelScope.launch {
+            installationCheckRepository.observe(interventionId).collect { check ->
+                installationCheck = check
+                refreshDerivedState()
+                refreshReportGenerationGate()
+            }
+        }
+    }
+
+    private fun refreshReportGenerationGate() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val intervention = state.intervention ?: run {
+                _uiState.update { it.copy(canGenerateReport = false) }
+                return@launch
+            }
+            val attestations = attestationVeDao.getByIntervention(interventionId).first()
+            val measures = measureDao.getByIntervention(interventionId)
+            val pacMeasures = pacMeasureDao.observeByInterventionId(interventionId).first()
+            val coldCount = coldMeasureDao.countForIntervention(interventionId)
+            val assessment =
+                assessReportGenerationContent(
+                    technicianNotes = intervention.notes,
+                    invoiceLines = state.invoiceLines,
+                    anomalyDrafts = state.anomalyDrafts,
+                    attestations = attestations,
+                    measures = measures,
+                    pacMeasures = pacMeasures,
+                    coldMeasureCount = coldCount,
+                    installationCheck = installationCheck,
+                )
+            reportTechnicalFactsCount = assessment.technicalFactsCount
+            _uiState.update { it.copy(canGenerateReport = assessment.canGenerate) }
+        }
     }
 
     private fun loadInvoiceLines() {
@@ -160,6 +199,7 @@ class ClotureRapportViewModel @Inject constructor(
             val invoice = invoiceDao.getByInterventionId(interventionId) ?: return@launch
             val lines = invoiceLineDao.getByInvoiceIdOnce(invoice.id)
             _uiState.update { it.copy(invoiceLines = lines) }
+            refreshReportGenerationGate()
         }
     }
 
@@ -167,6 +207,8 @@ class ClotureRapportViewModel @Inject constructor(
         viewModelScope.launch {
             anomalyDraftRepository.observeDrafts(interventionId).collect { drafts ->
                 _uiState.update { it.copy(anomalyDrafts = drafts) }
+                refreshDerivedState()
+                refreshReportGenerationGate()
             }
         }
         viewModelScope.launch {
@@ -209,6 +251,18 @@ class ClotureRapportViewModel @Inject constructor(
         }
     }
 
+    fun setAnomalyCorrected(localId: String, corrected: Boolean) {
+        viewModelScope.launch {
+            anomalyDraftRepository.setCorrected(localId, corrected)
+        }
+    }
+
+    fun removeAnomalyDraft(localId: String) {
+        viewModelScope.launch {
+            anomalyDraftRepository.deleteDraft(localId)
+        }
+    }
+
     private fun loadIntervention() {
         viewModelScope.launch {
             syncRepository.getInterventionById(interventionId)
@@ -217,6 +271,8 @@ class ClotureRapportViewModel @Inject constructor(
                         it.copy(
                             intervention = intervention,
                             report = intervention?.report ?: it.report,
+                            followUpRequired = intervention?.followUpRequired ?: it.followUpRequired,
+                            followUpNote = intervention?.followUpNote ?: it.followUpNote,
                         )
                     }
                     if (intervention != null) {
@@ -224,6 +280,7 @@ class ClotureRapportViewModel @Inject constructor(
                     }
                     tryInitCloseTypeSelection()
                     refreshDerivedState()
+                    refreshReportGenerationGate()
                 }
         }
     }
@@ -272,6 +329,14 @@ class ClotureRapportViewModel @Inject constructor(
     private fun refreshDerivedState() {
         val state = _uiState.value
         val contract = state.intervention?.let { contractSummaryFrom(it) }
+        val hasGasPipeDraft =
+            state.anomalyDrafts.any { it.anomalyTypeCode == GAS_PIPE_EXPIRED_ANOMALY_CODE }
+        val gasPipeExpiredWithoutAnomaly =
+            isGasPipeExpiredWithoutAnomaly(
+                check = installationCheck,
+                hasGasPipeAnomalyDraft = hasGasPipeDraft,
+                today = LocalDate.now(SavioTimeZone.appZone),
+            )
         _uiState.update {
             it.copy(
                 contractInfo = contract,
@@ -280,6 +345,7 @@ class ClotureRapportViewModel @Inject constructor(
                     plannedTypeCode = state.intervention?.typeCode,
                     hasLocalAttestationVe = hasLocalAttestationVe,
                     updatesRequireValidation = updatesRequireValidation,
+                    gasPipeExpiredWithoutAnomaly = gasPipeExpiredWithoutAnomaly,
                 ),
             )
         }
@@ -304,6 +370,23 @@ class ClotureRapportViewModel @Inject constructor(
         _uiState.update { it.copy(report = text) }
     }
 
+    fun clearReport() {
+        _uiState.update { it.copy(report = "") }
+    }
+
+    fun onFollowUpRequiredChange(required: Boolean) {
+        _uiState.update {
+            it.copy(
+                followUpRequired = required,
+                followUpNote = if (required) it.followUpNote else "",
+            )
+        }
+    }
+
+    fun onFollowUpNoteChange(value: String) {
+        _uiState.update { it.copy(followUpNote = value) }
+    }
+
     fun generateReport() {
         viewModelScope.launch {
             if (!NetworkUtils.isOnline(context)) {
@@ -317,12 +400,13 @@ class ClotureRapportViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         errorMessage =
-                            "Saisissez des observations, pièces ou anomalies avant de générer le compte rendu.",
+                            "Saisissez des observations, mesures, attestation, pièces, anomalies ou contrôle installation avant de générer le compte rendu.",
                     )
                 }
                 return@launch
             }
             val intervention = state.intervention ?: return@launch
+            SavioSyncSentry.onReportGenerationStarted(interventionId)
             _uiState.update {
                 it.copy(
                     isGeneratingReport = true,
@@ -354,6 +438,10 @@ class ClotureRapportViewModel @Inject constructor(
                                     isGeneratingReport = false,
                                 )
                             }
+                            SavioSyncSentry.onReportGenerationDone(
+                                interventionId = interventionId,
+                                fallbackUsed = statusResponse.fallbackUsed == true,
+                            )
                             finished = true
                             break
                         }
@@ -382,6 +470,7 @@ class ClotureRapportViewModel @Inject constructor(
                         errorMessage = message,
                     )
                 }
+                SavioSyncSentry.onReportGenerationFailed(interventionId, message)
             }
         }
     }
@@ -392,6 +481,11 @@ class ClotureRapportViewModel @Inject constructor(
         if (state.showReport && toSave.isBlank()) return false
         return try {
             syncRepository.saveReport(interventionId, toSave)
+            syncRepository.saveFollowUp(
+                interventionId = interventionId,
+                required = state.followUpRequired,
+                note = state.followUpNote,
+            )
             true
         } catch (e: Exception) {
             _uiState.update { it.copy(errorMessage = e.message) }
@@ -447,6 +541,16 @@ class ClotureRapportViewModel @Inject constructor(
         val anomalySummaries = buildAnomalySummaries(state.anomalyDrafts, state.anomalyCatalog)
             .ifEmpty { null }
         val establishedDocuments = buildEstablishedDocuments().ifEmpty { null }
+        val structuredFacts = buildStructuredFactsBlocks(
+            equipments = state.rootEquipments,
+            attestations = attestationVeDao.getByIntervention(interventionId).first(),
+            measures = measureDao.getByIntervention(interventionId),
+            pacMeasures = pacMeasureDao.observeByInterventionId(interventionId).first(),
+            anomalyDrafts = state.anomalyDrafts,
+            anomalyCatalog = state.anomalyCatalog,
+            invoiceLines = state.invoiceLines,
+            installationCheck = installationCheck,
+        ).ifEmpty { null }
 
         return GenerateReportRequestDto(
             plannedTypeLabel = intervention.typeLabel,
@@ -460,6 +564,8 @@ class ClotureRapportViewModel @Inject constructor(
             lastVisitSummary = buildLastVisitSummary(state.lastVe),
             interventionDate = formatInterventionDate(intervention),
             establishedDocuments = establishedDocuments,
+            structuredFacts = structuredFacts,
+            technicalFactsCount = reportTechnicalFactsCount.takeIf { it > 0 },
         )
     }
 }
@@ -477,7 +583,7 @@ private fun resolveDefaultSingle(
 
 private fun hasText(value: String?): Boolean = !value.isNullOrBlank()
 
-private fun billableInvoiceLines(lines: List<InvoiceLineEntity>): List<InvoiceLineEntity> =
+internal fun billableInvoiceLines(lines: List<InvoiceLineEntity>): List<InvoiceLineEntity> =
     lines.filter { !it.isTextBlock }
 
 private fun formatInvoiceLine(line: InvoiceLineEntity): String {
@@ -500,7 +606,7 @@ private fun formatEquipment(eq: EquipmentEntity): String {
     return formatEquipmentTypeLabel(eq.typeCode).ifBlank { "Équipement" }
 }
 
-private fun buildAnomalySummaries(
+internal fun buildAnomalySummaries(
     drafts: List<AnomalyDraftEntity>,
     catalog: List<AnomalyTypeEntity>,
 ): List<String> {
@@ -513,6 +619,9 @@ private fun buildAnomalySummaries(
             display.draft.action?.trim()?.takeIf { it.isNotEmpty() }?.let { action ->
                 append(" — ")
                 append(action)
+            }
+            if (display.draft.corrected) {
+                append(" — corrigée sur place")
             }
         }
     }

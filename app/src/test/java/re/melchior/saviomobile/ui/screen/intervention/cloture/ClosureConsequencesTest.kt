@@ -58,6 +58,18 @@ class ClosureConsequencesTest {
   }
 
   @Test
+  fun gasPipeExpiredWithoutAnomalyWarning() {
+    val list = computeClosureConsequences(
+        selectedTypes = listOf(maintType),
+        plannedTypeCode = "MAINT",
+        hasLocalAttestationVe = false,
+        updatesRequireValidation = false,
+        gasPipeExpiredWithoutAnomaly = true,
+    )
+    assertTrue(list.any { it.isWarning && it.text.contains("anomalie manquante") })
+  }
+
+  @Test
   fun validationBureau() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(maintType),

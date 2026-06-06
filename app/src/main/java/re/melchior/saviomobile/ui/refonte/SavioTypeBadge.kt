@@ -22,10 +22,12 @@ fun savioTypeIcon(typeLabel: String, typeCode: String? = null): ImageVector {
     return when {
         key.contains("mise") && key.contains("service") -> Icons.Outlined.PowerSettingsNew
         key.contains("visite") || key.contains("entretien") -> Icons.Outlined.Assignment
+        key.contains("ramonage") -> Icons.Outlined.Assignment
         key.contains("maintenance") -> Icons.Outlined.Build
         key.contains("dépannage") || key.contains("depannage") -> Icons.Outlined.Build
         typeLabel.contains("Mise en service", ignoreCase = true) -> Icons.Outlined.PowerSettingsNew
         typeLabel.contains("Visite", ignoreCase = true) -> Icons.Outlined.Assignment
+        typeLabel.contains("Ramonage", ignoreCase = true) -> Icons.Outlined.Assignment
         typeLabel.contains("Maintenance", ignoreCase = true) -> Icons.Outlined.Build
         typeLabel.contains("Dépannage", ignoreCase = true) -> Icons.Outlined.Build
         else -> Icons.Outlined.Build

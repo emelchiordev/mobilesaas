@@ -166,7 +166,6 @@ class InterventionActiveViewModel @Inject constructor(
         viewModelScope.launch {
             chronoJob?.cancel()
             syncRepository.abandonInterventionLocally(interventionId)
-            invoiceRepository.deleteDraftByIntervention(interventionId)
             _uiState.update { it.copy(showQuitDialog = false) }
             _navigateBackToPlanning.emit(Unit)
         }

@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.ui.component.ClientHistoryEmbeddedSection
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioClientInfoCard
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
@@ -118,13 +119,18 @@ fun ClientDetailScreen(
     }
 
     val titleName = uiState.titleName
-    val showBottomBar = !isTablet && uiState.canShowContent && !uiState.isLoading
+    val showBottomBar =
+        !isTablet &&
+            uiState.canShowContent &&
+            !uiState.isLoading &&
+            (uiState.isEditing || uiState.showNewInterventionCta)
 
     val refonte = useSavioRefonteUi()
     Scaffold(
         containerColor =
             if (refonte) SavioRefonte.BgPage else SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (refonte) {
                 SavioNavyHeader(
@@ -257,7 +263,7 @@ fun ClientDetailScreen(
                                 viewModel = viewModel,
                                 refonte = refonte,
                             )
-                            if (!uiState.isEditing && uiState.resolvedUnitId.isNotBlank() && !refonte) {
+                            if (uiState.showNewInterventionCta && !refonte) {
                                 ClientNewInterventionButton(
                                     onClick = {
                                         onNewIntervention(
@@ -425,7 +431,7 @@ private fun ClientDetailBottomBar(
                 onCancel = onCancel,
                 isSaving = uiState.isSaving,
             )
-        } else if (uiState.resolvedUnitId.isNotBlank()) {
+        } else if (uiState.showNewInterventionCta) {
             SavioRefonteCtaBar(
                 text = "Nouvelle intervention",
                 onClick = {
@@ -491,7 +497,7 @@ private fun ClientDetailBottomBar(
             ) {
                 Text("Annuler", fontWeight = FontWeight.Medium)
             }
-        } else if (uiState.resolvedUnitId.isNotBlank()) {
+        } else if (uiState.showNewInterventionCta) {
             ClientNewInterventionButton(
                 onClick = {
                     onNewIntervention(

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import re.melchior.saviomobile.data.local.database.TokenDataStore
 import re.melchior.saviomobile.data.remote.interceptor.AuthEventBus
 import re.melchior.saviomobile.ui.navigation.AppNavigation
+import re.melchior.saviomobile.ui.refonte.SavioNavyStatusBarEffect
 import re.melchior.saviomobile.ui.theme.SavioTheme
 
 @Composable
@@ -17,6 +18,7 @@ fun SavioApp(
     onConsumeDeepLinkIntent: () -> Unit,
 ) {
     SavioTheme {
+        SavioNavyStatusBarEffect()
         AppNavigation(
             tokenDataStore = tokenDataStore,
             authEventBus = authEventBus,

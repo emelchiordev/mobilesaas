@@ -19,6 +19,8 @@ data class AnomalyDraftEntity(
     val customDescription: String?,
     val reportedAt: String,
     val action: String?,
+    @ColumnInfo(defaultValue = "0")
+    val corrected: Boolean = false,
     @ColumnInfo(defaultValue = "pending")
     val syncStatus: String = "pending",
 )

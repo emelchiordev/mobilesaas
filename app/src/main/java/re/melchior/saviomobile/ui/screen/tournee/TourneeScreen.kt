@@ -76,6 +76,7 @@ import java.util.Locale
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
 import re.melchior.saviomobile.ui.designsystem.BottomNavBar
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioDateNavigator
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
@@ -162,6 +163,7 @@ fun TourneeScreen(
         containerColor =
             if (refonte) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (refonte) {
                 SavioNavyHeader(

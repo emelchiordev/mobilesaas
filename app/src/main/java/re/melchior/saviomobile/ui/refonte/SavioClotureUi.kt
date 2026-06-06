@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,7 +70,6 @@ fun SavioClotureHeader(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    SavioNavyStatusBarEffect()
     Box(
         modifier =
             modifier
@@ -542,6 +542,7 @@ fun SavioClotureReportField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    onClear: (() -> Unit)? = null,
 ) {
     Box(
         modifier =
@@ -579,6 +580,22 @@ fun SavioClotureReportField(
                 }
             },
         )
+        if (value.isNotEmpty() && onClear != null) {
+            IconButton(
+                onClick = onClear,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(32.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Clear,
+                    contentDescription = "Vider le compte rendu",
+                    tint = SavioRefonte.Muted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
         Text(
             text = "${value.length} caractère${if (value.length > 1) "s" else ""}",
             fontSize = 12.sp,

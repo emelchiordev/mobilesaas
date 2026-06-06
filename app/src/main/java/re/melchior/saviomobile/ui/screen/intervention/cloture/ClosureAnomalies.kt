@@ -10,16 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -81,6 +83,8 @@ fun buildAnomalyDraftDisplays(
 fun ClosureAnomaliesSection(
     drafts: List<AnomalyDraftDisplay>,
     onAddClick: () -> Unit,
+    onCorrectedChange: (localId: String, corrected: Boolean) -> Unit,
+    onDeleteDraft: (localId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val refonte = useSavioRefonteUi()
@@ -91,17 +95,15 @@ fun ClosureAnomaliesSection(
             modifier = modifier,
         ) {
             if (drafts.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(bottom = 12.dp),
                 ) {
                     drafts.forEach { item ->
-                        AssistChip(
-                            onClick = {},
-                            label = {
-                                Text("${item.levelEmoji} ${item.levelTag} — ${item.label}")
-                            },
+                        AnomalyDraftRow(
+                            item = item,
+                            onCorrectedChange = { onCorrectedChange(item.draft.localId, it) },
+                            onDelete = { onDeleteDraft(item.draft.localId) },
                         )
                     }
                 }
@@ -128,17 +130,15 @@ fun ClosureAnomaliesSection(
         )
 
         if (drafts.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 12.dp),
             ) {
                 drafts.forEach { item ->
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text("${item.levelEmoji} ${item.levelTag} — ${item.label}")
-                        },
+                    AnomalyDraftRow(
+                        item = item,
+                        onCorrectedChange = { onCorrectedChange(item.draft.localId, it) },
+                        onDelete = { onDeleteDraft(item.draft.localId) },
                     )
                 }
             }
@@ -146,6 +146,59 @@ fun ClosureAnomaliesSection(
 
         OutlinedButton(onClick = onAddClick, modifier = Modifier.fillMaxWidth()) {
             Text("+ Ajouter une anomalie")
+        }
+    }
+}
+
+@Composable
+private fun AnomalyDraftRow(
+    item: AnomalyDraftDisplay,
+    onCorrectedChange: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${item.levelEmoji} ${item.levelTag} — ${item.label}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                item.draft.action?.trim()?.takeIf { it.isNotEmpty() }?.let { action ->
+                    Text(
+                        text = action,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = item.draft.corrected,
+                    onCheckedChange = onCorrectedChange,
+                )
+                Text(
+                    text = "Corrigée",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Supprimer l'anomalie",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.remote.dto.CustomerSearchRowDto
 import re.melchior.saviomobile.ui.designsystem.BottomNavBar
 import re.melchior.saviomobile.ui.designsystem.BottomNavItem
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.refonte.SavioRefonteFab
@@ -55,6 +56,7 @@ fun ClientsScreen(
     Scaffold(
         containerColor =
             if (refonte) MaterialTheme.colorScheme.background else SavioUi.PageBackground,
+        contentWindowInsets = if (refonte) SavioEdgeToEdgeScaffoldInsets else androidx.compose.material3.ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (refonte) {
                 SavioNavyHeader(title = "Clients", style = SavioHeaderStyle.Primary)

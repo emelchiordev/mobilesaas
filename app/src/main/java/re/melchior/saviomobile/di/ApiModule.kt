@@ -12,6 +12,7 @@ import re.melchior.saviomobile.data.remote.api.InterventionApi
 import re.melchior.saviomobile.data.remote.api.InterventionPdfApi
 import re.melchior.saviomobile.data.remote.api.InvoiceApi
 import re.melchior.saviomobile.data.remote.api.PushApi
+import re.melchior.saviomobile.data.remote.api.RagApi
 import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.api.TenantArticleApi
 import re.melchior.saviomobile.data.remote.api.TourneeApi
@@ -76,4 +77,9 @@ object ApiModule {
     @Singleton
     fun provideTenantArticleApi(retrofit: Retrofit): TenantArticleApi =
         retrofit.create(TenantArticleApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRagApi(retrofit: Retrofit): RagApi =
+        retrofit.create(RagApi::class.java)
 }

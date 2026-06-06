@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -106,6 +105,7 @@ import re.melchior.saviomobile.ui.designsystem.SectionDivider
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
 import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
+import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
 import re.melchior.saviomobile.ui.refonte.SavioRefonteOrangeCtaBar
@@ -156,7 +156,7 @@ fun InterventionDetailScreen(
     Scaffold(
         containerColor = if (refonte) SavioRefonte.BgPage else MaterialTheme.colorScheme.background,
         snackbarHost = { SavioSnackbarHost(snackbarHostState) },
-        contentWindowInsets = WindowInsets(0),
+        contentWindowInsets = SavioEdgeToEdgeScaffoldInsets,
         topBar = {
             if (!embeddedInMasterDetail) {
                 val refonte = useSavioRefonteUi()
@@ -347,15 +347,14 @@ fun InterventionDetailScreen(
             else -> {
                 val intervention = uiState.intervention!!
 
-                // â† ICI intervention est disponible
                 val isCompleted = intervention.status == "completed"
 
                 val tabs = remember(isCompleted) {
                     buildList {
                         if (isCompleted) add(DetailTab("Rapport", Icons.Filled.Assessment))
-                        add(DetailTab("DÃ©tail", Icons.Filled.Person))
-                        add(DetailTab("Ã‰quipements", Icons.Filled.Build))
-                        add(DetailTab("Historique", Icons.Filled.History)) // â† ajoutÃ©
+                        add(DetailTab("Détail", Icons.Filled.Person))
+                        add(DetailTab("Équipements", Icons.Filled.Build))
+                        add(DetailTab("Historique", Icons.Filled.History))
                     }
                 }
 
@@ -458,7 +457,7 @@ fun InterventionDetailScreen(
                     }
 
                     HorizontalPager(state = pagerState, key = { it }, modifier = pagerModifier) { page ->
-                        // Si isCompleted, page 0 = Rapport, sinon page 0 = DÃ©tail
+                        // Si isCompleted, page 0 = Rapport, sinon page 0 = Détail
                         val adjustedPage = if (isCompleted) page else page + 1
 
                         when (adjustedPage) {
@@ -618,7 +617,7 @@ private fun InterventionDetailEmbeddedFooter(
     onPrimaryClick: () -> Unit,
 ) {
     val primaryLabel =
-        if (intervention.status == "scheduled") "DÃ©marrer l'intervention" else "Reprendre l'intervention"
+        if (intervention.status == "scheduled") "Démarrer l'intervention" else "Reprendre l'intervention"
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -683,9 +682,9 @@ private fun SyncStatusCard(
         else MaterialTheme.colorScheme.primary
     val message =
         when {
-            isConflict -> "Conflit de synchronisation â€” contactez le support si le problÃ¨me persiste."
+            isConflict -> "Conflit de synchronisation — contactez le support si le problème persiste."
             pendingHamonIssue ->
-                "La signature Hamon nâ€™a pas Ã©tÃ© envoyÃ©e. Reprenez la signature du devis ou rÃ©essayez la synchronisation aprÃ¨s correction cÃ´tÃ© bureau."
+                "La signature Hamon n'a pas été envoyée. Reprenez la signature du devis ou réessayez la synchronisation après correction côté bureau."
             else -> "En attente de synchronisation avec le serveur."
         }
 
@@ -724,7 +723,7 @@ private fun SyncStatusCard(
                         onClick = onRetrySync,
                         enabled = !isRetrying,
                     ) {
-                        Text(if (isRetrying) "Synchronisationâ€¦" else "RÃ©essayer la synchronisation")
+                        Text(if (isRetrying) "Synchronisation…" else "Réessayer la synchronisation")
                     }
                     if (pendingHamonIssue) {
                         OutlinedButton(onClick = onDevisSignature) {
@@ -892,7 +891,7 @@ private fun DetailPage(
             val clientName = if (intervention.customerFirstName != null) {
                 "${intervention.customerFirstName} ${intervention.customerLastName}".trim()
             } else {
-                "Non renseignÃ©"
+                "Non renseigné"
             }
             Row(
                 modifier = Modifier
@@ -1004,7 +1003,7 @@ private fun DetailPage(
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
-                                        text = "Ã‰tage $it",
+                                        text = "Étage $it",
                                         fontSize = 11.sp,
                                         color = SavioUi.BusinessAccent,
                                         fontWeight = FontWeight.Medium,
@@ -1153,7 +1152,7 @@ private fun RapportPage(
                     }
                 }
 
-                // Date de clÃ´ture
+                // Date de clôture
                 intervention.completedAt?.let { completedAt ->
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -1174,12 +1173,12 @@ private fun RapportPage(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "ClÃ´turÃ©e le",
+                                text = "Clôturée le",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "${formatScheduledAtDate(completedAt)} Ã  ${formatScheduledAtTime(completedAt)}",
+                                text = "${formatScheduledAtDate(completedAt)} à ${formatScheduledAtTime(completedAt)}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -1250,7 +1249,7 @@ private fun RapportPage(
                                             .weight(1f)
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable { selectedPhoto = photo } // â† ajoutÃ©
+                                            .clickable { selectedPhoto = photo }
                                     )
                                 }
                                 repeat(3 - row.size) {
@@ -1262,8 +1261,8 @@ private fun RapportPage(
                 } else {
                     SavioEmptyState(
                         icon = Icons.Outlined.PhotoCamera,
-                        title = "Aucune photo ajoutÃ©e",
-                        subtitle = "Aucune image n'a Ã©tÃ© jointe au rapport.",
+                        title = "Aucune photo ajoutée",
+                        subtitle = "Aucune image n'a été jointe au rapport.",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     )
                 }

@@ -58,4 +58,7 @@ data class InterventionEntity(
     val updatedAt: String? = null,
     /** Version serveur (pull) pour détection de conflit push. */
     val version: Int = 1,
+    /** Suivi terrain : intervention à reprendre / devis à faire, etc. */
+    val followUpRequired: Boolean = false,
+    val followUpNote: String? = null,
 )
