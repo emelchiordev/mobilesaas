@@ -8,6 +8,8 @@ data class InterventionEntity(
     @PrimaryKey
     val id: String,
     val scheduledAt: String,
+    val timeSlot: String = "matin",
+    val isUrgent: Boolean = false,
     val status: String,
     val syncStatus: String = "SYNCED", // SYNCED, PENDING, IN_PROGRESS, COMPLETED, CONFLICT_*
     /** Modifications locales non encore alignées serveur — protège du pull. */

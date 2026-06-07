@@ -15,7 +15,10 @@ import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.remote.api.DocumentApi
 import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.MobileSyncOrchestrator
+import re.melchior.saviomobile.data.repository.PlanningUpdateOutcome
+import re.melchior.saviomobile.data.repository.PlanningUpdateRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.util.MobilePlanningPermission
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -27,6 +30,8 @@ data class InterventionDetailUiState(
     val isLoading: Boolean = false,
     val isSyncRetrying: Boolean = false,
     val pendingInvoiceHamonIssue: Boolean = false,
+    val planningPermission: MobilePlanningPermission = MobilePlanningPermission.LIMITED_EDIT,
+    val isPlanningSaving: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -35,6 +40,7 @@ class InterventionDetailViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val invoiceRepository: InvoiceRepository,
     private val mobileSyncOrchestrator: MobileSyncOrchestrator,
+    private val planningUpdateRepository: PlanningUpdateRepository,
     private val documentApi: DocumentApi,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -47,6 +53,11 @@ class InterventionDetailViewModel @Inject constructor(
     init {
         loadIntervention()
         loadEquipments()
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(planningPermission = planningUpdateRepository.currentPermission())
+            }
+        }
     }
 
     private fun loadIntervention() {
@@ -129,11 +140,35 @@ class InterventionDetailViewModel @Inject constructor(
 
     fun startIntervention() {
         viewModelScope.launch {
-            syncRepository.startIntervention(interventionId)
+            try {
+                syncRepository.startIntervention(interventionId)
+            } catch (e: IllegalStateException) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = e.message ?: "Impossible de démarrer l'intervention")
+                }
+            }
         }
     }
 
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun savePlanning(scheduledAt: String, timeSlot: String, isUrgent: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPlanningSaving = true, errorMessage = null) }
+            when (val outcome = planningUpdateRepository.updatePlanning(interventionId, scheduledAt, timeSlot, isUrgent)) {
+                PlanningUpdateOutcome.Success -> Unit
+                PlanningUpdateOutcome.ReadOnly ->
+                    _uiState.update {
+                        it.copy(errorMessage = "Planning verrouillé par votre société")
+                    }
+                is PlanningUpdateOutcome.Error ->
+                    _uiState.update { it.copy(errorMessage = outcome.message) }
+            }
+            _uiState.update { it.copy(isPlanningSaving = false) }
+        }
     }
 }

@@ -182,6 +182,9 @@ abstract class InterventionDao {
     @Query("UPDATE interventions SET hasLocalChanges = :hasLocalChanges WHERE id = :id")
     abstract suspend fun markLocalChanges(id: String, hasLocalChanges: Boolean)
 
+    @Query("UPDATE interventions SET version = :version WHERE id = :id")
+    abstract suspend fun updateVersion(id: String, version: Int)
+
     @Query(
         """
         UPDATE interventions
@@ -205,6 +208,9 @@ abstract class InterventionDao {
 
     @Query("SELECT * FROM interventions WHERE syncStatus = 'COMPLETED' ORDER BY scheduledAt ASC")
     abstract suspend fun getPendingSyncOnce(): List<InterventionEntity>
+
+    @Query("SELECT * FROM interventions WHERE syncStatus = 'CONFLICT_VERSION'")
+    abstract suspend fun getVersionConflictInterventionsOnce(): List<InterventionEntity>
     /**
      * Supprime les interventions SYNCED du jour encore « ouvertes » côté sync,
      * absentes du pull. Ne touche jamais [completed] ni [pending_validation].

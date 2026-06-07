@@ -6,9 +6,11 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import re.melchior.saviomobile.data.local.entity.CivilityOptionEntity
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionTypeEntity
+import re.melchior.saviomobile.data.local.entity.UnitTypeEntity
 
 @Dao
 interface ReferentielDao {
@@ -45,4 +47,28 @@ interface ReferentielDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEnergyTypes(types: List<EnergyTypeEntity>)
+
+    @Query("SELECT * FROM unit_types ORDER BY category ASC, label ASC")
+    fun getUnitTypes(): Flow<List<UnitTypeEntity>>
+
+    @Query("SELECT * FROM unit_types ORDER BY category ASC, label ASC")
+    suspend fun getUnitTypesOnce(): List<UnitTypeEntity>
+
+    @Query("DELETE FROM unit_types")
+    suspend fun deleteAllUnitTypes()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUnitTypes(types: List<UnitTypeEntity>)
+
+    @Query("SELECT * FROM civility_options ORDER BY label ASC")
+    fun getCivilityOptions(): Flow<List<CivilityOptionEntity>>
+
+    @Query("SELECT * FROM civility_options ORDER BY label ASC")
+    suspend fun getCivilityOptionsOnce(): List<CivilityOptionEntity>
+
+    @Query("DELETE FROM civility_options")
+    suspend fun deleteAllCivilityOptions()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCivilityOptions(options: List<CivilityOptionEntity>)
 }

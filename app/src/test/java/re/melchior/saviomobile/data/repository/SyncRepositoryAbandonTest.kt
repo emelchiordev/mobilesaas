@@ -48,6 +48,7 @@ class SyncRepositoryAbandonTest {
         val installationCheckRepository: InstallationCheckRepository = mock()
         val photoRepository: PhotoRepository = mock()
         val invoiceRepository: InvoiceRepository = mock()
+        val pushRepository: PushRepository = mock()
 
         whenever(interventionDao.getInterventionByIdOnce(interventionId)).thenReturn(null)
         whenever(equipmentSnapshotDao.getByInterventionId(interventionId)).thenReturn(emptyList())
@@ -76,6 +77,7 @@ class SyncRepositoryAbandonTest {
                 installationCheckRepository = installationCheckRepository,
                 photoRepository = photoRepository,
                 invoiceRepository = invoiceRepository,
+                pushRepository = pushRepository,
             )
 
         repository.abandonInterventionLocally(interventionId)

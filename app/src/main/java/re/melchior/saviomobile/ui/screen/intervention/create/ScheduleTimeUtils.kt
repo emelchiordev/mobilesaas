@@ -1,8 +1,33 @@
 package re.melchior.saviomobile.ui.screen.intervention.create
 
+import re.melchior.saviomobile.util.InterventionTimeSlot
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+
+fun defaultPlanningDateText(zoneId: ZoneId = ZoneId.systemDefault()): String =
+    LocalDate.now(zoneId).toString()
+
+fun buildPlanningScheduledAtMillis(
+    date: LocalDate,
+    timeSlot: InterventionTimeSlot,
+    timeText: String,
+    zoneId: ZoneId = ZoneId.systemDefault(),
+): Long {
+    val time = runCatching { LocalTime.parse(timeText.trim()) }.getOrNull()
+    val hour = time?.hour ?: when (timeSlot) {
+        InterventionTimeSlot.MATIN -> 8
+        InterventionTimeSlot.APRES_MIDI -> 14
+        InterventionTimeSlot.JOURNEE -> 8
+    }
+    val minute = time?.minute ?: 0
+    return date.atTime(hour, minute)
+        .atZone(zoneId)
+        .toInstant()
+        .toEpochMilli()
+}
 
 fun defaultScheduledMillis(zoneId: ZoneId = ZoneId.systemDefault()): Long =
     ceilToNextHalfHour(ZonedDateTime.now(zoneId)).toInstant().toEpochMilli()

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -29,17 +28,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -193,35 +187,15 @@ fun CreateClientScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text(
-                            "Civilité",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodySmall,
+                        CivilityDropdownField(
+                            options = uiState.civilityOptions,
+                            selectedCode = uiState.selectedCivilityCode,
+                            onSelect = viewModel::onCivilityChange,
+                            enabled = !uiState.isSubmitting,
+                            isError = uiState.fieldErrors.containsKey("civility"),
+                            supportingText = uiState.fieldErrors["civility"],
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        SingleChoiceSegmentedButtonRow {
-                            ClientCivilityUi.entries.forEachIndexed { index, c ->
-                                SegmentedButton(
-                                    selected = uiState.civility == c,
-                                    onClick = { viewModel.onCivilityChange(c) },
-                                    enabled = !uiState.isSubmitting,
-                                    shape =
-                                        SegmentedButtonDefaults.itemShape(
-                                            index = index,
-                                            count = ClientCivilityUi.entries.size,
-                                        ),
-                                    colors =
-                                        SegmentedButtonDefaults.colors(
-                                            activeContainerColor = SavioPalette.Accent,
-                                            activeContentColor = SavioPalette.OnAccent,
-                                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            inactiveBorderColor = MaterialTheme.colorScheme.outline,
-                                            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                ) {
-                                    Text(c.label, fontWeight = FontWeight.Medium)
-                                }
-                            }
-                        }
                         OutlinedTextField(
                             value = uiState.firstName,
                             onValueChange = viewModel::onFirstNameChange,
@@ -416,29 +390,16 @@ fun CreateClientScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text(
-                            "Type de logement",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodySmall,
+                        UnitTypeDropdownField(
+                            options = uiState.unitTypeOptions,
+                            selectedCode = uiState.selectedUnitTypeCode,
+                            onSelect = viewModel::onUnitTypeChange,
+                            enabled = !uiState.isSubmitting,
+                            isError = uiState.fieldErrors.containsKey("unitType"),
+                            supportingText = uiState.fieldErrors["unitType"],
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HousingKindUi.entries.forEach { k ->
-                                FilterChip(
-                                    selected = uiState.housingKind == k,
-                                    onClick = { viewModel.onHousingKindChange(k) },
-                                    enabled = !uiState.isSubmitting,
-                                    label = { Text(k.label, maxLines = 2) },
-                                    colors =
-                                        FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = SavioPalette.Accent,
-                                            selectedLabelColor = SavioPalette.OnAccent,
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            labelColor = MaterialTheme.colorScheme.onSurface,
-                                        ),
-                                )
-                            }
-                        }
-                        if (uiState.housingKind == HousingKindUi.APPARTEMENT) {
+                        if (uiState.showsFloorField) {
                             OutlinedTextField(
                                 value = uiState.floor,
                                 onValueChange = viewModel::onFloorChange,

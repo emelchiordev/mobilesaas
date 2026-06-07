@@ -43,6 +43,10 @@ class MobileSyncOrchestrator @Inject constructor(
         var pushResult: PushResult = PushResult.Error("sync interrompu")
         var pullResult: SyncResult? = null
         try {
+            runPipelineStep(transaction, "sync.heal_version_conflicts", "sync.step.heal_version_conflicts") {
+                syncRepository.healStaleVersionConflicts()
+            }
+
             runPipelineStep(transaction, "sync.clients_pending", "sync.step.clients_pending") {
                 pendingClientRepository.syncPendingClients()
             }
@@ -51,9 +55,22 @@ class MobileSyncOrchestrator @Inject constructor(
                 pendingInterventionRepository.syncPendingQueue()
             }
 
+            runPipelineStep(transaction, "sync.pre_closure_pull", "sync.step.pre_closure_pull") {
+                if (interventionDao.getPendingSyncOnce().isNotEmpty()) {
+                    Log.i(TAG, "Clôture en attente — pull forcé avant push (refresh version)")
+                    syncRepository.pull(pullDate, force = true)
+                }
+            }
+
             pushResult = runPipelineStepResult(transaction, "sync.push", "sync.step.push") {
                 pushRepository.migrateLegacyPendingInvoiceSubmit()
-                runStepPush(onPushConflict)
+                var result = runStepPush(onPushConflict)
+                if (result is PushResult.Error && result.resyncPullRecommended) {
+                    Log.i(TAG, "VERSION_MISMATCH clôture — pull + retry push")
+                    syncRepository.pull(pullDate, force = true)
+                    result = runStepPush(onPushConflict)
+                }
+                result
             } ?: PushResult.Error("Push interrompu")
 
             val skipMedia = pushResult is PushResult.Error
@@ -77,7 +94,8 @@ class MobileSyncOrchestrator @Inject constructor(
 
             val forceFinalPull =
                 pullForce ||
-                    (pushResult is PushResult.Success && pushResult.conflictInterventionIds.isNotEmpty())
+                    (pushResult is PushResult.Success && pushResult.conflictInterventionIds.isNotEmpty()) ||
+                    (pushResult is PushResult.Error && pushResult.resyncPullRecommended)
             pullResult =
                 runPipelineStepResult(transaction, "sync.pull", "sync.step.pull") {
                     syncRepository.pull(pullDate, force = forceFinalPull)

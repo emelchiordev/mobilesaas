@@ -30,7 +30,11 @@ data class TechnicianDto(
     @SerializedName("phone")
     val phone: String?,
     @SerializedName("requireInvoiceValidation")
-    val requireInvoiceValidation: Boolean? = null
+    val requireInvoiceValidation: Boolean? = null,
+    @SerializedName("updatesRequireValidation")
+    val updatesRequireValidation: Boolean? = null,
+    @SerializedName("mobilePlanningPermission")
+    val mobilePlanningPermission: String? = null,
 )
 
 data class InterventionDto(
@@ -38,6 +42,10 @@ data class InterventionDto(
     val id: String,
     @SerializedName("scheduledAt")
     val scheduledAt: String,
+    @SerializedName("timeSlot")
+    val timeSlot: String? = null,
+    @SerializedName("isUrgent")
+    val isUrgent: Boolean? = null,
     @SerializedName("status")
     val status: String,
     @SerializedName("version")
@@ -273,7 +281,20 @@ data class ReferentielsDto(
     @SerializedName("equipmentTypes")
     val equipmentTypes: List<CodeLabelDto>?,
     @SerializedName("energyTypes")
-    val energyTypes: List<CodeLabelDto>?
+    val energyTypes: List<CodeLabelDto>?,
+    @SerializedName("unitTypes")
+    val unitTypes: List<UnitTypeReferentialDto>?,
+    @SerializedName("civilityOptions")
+    val civilityOptions: List<CodeLabelDto>?,
+)
+
+data class UnitTypeReferentialDto(
+    @SerializedName("code")
+    val code: String,
+    @SerializedName("label")
+    val label: String,
+    @SerializedName("category")
+    val category: String,
 )
 
 data class CodeLabelDto(

@@ -67,6 +67,8 @@ import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.savioTopAppBarContentColor
 import re.melchior.saviomobile.ui.utils.rememberIsNetworkOnline
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.util.formatPlanningLabel
+import re.melchior.saviomobile.util.parseInterventionTimeSlot
 import re.melchior.saviomobile.util.formatScheduledAtTime
 import java.time.Instant
 import java.time.LocalDate
@@ -572,11 +574,30 @@ private fun InterventionCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = formatScheduledAtTime(intervention.scheduledAt),
+                        text = formatPlanningLabel(
+                            parseInterventionTimeSlot(intervention.timeSlot),
+                            intervention.scheduledAt,
+                        ),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
                         color = SavioUi.BusinessAccent,
                     )
+                    if (intervention.isUrgent) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = "Urgent",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier

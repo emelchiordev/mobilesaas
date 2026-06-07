@@ -88,15 +88,19 @@ fun SavioTabletTopBar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = intervention.typeLabel,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SavioRefonte.Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = buildString {
+                            intervention.number?.takeIf { it.isNotBlank() }?.let { append("$it · ") }
+                            append(intervention.typeLabel)
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SavioRefonte.Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 SavioStatusPill(status = intervention.status, syncStatus = intervention.syncStatus)
             }

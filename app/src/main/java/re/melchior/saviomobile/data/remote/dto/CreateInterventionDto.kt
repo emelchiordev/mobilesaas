@@ -7,6 +7,8 @@ data class CreateInterventionRequestDto(
     @SerializedName("technicianId") val technicianId: String?,
     @SerializedName("interventionTypeId") val interventionTypeId: String,
     @SerializedName("scheduledAt") val scheduledAt: String,
+    @SerializedName("timeSlot") val timeSlot: String? = null,
+    @SerializedName("isUrgent") val isUrgent: Boolean? = null,
     @SerializedName("notes") val notes: String?,
 )
 

@@ -8,9 +8,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import re.melchior.saviomobile.util.compareInterventionsForPlanning
+import re.melchior.saviomobile.util.toPlanningSortKey
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
@@ -59,6 +62,11 @@ class TourneeViewModel @Inject constructor(
     val interventions: StateFlow<List<InterventionEntity>> = _uiState
         .flatMapLatest { state ->
             syncRepository.getInterventionsByDate(state.selectedDate)
+                .map { list ->
+                    list.sortedWith { a, b ->
+                        compareInterventionsForPlanning(a.toPlanningSortKey(), b.toPlanningSortKey())
+                    }
+                }
         }
         .stateIn(
             scope = viewModelScope,

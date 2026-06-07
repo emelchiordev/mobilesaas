@@ -45,7 +45,10 @@ sealed class PushResult {
     ) : PushResult()
 
     object NothingToPush : PushResult()
-    data class Error(val message: String) : PushResult()
+    data class Error(
+        val message: String,
+        val resyncPullRecommended: Boolean = false,
+    ) : PushResult()
 }
 
 data class ConflictEvent(
@@ -86,14 +89,6 @@ class PushRepository @Inject constructor(
 
     companion object {
         private const val LOG_TAG = "SavioPush"
-        private val VERSIONED_PUSH_TYPES = setOf(
-            "START_INTERVENTION",
-            "CLOSE_INTERVENTION",
-            "COMPLETE_INTERVENTION",
-            "UPDATE_INTERVENTION",
-            "ADD_SIGNATURE",
-        )
-
     }
 
     private data class PushApplyContext(
@@ -123,12 +118,17 @@ class PushRepository @Inject constructor(
             try {
                 android.util.Log.i(LOG_TAG, "push() — début (construction de la file)")
                 val pendingInterventions = interventionDao.getPendingSyncOnce()
-                val pushableInterventionIds = pendingInterventions.map { it.id }.toSet()
+                val planningInterventionIds = pendingOperationDao.getPending()
+                    .filter { it.type == "UPDATE_INTERVENTION" }
+                    .map { it.interventionId }
+                    .toSet()
+                val pushableInterventionIds =
+                    pendingInterventions.map { it.id }.toSet() + planningInterventionIds
 
                 if (pushableInterventionIds.isEmpty()) {
                     android.util.Log.i(
                         LOG_TAG,
-                        "rien à pousser : aucune intervention clôturée (COMPLETED) en attente",
+                        "rien à pousser : aucune intervention clôturée (COMPLETED) ni replanification en attente",
                     )
                     return PushResult.NothingToPush
                 }
@@ -382,6 +382,41 @@ class PushRepository @Inject constructor(
                     } else {
                         val closureFailure = findClosurePushFailure(response.results)
                         if (closureFailure != null) {
+                            if (PushVersionSync.isVersionMismatch(closureFailure)) {
+                                val mismatchInterventionId =
+                                    PushVersionSync.interventionIdFromVersionedResult(closureFailure)
+                                val localVersion =
+                                    mismatchInterventionId?.let { id ->
+                                        interventionDao.getInterventionByIdOnce(id)
+                                            ?.version
+                                            ?.coerceAtLeast(1)
+                                    }
+                                val serverVersion =
+                                    PushVersionSync.readVersionFromPayload(closureFailure.serverData)
+                                android.util.Log.e(
+                                    LOG_TAG,
+                                    "clôture VERSION_MISMATCH vague P$tier intervention=$mismatchInterventionId " +
+                                        "localVersion=$localVersion serverVersion=$serverVersion",
+                                )
+                                if (localVersion != null &&
+                                    serverVersion != null &&
+                                    localVersion == serverVersion
+                                ) {
+                                    android.util.Log.w(
+                                        LOG_TAG,
+                                        "versions alignées — conflit probablement rejoué depuis cache serveur",
+                                    )
+                                }
+                                applyVersionFromConflictResult(closureFailure)
+                                android.util.Log.e(
+                                    LOG_TAG,
+                                    "clôture transactionnelle annulée vague P$tier: VERSION_MISMATCH (version resynchronisée)",
+                                )
+                                return PushResult.Error(
+                                    message = "L'intervention a été modifiée. Synchronisation effectuée — relancez la clôture.",
+                                    resyncPullRecommended = true,
+                                )
+                            }
                             val msg = closureFailure.message ?: closureFailure.reason
                                 ?: "Synchronisation incomplète (clôture)"
                             android.util.Log.e(
@@ -847,6 +882,7 @@ class PushRepository @Inject constructor(
             }
             pendingOperationDao.updateStatus(it.id, "sent")
         }
+        applyVersionAfterVersionedOp(result, pendingOp?.type)
         ctx.dirtyColdMeasures.find { it.id == result.operationId }?.let {
             coldMeasureRepository.markClean(it.id)
         }
@@ -1160,13 +1196,49 @@ class PushRepository @Inject constructor(
         )
     }
 
+    private suspend fun applyVersionFromConflictResult(result: PushResultDto) {
+        val interventionId = PushVersionSync.interventionIdFromVersionedResult(result) ?: return
+        val row = interventionDao.getInterventionByIdOnce(interventionId) ?: return
+        val localVersion = row.version.coerceAtLeast(1)
+        val serverVersion = PushVersionSync.resolveServerVersion(result, localVersion)
+        interventionDao.updateVersion(interventionId, serverVersion)
+        interventionDao.markLocalChanges(interventionId, false)
+        restoreOperationalSyncStatusAfterVersionResync(row)
+    }
+
+    private suspend fun restoreOperationalSyncStatusAfterVersionResync(
+        row: re.melchior.saviomobile.data.local.entity.InterventionEntity,
+    ) {
+        val operational =
+            PushVersionSync.operationalSyncStatus(row.status, row.syncStatus, row.completedAt)
+        interventionDao.setSyncStatus(row.id, operational)
+        interventionDao.resetConflictResolveAttempts(row.id)
+    }
+
+    private suspend fun applyVersionAfterVersionedOp(
+        result: PushResultDto,
+        pendingOpType: String?,
+    ) {
+        if (result.status != "ok") return
+        val opType = PushVersionSync.resolveVersionedOpType(result, pendingOpType) ?: return
+        if (opType !in PushVersionSync.VERSIONED_PUSH_TYPES) return
+        val interventionId = PushVersionSync.interventionIdFromVersionedResult(result) ?: return
+        val localVersion =
+            interventionDao.getInterventionByIdOnce(interventionId)?.version?.coerceAtLeast(1) ?: 1
+        val newVersion = PushVersionSync.resolveServerVersion(result, localVersion)
+        interventionDao.updateVersion(interventionId, newVersion)
+        if (opType == "UPDATE_INTERVENTION") {
+            interventionDao.markLocalChanges(interventionId, false)
+        }
+    }
+
     /** Attache `clientKnownVersion` et simule les bumps serveur entre vagues ordonnées. */
     private suspend fun attachClientKnownVersions(
         ops: List<PushOperationDto>,
         versionByIntervention: MutableMap<String, Int>,
     ): List<PushOperationDto> =
         ops.map { op ->
-            if (op.type !in VERSIONED_PUSH_TYPES) return@map op
+            if (op.type !in PushVersionSync.VERSIONED_PUSH_TYPES) return@map op
             val interventionId = op.payload["interventionId"] as? String ?: return@map op
             val version = versionByIntervention.getOrPut(interventionId) {
                 interventionDao.getInterventionByIdOnce(interventionId)?.version?.coerceAtLeast(1) ?: 1

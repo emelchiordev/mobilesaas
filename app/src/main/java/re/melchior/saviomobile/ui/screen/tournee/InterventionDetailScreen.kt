@@ -81,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +91,8 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.screen.tournee.PlanningEditSection
+import re.melchior.saviomobile.ui.screen.tournee.detailHeaderSubtitle
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
 import re.melchior.saviomobile.util.formatScheduledAtDate
 import re.melchior.saviomobile.util.formatScheduledAtTime
@@ -164,11 +167,7 @@ fun InterventionDetailScreen(
                     SavioNavyHeader(
                         title = uiState.intervention?.displayTypeLabel() ?: "Intervention",
                         style = SavioHeaderStyle.Intervention,
-                        subtitle =
-                            uiState.intervention?.let { intervention ->
-                                val time = formatScheduledAtTime(intervention.scheduledAt)
-                                "Aujourd'hui · $time"
-                            },
+                        subtitle = uiState.intervention?.detailHeaderSubtitle(),
                         leading = {
                             IconButton(onClick = onBack) {
                                 Icon(
@@ -200,10 +199,10 @@ fun InterventionDetailScreen(
                                 fontWeight = FontWeight.Medium,
                                 color = savioTopAppBarContentColor(),
                             )
-                            uiState.intervention?.let {
+                            uiState.intervention?.let { intervention ->
                                 Text(
-                                    text = formatScheduledAtTime(it.scheduledAt),
-                                    fontSize = 16.sp,
+                                    text = intervention.detailHeaderSubtitle(),
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = savioTopAppBarContentColor(),
                                 )
@@ -525,6 +524,12 @@ fun InterventionDetailScreen(
                                         },
                                     )
                                 }
+                                PlanningEditSection(
+                                    intervention = intervention,
+                                    permission = uiState.planningPermission,
+                                    isSaving = uiState.isPlanningSaving,
+                                    onSave = viewModel::savePlanning,
+                                )
                                 if (intervention.syncStatus in listOf("COMPLETED", "CONFLICT")) {
                                     SyncStatusCard(
                                         intervention = intervention,
@@ -835,6 +840,15 @@ private fun DetailPage(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
+                    intervention.number?.takeIf { it.isNotBlank() }?.let { number ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = number,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             if (!intervention.notes.isNullOrBlank()) {

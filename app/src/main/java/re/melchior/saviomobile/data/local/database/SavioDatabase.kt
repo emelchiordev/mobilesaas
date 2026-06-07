@@ -49,6 +49,7 @@ import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
 import re.melchior.saviomobile.data.local.entity.PendingClientEntity
 import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
+import re.melchior.saviomobile.data.local.entity.CivilityOptionEntity
 import re.melchior.saviomobile.data.local.entity.ContractProposalEntity
 import re.melchior.saviomobile.data.local.entity.ContractTariffEntity
 import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
@@ -58,6 +59,7 @@ import re.melchior.saviomobile.data.local.entity.PendingOperationEntity
 import re.melchior.saviomobile.data.local.entity.PendingUpdateEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.data.local.entity.SettingsEntity
+import re.melchior.saviomobile.data.local.entity.UnitTypeEntity
 
 @Database(
     entities = [
@@ -66,6 +68,8 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         InterventionTypeEntity::class,
         EquipmentTypeEntity::class,
         EnergyTypeEntity::class,
+        UnitTypeEntity::class,
+        CivilityOptionEntity::class,
         SettingsEntity::class,
         PendingUpdateEntity::class,
         PhotoEntity::class,
@@ -91,7 +95,7 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
         AnomalyDraftEntity::class,
         InstallationCheckEntity::class,
     ],
-    version = 58,
+    version = 60,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {

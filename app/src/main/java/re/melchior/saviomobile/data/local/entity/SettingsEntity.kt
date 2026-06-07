@@ -14,5 +14,6 @@ data class SettingsEntity(
     val technicianFirstName: String? = null,
     val technicianLastName: String? = null,
     val requireInvoiceValidation: Boolean = false,
-    val updatesRequireValidation: Boolean = false
+    val updatesRequireValidation: Boolean = false,
+    val mobilePlanningPermission: String = "LIMITED_EDIT",
 )

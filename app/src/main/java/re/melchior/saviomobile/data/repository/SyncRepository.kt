@@ -17,10 +17,12 @@ import re.melchior.saviomobile.data.local.dao.AnomalyTypeDao
 import re.melchior.saviomobile.data.local.dao.PendingOperationDao
 import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
+import re.melchior.saviomobile.data.local.entity.CivilityOptionEntity
 import re.melchior.saviomobile.data.local.entity.EnergyTypeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentSnapshotEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
+import re.melchior.saviomobile.data.local.entity.UnitTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
@@ -66,18 +68,36 @@ class SyncRepository @Inject constructor(
     private val installationCheckRepository: InstallationCheckRepository,
     private val photoRepository: PhotoRepository,
     private val invoiceRepository: InvoiceRepository,
+    private val pushRepository: PushRepository,
 ) {
 
     fun getEquipmentsByIntervention(interventionId: String) =
         equipmentDao.getEquipmentsByIntervention(interventionId)
 
     suspend fun startIntervention(interventionId: String) {
+        ensureInterventionVersionFresh(interventionId)
         interventionDao.resetOtherInProgressToScheduled(
             exceptInterventionId = interventionId,
         )
         val now = java.time.Instant.now().toString()
         interventionDao.markAsInProgress(interventionId, now)
         snapshotEquipments(interventionId)
+    }
+
+    private suspend fun ensureInterventionVersionFresh(interventionId: String) {
+        val pendingPlanning =
+            pendingOperationDao.getPendingByInterventionIdOnce(interventionId)
+                .any { it.type == "UPDATE_INTERVENTION" }
+        if (pendingPlanning) {
+            when (val pushResult = pushRepository.push()) {
+                is PushResult.Error ->
+                    throw IllegalStateException(
+                        "Synchronisation planning requise avant de démarrer. Vérifiez votre connexion.",
+                    )
+                else -> Unit
+            }
+        }
+        pull(LocalDate.now(), force = true)
     }
 
     private suspend fun snapshotEquipments(interventionId: String) {
@@ -170,6 +190,21 @@ class SyncRepository @Inject constructor(
         interventionDao.saveFollowUp(interventionId, required, trimmedNote)
     }
 
+    /** Débloque les CONFLICT_VERSION orphelins (version déjà resync, rien à pousser côté planning). */
+    suspend fun healStaleVersionConflicts() {
+        val stuck = interventionDao.getVersionConflictInterventionsOnce()
+        for (row in stuck) {
+            val hasPendingPlanning =
+                pendingOperationDao.getPendingByInterventionIdOnce(row.id)
+                    .any { it.type == "UPDATE_INTERVENTION" }
+            if (hasPendingPlanning) continue
+            val operational =
+                PushVersionSync.operationalSyncStatus(row.status, row.syncStatus, row.completedAt)
+            interventionDao.setSyncStatus(row.id, operational)
+            interventionDao.resetConflictResolveAttempts(row.id)
+        }
+    }
+
     // Méthode au niveau de la classe — pas à l'intérieur de pull()
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
@@ -199,6 +234,9 @@ class SyncRepository @Inject constructor(
                 }
 
                 existing.syncStatus in PULL_PROTECTED_SYNC_STATUSES && existing.hasLocalChanges -> {
+                    if (entity.version > existing.version) {
+                        interventionDao.updateVersion(entity.id, entity.version)
+                    }
                     android.util.Log.d(
                         "InsertAllSafe",
                         "→ skip ${entity.id} (local=${existing.syncStatus}, hasLocalChanges)",
@@ -449,6 +487,22 @@ class SyncRepository @Inject constructor(
                         types.map { EnergyTypeEntity(it.code, it.label) }
                     )
                 }
+                refs.unitTypes?.let { types ->
+                    if (types.isNotEmpty()) {
+                        referentielDao.deleteAllUnitTypes()
+                        referentielDao.insertUnitTypes(
+                            types.map { UnitTypeEntity(it.code, it.label, it.category) },
+                        )
+                    }
+                }
+                refs.civilityOptions?.let { options ->
+                    if (options.isNotEmpty()) {
+                        referentielDao.deleteAllCivilityOptions()
+                        referentielDao.insertCivilityOptions(
+                            options.map { CivilityOptionEntity(it.code, it.label) },
+                        )
+                    }
+                }
             }
 
             response.anomalyTypes?.let { types ->
@@ -467,7 +521,9 @@ class SyncRepository @Inject constructor(
                     technicianId = response.technician.id,
                     technicianFirstName = response.technician.firstName,
                     technicianLastName = response.technician.lastName,
-                    requireInvoiceValidation = response.technician.requireInvoiceValidation ?: false
+                    requireInvoiceValidation = response.technician.requireInvoiceValidation ?: false,
+                    updatesRequireValidation = response.technician.updatesRequireValidation ?: false,
+                    mobilePlanningPermission = response.technician.mobilePlanningPermission ?: "LIMITED_EDIT",
                 )
             )
 
@@ -625,6 +681,8 @@ class SyncRepository @Inject constructor(
 private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     id = id,
     scheduledAt = scheduledAt,
+    timeSlot = timeSlot ?: "matin",
+    isUrgent = isUrgent == true,
     status = status,
     syncStatus = "SYNCED",
     typeCode = type.code,

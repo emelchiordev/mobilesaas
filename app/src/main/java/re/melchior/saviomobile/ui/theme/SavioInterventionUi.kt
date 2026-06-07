@@ -63,7 +63,7 @@ fun savioTabUnselectedColor(): Color =
 fun interventionStatusLabel(status: String, syncStatus: String): String =
     when {
         syncStatus == "CONFLICT_IMMUTABLE" -> "🔴 Clôturée ailleurs"
-        syncStatus == "CONFLICT_VERSION" -> "🟠 Sync…"
+        syncStatus == "CONFLICT_VERSION" -> "Sync requise"
         syncStatus == "CONFLICT" -> "Conflit"
         syncStatus == "SKIPPED" -> "Ignorée"
         syncStatus == "COMPLETED" -> "En attente"

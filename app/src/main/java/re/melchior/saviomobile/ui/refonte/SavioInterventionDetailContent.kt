@@ -27,12 +27,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.ui.theme.SavioInterventionColors
 import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.util.formatPlanningLabel
+import re.melchior.saviomobile.util.parseInterventionTimeSlot
+
 import java.util.Locale
 
 private val ChevronColor = Color(0xFFC2CBD6)
@@ -49,6 +53,7 @@ fun SavioInterventionDetailContent(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        SavioInterventionMetaCard(intervention = intervention)
         if (!intervention.notes.isNullOrBlank()) {
             SavioInterventionNotesCard(notes = intervention.notes)
         }
@@ -61,6 +66,41 @@ fun SavioInterventionDetailContent(
             onNavigateClick = onNavigateClick,
             onCallClick = onCallClick,
         )
+    }
+}
+
+@Composable
+private fun SavioInterventionMetaCard(intervention: InterventionEntity) {
+    SavioRefonteCard {
+        Column(
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = "Intervention",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SavioRefonte.Muted,
+            )
+            intervention.number?.takeIf { it.isNotBlank() }?.let { number ->
+                Text(
+                    text = number,
+                    fontSize = 15.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SavioRefonte.Ink,
+                )
+            }
+            Text(
+                text = formatPlanningLabel(
+                    parseInterventionTimeSlot(intervention.timeSlot),
+                    intervention.scheduledAt,
+                ),
+                fontSize = 14.sp,
+                color = SavioRefonte.Navy,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 

@@ -37,3 +37,18 @@ data class EnergyTypeEntity(
     val code: String,
     val label: String
 )
+
+@Entity(tableName = "unit_types")
+data class UnitTypeEntity(
+    @PrimaryKey
+    val code: String,
+    val label: String,
+    val category: String,
+)
+
+@Entity(tableName = "civility_options")
+data class CivilityOptionEntity(
+    @PrimaryKey
+    val code: String,
+    val label: String,
+)

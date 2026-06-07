@@ -81,11 +81,19 @@ fun TourneeCardTablet(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = intervention.time,
+                    text = intervention.planningLabel,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = SavioUi.BusinessAccent,
                 )
+                if (intervention.isUrgent) {
+                    Text(
+                        text = "Urgent",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 if (intervention.status == "in_progress" && intervention.elapsedTime.isNotBlank()) {
                     Text(
                         text = intervention.elapsedTime,

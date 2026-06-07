@@ -74,6 +74,16 @@ interface PendingOperationDao {
     @Query("DELETE FROM pending_operations WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query(
+        """
+        DELETE FROM pending_operations
+        WHERE interventionId = :interventionId
+        AND type = :type
+        AND status = 'pending'
+        """,
+    )
+    suspend fun deletePendingByInterventionAndType(interventionId: String, type: String)
+
     @Query("DELETE FROM pending_operations WHERE interventionId = :interventionId")
     suspend fun deleteByInterventionId(interventionId: String)
 }

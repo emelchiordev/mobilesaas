@@ -1,6 +1,7 @@
 package re.melchior.saviomobile.ui.screen.client
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,37 +12,27 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import re.melchior.saviomobile.data.local.dao.ReferentielDao
+import re.melchior.saviomobile.data.local.entity.PendingClientEntity
 import re.melchior.saviomobile.data.remote.dto.CreateClientLogementDto
 import re.melchior.saviomobile.data.remote.dto.CreateClientOccupancyDto
 import re.melchior.saviomobile.data.remote.dto.CreateTenantClientRequestDto
 import re.melchior.saviomobile.data.repository.BanAddressPick
 import re.melchior.saviomobile.data.repository.BanAddressSearchRepository
-import re.melchior.saviomobile.data.local.entity.PendingClientEntity
 import re.melchior.saviomobile.data.repository.ClientsRepository
 import re.melchior.saviomobile.data.repository.CreateClientResult
 import re.melchior.saviomobile.data.repository.PendingClientRepository
 import re.melchior.saviomobile.ui.utils.NetworkUtils
-import android.util.Log
-import java.util.UUID
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-
-enum class ClientCivilityUi(val apiValue: String, val label: String) {
-    M("M", "M."),
-    MME("Mme", "Mme"),
-}
-
-enum class HousingKindUi(val unitType: String, val unitCategory: String?, val label: String) {
-    MAISON("house", "individual", "Maison individuelle"),
-    APPARTEMENT("apartment", "individual", "Appartement"),
-    IMMEUBLE_COLLECTIF("building", "collective", "Immeuble collectif"),
-}
+import java.util.UUID
 
 enum class ClientAddressEntryMode {
     BAN,
@@ -50,7 +41,10 @@ enum class ClientAddressEntryMode {
 
 data class CreateClientUiState(
     val addressEntryMode: ClientAddressEntryMode = ClientAddressEntryMode.BAN,
-    val civility: ClientCivilityUi = ClientCivilityUi.M,
+    val civilityOptions: List<CivilityOptionUi> = emptyList(),
+    val unitTypeOptions: List<UnitTypeOptionUi> = emptyList(),
+    val selectedCivilityCode: String? = null,
+    val selectedUnitTypeCode: String? = null,
     val firstName: String = "",
     val lastName: String = "",
     val phone: String = "",
@@ -62,17 +56,21 @@ data class CreateClientUiState(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val addressComplement: String = "",
-    val housingKind: HousingKindUi = HousingKindUi.MAISON,
     val floor: String = "",
     val banSuggestions: List<BanAddressPick> = emptyList(),
     val banLoading: Boolean = false,
     val banSearchError: Boolean = false,
-    /** Adresse BAN choisie dans la liste (la validation ne doit pas se fier au seul texte du champ de recherche). */
     val isBanAddressSelected: Boolean = false,
     val isSubmitting: Boolean = false,
     val fieldErrors: Map<String, String> = emptyMap(),
     val submitError: String? = null,
-)
+) {
+    val selectedUnitType: UnitTypeOptionUi?
+        get() = unitTypeOptions.firstOrNull { it.code == selectedUnitTypeCode }
+
+    val showsFloorField: Boolean
+        get() = selectedUnitType?.showsFloorField() == true
+}
 
 sealed interface CreateClientEvent {
     data class Created(
@@ -92,6 +90,7 @@ class CreateClientViewModel @Inject constructor(
     private val banAddressSearchRepository: BanAddressSearchRepository,
     private val clientsRepository: ClientsRepository,
     private val pendingClientRepository: PendingClientRepository,
+    private val referentielDao: ReferentielDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreateClientUiState())
@@ -104,6 +103,39 @@ class CreateClientViewModel @Inject constructor(
     private var isSubmitting = false
 
     init {
+        viewModelScope.launch {
+            combine(
+                referentielDao.getCivilityOptions(),
+                referentielDao.getUnitTypes(),
+            ) { civilities, unitTypes ->
+                val civList =
+                    civilities.map { it.toUi() }
+                        .ifEmpty { ClientReferentialDefaults.civilities.map { it.toUi() } }
+                val unitList =
+                    unitTypes.map { it.toUi() }
+                        .ifEmpty { ClientReferentialDefaults.unitTypes.map { it.toUi() } }
+                civList to unitList
+            }.collect { (civList, unitList) ->
+                _uiState.update { state ->
+                    val civCode =
+                        state.selectedCivilityCode?.takeIf { code ->
+                            civList.any { it.code == code }
+                        } ?: civList.firstOrNull()?.code
+                    val unitCode =
+                        state.selectedUnitTypeCode?.takeIf { code ->
+                            unitList.any { it.code == code }
+                        } ?: unitList.firstOrNull { it.code == "house" }?.code
+                            ?: unitList.firstOrNull()?.code
+                    state.copy(
+                        civilityOptions = civList,
+                        unitTypeOptions = unitList,
+                        selectedCivilityCode = civCode,
+                        selectedUnitTypeCode = unitCode,
+                    )
+                }
+            }
+        }
+
         viewModelScope.launch {
             _addressSearchInput
                 .debounce(300)
@@ -270,8 +302,19 @@ class CreateClientViewModel @Inject constructor(
         _addressSearchInput.value = ""
     }
 
-    fun onCivilityChange(c: ClientCivilityUi) {
-        _uiState.update { it.copy(civility = c, submitError = null) }
+    fun onCivilityChange(code: String) {
+        _uiState.update { it.copy(selectedCivilityCode = code, submitError = null) }
+    }
+
+    fun onUnitTypeChange(code: String) {
+        _uiState.update { state ->
+            val unit = state.unitTypeOptions.firstOrNull { it.code == code }
+            state.copy(
+                selectedUnitTypeCode = code,
+                floor = if (unit?.showsFloorField() == true) state.floor else "",
+                submitError = null,
+            )
+        }
     }
 
     fun onFirstNameChange(v: String) {
@@ -294,16 +337,6 @@ class CreateClientViewModel @Inject constructor(
         _uiState.update { it.copy(addressComplement = v, submitError = null) }
     }
 
-    fun onHousingKindChange(k: HousingKindUi) {
-        _uiState.update {
-            it.copy(
-                housingKind = k,
-                floor = if (k != HousingKindUi.APPARTEMENT) "" else it.floor,
-                submitError = null,
-            )
-        }
-    }
-
     fun onFloorChange(v: String) {
         _uiState.update { it.copy(floor = v, submitError = null) }
     }
@@ -311,19 +344,32 @@ class CreateClientViewModel @Inject constructor(
     fun resetForm() {
         isSubmitting = false
         _addressSearchInput.value = ""
-        _uiState.value = CreateClientUiState()
+        val civs = _uiState.value.civilityOptions
+        val units = _uiState.value.unitTypeOptions
+        _uiState.value =
+            CreateClientUiState(
+                civilityOptions = civs,
+                unitTypeOptions = units,
+                selectedCivilityCode = civs.firstOrNull()?.code,
+                selectedUnitTypeCode =
+                    units.firstOrNull { it.code == "house" }?.code ?: units.firstOrNull()?.code,
+            )
     }
 
     fun submit() {
         if (isSubmitting) return
 
         val s = _uiState.value
+        val unitType = s.selectedUnitType
+        val civilityCode = s.selectedCivilityCode
         Log.d(
             "BAN",
             "submit validation: mode=${s.addressEntryMode} isBanAddressSelected=${s.isBanAddressSelected} " +
                 "street=${s.streetResolved} cp=${s.postalCode} city=${s.city}",
         )
         val errors = mutableMapOf<String, String>()
+        if (civilityCode.isNullOrBlank()) errors["civility"] = "Sélectionnez une civilité"
+        if (unitType == null) errors["unitType"] = "Sélectionnez un type de logement"
         if (s.firstName.isBlank()) errors["firstName"] = "Prénom requis"
         if (s.lastName.isBlank()) errors["lastName"] = "Nom requis"
         val street = s.streetResolved.trim()
@@ -355,12 +401,19 @@ class CreateClientViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                val resolvedUnitType = requireNotNull(unitType)
+                val resolvedCivility = requireNotNull(civilityCode)
                 Log.d(
                     TAG,
                     "POST /api/clients — logement: street=\"$street\" postal=\"${s.postalCode.trim()}\" " +
-                        "city=\"${s.city.trim()}\" latitude=${s.latitude} longitude=${s.longitude} " +
-                        "mode=${s.addressEntryMode} banSelected=${s.isBanAddressSelected}",
+                        "city=\"${s.city.trim()}\" unitType=${resolvedUnitType.code} civility=$resolvedCivility",
                 )
+                val floorValue =
+                    if (s.showsFloorField) {
+                        s.floor.trim().takeIf { it.isNotEmpty() }
+                    } else {
+                        null
+                    }
                 val logement =
                     CreateClientLogementDto(
                         street = street,
@@ -369,20 +422,15 @@ class CreateClientViewModel @Inject constructor(
                         latitude = s.latitude,
                         longitude = s.longitude,
                         addressLine2 = s.addressComplement.trim().takeIf { it.isNotEmpty() },
-                        floor =
-                            if (s.housingKind == HousingKindUi.APPARTEMENT) {
-                                s.floor.trim().takeIf { it.isNotEmpty() }
-                            } else {
-                                null
-                            },
-                        unitType = s.housingKind.unitType,
-                        unitCategory = s.housingKind.unitCategory,
+                        floor = floorValue,
+                        unitType = resolvedUnitType.code,
+                        unitCategory = resolvedUnitType.category,
                     )
                 val body =
                     CreateTenantClientRequestDto(
                         firstName = s.firstName.trim(),
                         lastName = s.lastName.trim(),
-                        civility = s.civility.apiValue,
+                        civility = resolvedCivility,
                         phone = s.phone.trim().takeIf { it.isNotEmpty() },
                         email = s.email.trim().takeIf { it.isNotEmpty() },
                         logement = logement,
@@ -399,7 +447,7 @@ class CreateClientViewModel @Inject constructor(
                             localId = localId,
                             firstName = s.firstName.trim(),
                             lastName = s.lastName.trim(),
-                            civility = s.civility.apiValue,
+                            civility = resolvedCivility,
                             phone = s.phone.trim().takeIf { it.isNotEmpty() },
                             email = s.email.trim().takeIf { it.isNotEmpty() },
                             address = street,
@@ -408,14 +456,9 @@ class CreateClientViewModel @Inject constructor(
                             zipCode = s.postalCode.trim(),
                             lat = s.latitude,
                             lng = s.longitude,
-                            unitType = s.housingKind.unitType,
-                            unitCategory = s.housingKind.unitCategory,
-                            floor =
-                                if (s.housingKind == HousingKindUi.APPARTEMENT) {
-                                    s.floor.trim().takeIf { it.isNotEmpty() }
-                                } else {
-                                    null
-                                },
+                            unitType = resolvedUnitType.code,
+                            unitCategory = resolvedUnitType.category,
+                            floor = floorValue,
                         ),
                     )
                     Log.d(TAG, "Client en file d’attente (offline) localId=$localId")
