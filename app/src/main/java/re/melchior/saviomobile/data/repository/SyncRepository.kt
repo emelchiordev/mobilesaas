@@ -32,7 +32,16 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
 import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.dto.InterventionDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
-import re.melchior.saviomobile.data.remote.dto.stableKey
+import re.melchior.saviomobile.util.buildInterventionPolicySnapshot
+import re.melchior.saviomobile.util.interventionPolicySnapshotToJson
+import re.melchior.saviomobile.util.policyOverridesToJson
+import re.melchior.saviomobile.util.policySnapshotDtoToJson
+import re.melchior.saviomobile.util.settingsToResolvedPolicies
+import re.melchior.saviomobile.util.InvoicePolicy
+import re.melchior.saviomobile.util.FieldModificationPolicy
+import re.melchior.saviomobile.util.ClosingPolicy
+import re.melchior.saviomobile.util.MobilePlanningPermissionPolicy
+import re.melchior.saviomobile.util.UserProfile
 import re.melchior.saviomobile.data.remote.dto.SettingsDto
 import re.melchior.saviomobile.util.toScheduledAtIsoRange
 import java.time.LocalDate
@@ -81,6 +90,18 @@ class SyncRepository @Inject constructor(
         )
         val now = java.time.Instant.now().toString()
         interventionDao.markAsInProgress(interventionId, now)
+        val existing = interventionDao.getInterventionByIdOnce(interventionId)
+        if (existing?.policySnapshotJson.isNullOrBlank()) {
+            val settings = settingsDao.getSettingsOnce()
+            if (settings != null) {
+                val resolved = settingsToResolvedPolicies(settings)
+                val snapshot = buildInterventionPolicySnapshot(resolved)
+                interventionDao.setPolicySnapshot(
+                    interventionId,
+                    interventionPolicySnapshotToJson(snapshot),
+                )
+            }
+        }
         snapshotEquipments(interventionId)
     }
 
@@ -205,6 +226,14 @@ class SyncRepository @Inject constructor(
         }
     }
 
+    private fun preserveLocalPolicySnapshot(
+        entity: InterventionEntity,
+        existing: InterventionEntity?,
+    ): InterventionEntity {
+        if (existing?.policySnapshotJson.isNullOrBlank()) return entity
+        return entity.copy(policySnapshotJson = existing.policySnapshotJson)
+    }
+
     // Méthode au niveau de la classe — pas à l'intérieur de pull()
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
@@ -224,7 +253,7 @@ class SyncRepository @Inject constructor(
                         "InsertAllSafe",
                         "→ overwrite conflict ${entity.id} (${existing.syncStatus})",
                     )
-                    interventionDao.insertOrReplace(entity)
+                    interventionDao.insertOrReplace(preserveLocalPolicySnapshot(entity, existing))
                     interventionDao.markLocalChanges(entity.id, false)
                     interventionDao.resetConflictResolveAttempts(entity.id)
                 }
@@ -245,7 +274,7 @@ class SyncRepository @Inject constructor(
                 }
 
                 else -> {
-                    interventionDao.insertOrReplace(entity)
+                    interventionDao.insertOrReplace(preserveLocalPolicySnapshot(entity, existing))
                 }
             }
         }
@@ -364,6 +393,7 @@ class SyncRepository @Inject constructor(
                         typeColor = h.typeColor,
                         technicianFirstName = h.technicianFirstName,
                         technicianLastName = h.technicianLastName,
+                        completedAsVe = h.completedAsVe,
                         photoKeys = if (h.photoKeys.isEmpty()) null
                         else Gson().toJson(h.photoKeys)
                     )
@@ -512,6 +542,7 @@ class SyncRepository @Inject constructor(
                 }
             }
 
+            val resolved = response.technician.resolvedPolicies
             settingsDao.save(
                 SettingsEntity(
                     id = 1,
@@ -521,9 +552,17 @@ class SyncRepository @Inject constructor(
                     technicianId = response.technician.id,
                     technicianFirstName = response.technician.firstName,
                     technicianLastName = response.technician.lastName,
+                    profile = response.technician.profile ?: UserProfile.ARTISAN_SOLO,
+                    policyOverridesJson = policyOverridesToJson(response.technician.policyOverrides),
+                    resolvedInvoices = resolved?.invoices ?: InvoicePolicy.AUTO_ISSUE,
+                    resolvedPlanning = resolved?.planning ?: "FREE",
+                    resolvedPlanningEdit = resolved?.planningEdit ?: MobilePlanningPermissionPolicy.LIMITED_EDIT,
+                    resolvedFieldModifications = resolved?.fieldModifications ?: FieldModificationPolicy.AUTO_APPLY,
+                    resolvedClosing = resolved?.closing ?: ClosingPolicy.TECH_CAN_CLOSE,
                     requireInvoiceValidation = response.technician.requireInvoiceValidation ?: false,
                     updatesRequireValidation = response.technician.updatesRequireValidation ?: false,
                     mobilePlanningPermission = response.technician.mobilePlanningPermission ?: "LIMITED_EDIT",
+                    blockMobileFollowUpResolve = response.technician.blockMobileFollowUpResolve ?: false,
                 )
             )
 
@@ -572,6 +611,9 @@ class SyncRepository @Inject constructor(
         val range = date.toScheduledAtIsoRange()
         return interventionDao.getInterventionsByDate(range.startIso, range.endIso)
     }
+
+    fun observePendingFollowUp(): Flow<List<InterventionEntity>> =
+        interventionDao.observePendingFollowUp()
 
     suspend fun hasCachedInterventionsForDate(date: LocalDate): Boolean {
         val range = date.toScheduledAtIsoRange()
@@ -725,4 +767,10 @@ private fun InterventionDto.toEntity(pulledAt: String) = InterventionEntity(
     version = version,
     followUpRequired = followUpRequired == true,
     followUpNote = followUpNote,
+    followUpStatus = followUpStatus?.trim()?.takeIf { it.isNotEmpty() } ?: if (followUpRequired == true) "pending" else "none",
+    unitVeCoverageUnavailable = unit.coverageUnavailable,
+    unitVeCoverageAttested = unit.coverageAttested,
+    unitVeCoverageExpected = unit.coverageExpected,
+    unitVeCoverageComplete = unit.coverageComplete,
+    policySnapshotJson = policySnapshotDtoToJson(policySnapshot),
 )

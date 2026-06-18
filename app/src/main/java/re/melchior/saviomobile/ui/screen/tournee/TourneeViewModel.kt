@@ -100,6 +100,19 @@ class TourneeViewModel @Inject constructor(
             initialValue = emptyList(),
         )
 
+    val followUpInterventions: StateFlow<List<InterventionEntity>> = syncRepository
+        .observePendingFollowUp()
+        .map { list ->
+            list.sortedWith { a, b ->
+                compareInterventionsForPlanning(a.toPlanningSortKey(), b.toPlanningSortKey())
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
+
     init {
         viewModelScope.launch {
             _resumeCandidate.value = syncRepository.getInProgressIntervention()

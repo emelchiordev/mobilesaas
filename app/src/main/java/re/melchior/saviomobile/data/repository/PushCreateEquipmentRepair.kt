@@ -31,6 +31,18 @@ object PushCreateEquipmentRepair {
             && !hasReplacePending
             && !hasCreateOrReplaceAnyStatus
 
+    fun payloadOrder(payloadJson: String): Int? {
+        return runCatching {
+            val gson = com.google.gson.Gson()
+            @Suppress("UNCHECKED_CAST")
+            val map = gson.fromJson(payloadJson, Map::class.java) as? Map<String, Any?> ?: return null
+            (map["order"] as? Number)?.toInt()
+        }.getOrNull()
+    }
+
+    fun matchesEquipmentOrder(payloadJson: String, equipmentOrder: Int): Boolean =
+        payloadOrder(payloadJson) == equipmentOrder
+
     fun buildPayloadFromEntity(equipment: EquipmentEntity): Map<String, Any?> = buildMap {
         put("interventionId", equipment.interventionId)
         put("unitId", equipment.unitId)

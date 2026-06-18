@@ -22,6 +22,7 @@ object PushOperationOrdering {
         "UPDATE_EQUIPMENT" to 2,
         "DELETE_EQUIPMENT" to 2,
         "UPDATE_INTERVENTION" to 2,
+        "RESOLVE_FOLLOW_UP" to 2,
         "SAVE_MEASURE" to 2,
         "SAVE_PAC_MEASURE" to 2,
         "SAVE_INSTALLATION_CHECK" to 2,

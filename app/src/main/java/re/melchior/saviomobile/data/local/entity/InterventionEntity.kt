@@ -63,4 +63,10 @@ data class InterventionEntity(
     /** Suivi terrain : intervention à reprendre / devis à faire, etc. */
     val followUpRequired: Boolean = false,
     val followUpNote: String? = null,
+    val followUpStatus: String = "none",
+    val unitVeCoverageUnavailable: Boolean? = null,
+    val unitVeCoverageAttested: Int? = null,
+    val unitVeCoverageExpected: Int? = null,
+    val unitVeCoverageComplete: Boolean? = null,
+    val policySnapshotJson: String? = null,
 )

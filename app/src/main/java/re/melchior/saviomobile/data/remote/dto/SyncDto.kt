@@ -20,6 +20,30 @@ data class PullResponseDto(
     val settings: SettingsDto? // ← nullable
 )
 
+data class ResolvedPoliciesDto(
+    @SerializedName("invoices")
+    val invoices: String? = null,
+    @SerializedName("planning")
+    val planning: String? = null,
+    @SerializedName("planningEdit")
+    val planningEdit: String? = null,
+    @SerializedName("fieldModifications")
+    val fieldModifications: String? = null,
+    @SerializedName("closing")
+    val closing: String? = null,
+)
+
+data class PolicySnapshotDto(
+    @SerializedName("invoices")
+    val invoices: String? = null,
+    @SerializedName("planning")
+    val planning: String? = null,
+    @SerializedName("fieldModifications")
+    val fieldModifications: String? = null,
+    @SerializedName("closing")
+    val closing: String? = null,
+)
+
 data class TechnicianDto(
     @SerializedName("id")
     val id: String,
@@ -29,12 +53,20 @@ data class TechnicianDto(
     val lastName: String,
     @SerializedName("phone")
     val phone: String?,
+    @SerializedName("profile")
+    val profile: String? = null,
+    @SerializedName("policyOverrides")
+    val policyOverrides: Map<String, String>? = null,
+    @SerializedName("resolvedPolicies")
+    val resolvedPolicies: ResolvedPoliciesDto? = null,
     @SerializedName("requireInvoiceValidation")
     val requireInvoiceValidation: Boolean? = null,
     @SerializedName("updatesRequireValidation")
     val updatesRequireValidation: Boolean? = null,
     @SerializedName("mobilePlanningPermission")
     val mobilePlanningPermission: String? = null,
+    @SerializedName("blockMobileFollowUpResolve")
+    val blockMobileFollowUpResolve: Boolean? = null,
 )
 
 data class InterventionDto(
@@ -78,6 +110,8 @@ data class InterventionDto(
     val followUpRequired: Boolean? = null,
     @SerializedName("followUpNote")
     val followUpNote: String? = null,
+    @SerializedName("followUpStatus")
+    val followUpStatus: String? = null,
     @SerializedName("actualTypeId")
     val actualTypeId: String? = null,
     @SerializedName("actualTypeCode")
@@ -90,6 +124,8 @@ data class InterventionDto(
     val pacMeasures: List<PacMeasurePullDto> = emptyList(),
     @SerializedName("installationCheck")
     val installationCheck: InstallationCheckPullDto? = null,
+    @SerializedName("policySnapshot")
+    val policySnapshot: PolicySnapshotDto? = null,
 )
 
 data class InstallationCheckPullDto(
@@ -211,7 +247,15 @@ data class UnitDto(
     @SerializedName("latitude")
     val latitude: Double?,
     @SerializedName("longitude")
-    val longitude: Double?
+    val longitude: Double?,
+    @SerializedName("coverageUnavailable")
+    val coverageUnavailable: Boolean? = null,
+    @SerializedName("coverageAttested")
+    val coverageAttested: Int? = null,
+    @SerializedName("coverageExpected")
+    val coverageExpected: Int? = null,
+    @SerializedName("coverageComplete")
+    val coverageComplete: Boolean? = null,
 )
 
 data class CustomerDto(

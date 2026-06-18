@@ -27,22 +27,28 @@ sealed class Screen(val route: String) {
     object CreateIntervention :
         Screen(
             "create_intervention?unitId={unitId}&customerId={customerId}" +
-                "&displayName={displayName}&addressLine={addressLine}",
+                "&displayName={displayName}&addressLine={addressLine}&defaultDate={defaultDate}",
         ) {
         fun createRoute(
             unitId: String = "",
             customerId: String = "",
             displayName: String = "",
             addressLine: String = "",
+            defaultDate: String = "",
         ): String =
             "create_intervention?" +
                 "unitId=${Uri.encode(unitId)}&" +
                 "customerId=${Uri.encode(customerId)}&" +
                 "displayName=${Uri.encode(displayName)}&" +
-                "addressLine=${Uri.encode(addressLine)}"
+                "addressLine=${Uri.encode(addressLine)}&" +
+                "defaultDate=${Uri.encode(defaultDate)}"
     }
 
-    object CreateOfflineIntervention : Screen("create_offline_intervention")
+    object CreateOfflineIntervention :
+        Screen("create_offline_intervention?defaultDate={defaultDate}") {
+        fun createRoute(defaultDate: String = ""): String =
+            "create_offline_intervention?defaultDate=${Uri.encode(defaultDate)}"
+    }
 
     object PendingOfflineInterventions : Screen("pending_offline_interventions")
 

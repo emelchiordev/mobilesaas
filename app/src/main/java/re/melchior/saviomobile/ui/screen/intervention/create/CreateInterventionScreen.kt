@@ -61,7 +61,7 @@ import re.melchior.saviomobile.util.MobilePlanningPermission
 fun CreateInterventionScreen(
     onBack: () -> Unit,
     onCreated: (scheduledAtMillis: Long) -> Unit,
-    onNavigateOffline: () -> Unit,
+    onNavigateOffline: (defaultDate: String) -> Unit,
     onCreateClient: () -> Unit = {},
     viewModel: CreateInterventionViewModel = hiltViewModel(),
 ) {
@@ -71,7 +71,7 @@ fun CreateInterventionScreen(
         viewModel.events.collect { ev ->
             when (ev) {
                 is CreateInterventionEvent.Created -> onCreated(ev.scheduledAtMillis)
-                CreateInterventionEvent.NavigateOffline -> onNavigateOffline()
+                is CreateInterventionEvent.NavigateOffline -> onNavigateOffline(ev.defaultDate)
             }
         }
     }
@@ -183,6 +183,7 @@ fun CreateInterventionScreen(
                         onIsUrgentChange = viewModel::onIsUrgentChange,
                         permission = uiState.planningPermission,
                         previewScheduledAtIso = previewScheduledAtIso,
+                        allowDateEdit = true,
                         modifier = Modifier.padding(16.dp),
                     )
                 }

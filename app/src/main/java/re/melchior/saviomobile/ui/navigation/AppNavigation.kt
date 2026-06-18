@@ -312,6 +312,10 @@ fun AppNavigation(
                     type = NavType.StringType
                     defaultValue = ""
                 },
+                navArgument("defaultDate") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
             ),
         ) {
             CreateInterventionScreen(
@@ -326,8 +330,10 @@ fun AppNavigation(
                         launchSingleTop = true
                     }
                 },
-                onNavigateOffline = {
-                    navController.navigate(Screen.CreateOfflineIntervention.route) {
+                onNavigateOffline = { defaultDate ->
+                    navController.navigate(
+                        Screen.CreateOfflineIntervention.createRoute(defaultDate = defaultDate),
+                    ) {
                         popUpTo(Screen.CreateIntervention.route) { inclusive = true }
                     }
                 },
@@ -335,7 +341,15 @@ fun AppNavigation(
             )
         }
 
-        composable(Screen.CreateOfflineIntervention.route) {
+        composable(
+            route = Screen.CreateOfflineIntervention.route,
+            arguments = listOf(
+                navArgument("defaultDate") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) {
             CreateOfflineInterventionScreen(onBack = { navController.popBackStack() })
         }
 

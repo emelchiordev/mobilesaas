@@ -12,12 +12,13 @@ import re.melchior.saviomobile.data.local.entity.PendingInterventionEntity
 fun TourneeSidebar(
     modifier: Modifier,
     interventions: List<InterventionItem>,
+    followUpItems: List<InterventionItem> = emptyList(),
     pendingCreating: List<PendingInterventionEntity> = emptyList(),
     selectedId: String?,
     onSelect: (String) -> Unit,
     onPendingCreatingClick: () -> Unit = {},
 ) {
-    val sections = groupInterventionsForPlanningSidebar(interventions)
+    val sections = groupInterventionsForPlanningSidebar(interventions, followUpItems)
 
     LazyColumn(
         modifier

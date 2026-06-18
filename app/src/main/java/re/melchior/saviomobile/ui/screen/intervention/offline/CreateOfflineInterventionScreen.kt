@@ -67,6 +67,7 @@ fun CreateOfflineInterventionScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val typeOptions by viewModel.interventionTypes.collectAsStateWithLifecycle()
+    val initialScheduledAtMillis = viewModel.initialScheduledAtMillis
 
     var clientName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
@@ -74,7 +75,9 @@ fun CreateOfflineInterventionScreen(
     var zip by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    var scheduledAtMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var scheduledAtMillis by remember(initialScheduledAtMillis) {
+        mutableLongStateOf(initialScheduledAtMillis)
+    }
     var selectedType by remember { mutableStateOf<InterventionTypeEntity?>(null) }
 
     LaunchedEffect(typeOptions) {

@@ -91,6 +91,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.ui.screen.tournee.FollowUpPendingBanner
 import re.melchior.saviomobile.ui.screen.tournee.PlanningEditSection
 import re.melchior.saviomobile.ui.screen.tournee.detailHeaderSubtitle
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
@@ -107,7 +108,7 @@ import re.melchior.saviomobile.ui.component.PhotoViewerDialog
 import re.melchior.saviomobile.ui.designsystem.SectionDivider
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
-import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ContractVeSummaryCard
 import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
@@ -404,6 +405,15 @@ fun InterventionDetailScreen(
                         }
                     }
 
+                    if (viewModel.isFollowUpPending(intervention)) {
+                        FollowUpPendingBanner(
+                            note = intervention.followUpNote,
+                            canResolve = !uiState.blockMobileFollowUpResolve,
+                            isResolving = uiState.isFollowUpResolving,
+                            onResolve = viewModel::resolveFollowUp,
+                        )
+                    }
+
                     if (refonte) {
                         SavioRefonteTabRow(
                             tabs = tabs.map { it.label },
@@ -522,6 +532,15 @@ fun InterventionDetailScreen(
                                                 }
                                             context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                                         },
+                                    )
+                                }
+                                if (uiState.showVeSummary) {
+                                    ContractVeSummaryCard(
+                                        contractInfo = uiState.contractInfo,
+                                        lastVe = uiState.lastVe,
+                                        nextVe = uiState.nextVe,
+                                        coverage = uiState.coverage,
+                                        modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                                 PlanningEditSection(

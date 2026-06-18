@@ -60,6 +60,20 @@ abstract class InterventionDao {
     @Query(
         """
         SELECT * FROM interventions
+        WHERE unitId = :unitId
+          AND (
+            (contractType IS NOT NULL AND contractType != '')
+            OR (contractRenewalDate IS NOT NULL AND contractRenewalDate != '')
+          )
+        ORDER BY scheduledAt DESC
+        LIMIT 1
+        """,
+    )
+    abstract suspend fun getLatestContractSnapshotForUnit(unitId: String): InterventionEntity?
+
+    @Query(
+        """
+        SELECT * FROM interventions
         WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
         ORDER BY scheduledAt ASC
         """,
@@ -102,6 +116,9 @@ abstract class InterventionDao {
         """,
     )
     abstract suspend fun markAsInProgress(id: String, startedAt: String)
+
+    @Query("UPDATE interventions SET policySnapshotJson = :json WHERE id = :id")
+    abstract suspend fun setPolicySnapshot(id: String, json: String)
 
     @Query(
         """
@@ -155,11 +172,34 @@ abstract class InterventionDao {
     @Query(
         """
         UPDATE interventions
-        SET followUpRequired = :required, followUpNote = :note
+        SET followUpRequired = :required,
+            followUpNote = :note,
+            followUpStatus = CASE WHEN :required = 1 THEN 'pending' ELSE 'none' END
         WHERE id = :id
         """,
     )
     abstract suspend fun saveFollowUp(id: String, required: Boolean, note: String?)
+
+    @Query(
+        """
+        UPDATE interventions
+        SET followUpRequired = 0,
+            followUpStatus = 'done',
+            followUpNote = COALESCE(:note, followUpNote)
+        WHERE id = :id
+        """,
+    )
+    abstract suspend fun resolveFollowUp(id: String, note: String?)
+
+    @Query(
+        """
+        SELECT * FROM interventions
+        WHERE followUpStatus = 'pending'
+           OR (followUpRequired = 1 AND status IN ('completed', 'pending_validation') AND followUpStatus != 'done')
+        ORDER BY scheduledAt DESC
+        """,
+    )
+    abstract fun observePendingFollowUp(): Flow<List<InterventionEntity>>
 
     @Query("UPDATE interventions SET syncStatus = 'SYNCED' WHERE id = :id")
     abstract suspend fun markAsSynced(id: String)

@@ -1,8 +1,13 @@
 package re.melchior.saviomobile.ui.screen.intervention.offline
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import re.melchior.saviomobile.ui.screen.intervention.create.buildPlanningScheduledAtMillis
+import re.melchior.saviomobile.ui.screen.intervention.create.defaultScheduledMillis
+import re.melchior.saviomobile.util.InterventionTimeSlot
+import java.time.LocalDate
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +32,10 @@ class CreateOfflineInterventionViewModel @Inject constructor(
     private val pendingInterventionRepository: PendingInterventionRepository,
     private val referentielDao: ReferentielDao,
     private val workManager: WorkManager,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+
+    val initialScheduledAtMillis: Long = initialScheduledAtFromNavArgs(savedStateHandle)
 
     val interventionTypes: StateFlow<List<InterventionTypeEntity>> =
         referentielDao.getCreateInterventionTypes()
@@ -65,6 +73,19 @@ class CreateOfflineInterventionViewModel @Inject constructor(
             )
             PendingInterventionSyncWorker.enqueue(workManager)
             _events.send(CreateOfflineInterventionEvent.Saved)
+        }
+    }
+
+    private companion object {
+        fun initialScheduledAtFromNavArgs(savedStateHandle: SavedStateHandle): Long {
+            val raw = savedStateHandle.get<String>("defaultDate")?.takeIf { it.isNotBlank() }
+            if (raw != null) {
+                runCatching { LocalDate.parse(raw) }
+                    .map { buildPlanningScheduledAtMillis(it, InterventionTimeSlot.MATIN, "") }
+                    .getOrNull()
+                    ?.let { return it }
+            }
+            return defaultScheduledMillis()
         }
     }
 }

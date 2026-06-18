@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.data.remote.dto.CustomerSearchRowDto
+import re.melchior.saviomobile.ui.screen.intervention.cloture.formatVeListHint
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.savioFieldColors
 
@@ -119,6 +120,14 @@ fun CustomerSearchResultCard(
                 .joinToString("")
                 .ifBlank { "?" }
         val incomplete = row.phone.isNullOrBlank() && row.email.isNullOrBlank()
+        val veListHint =
+            formatVeListHint(
+                veStatus = row.veStatus,
+                lastVeCompletedAt = row.lastVeCompletedAt,
+                nextVePrevisionalMonth = row.nextVePrevisionalMonth,
+                displayContractStatus = row.displayContractStatus,
+                contractStatus = row.contractStatus,
+            )
         SavioClientRow(
             name = row.resolvedDisplayName(),
             subtitle = row.formattedAddress(),
@@ -127,6 +136,8 @@ fun CustomerSearchResultCard(
             phone = row.phone,
             incomplete = incomplete,
             tag = if (incomplete) "Fiche à compléter" else null,
+            veHint = veListHint?.text,
+            veHintUrgency = veListHint?.urgency,
             showDivider = showDivider,
         )
         return

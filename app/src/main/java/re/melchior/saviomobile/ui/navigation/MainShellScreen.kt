@@ -39,11 +39,18 @@ fun MainShellScreen(
         if (pendingFocusDateMillis != null) selectedTab = 0
     }
 
+    val tourneeUiState by tourneeViewModel.uiState.collectAsStateWithLifecycle()
+    val planningDefaultDate = tourneeUiState.selectedDate.toString()
+
     val onNewIntervention: () -> Unit = {
         if (NetworkUtils.isOnline(context)) {
-            parentNavController.navigate(Screen.CreateIntervention.createRoute())
+            parentNavController.navigate(
+                Screen.CreateIntervention.createRoute(defaultDate = planningDefaultDate),
+            )
         } else {
-            parentNavController.navigate(Screen.CreateOfflineIntervention.route)
+            parentNavController.navigate(
+                Screen.CreateOfflineIntervention.createRoute(defaultDate = planningDefaultDate),
+            )
         }
     }
 
@@ -73,7 +80,9 @@ fun MainShellScreen(
                     onLogout = onLogout,
                     onNewIntervention = onNewIntervention,
                     onOfflineIntervention = {
-                        parentNavController.navigate(Screen.CreateOfflineIntervention.route)
+                        parentNavController.navigate(
+                            Screen.CreateOfflineIntervention.createRoute(defaultDate = planningDefaultDate),
+                        )
                     },
                     onPendingOfflineList = {
                         parentNavController.navigate(Screen.PendingOfflineInterventions.route)
@@ -102,7 +111,9 @@ fun MainShellScreen(
                     onLogout = onLogout,
                     onNewIntervention = onNewIntervention,
                     onOfflineIntervention = {
-                        parentNavController.navigate(Screen.CreateOfflineIntervention.route)
+                        parentNavController.navigate(
+                            Screen.CreateOfflineIntervention.createRoute(defaultDate = planningDefaultDate),
+                        )
                     },
                     onPendingOfflineList = {
                         parentNavController.navigate(Screen.PendingOfflineInterventions.route)

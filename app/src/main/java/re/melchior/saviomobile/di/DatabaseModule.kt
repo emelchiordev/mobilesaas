@@ -70,6 +70,9 @@ import re.melchior.saviomobile.data.local.database.MIGRATION_56_57
 import re.melchior.saviomobile.data.local.database.MIGRATION_57_58
 import re.melchior.saviomobile.data.local.database.MIGRATION_58_59
 import re.melchior.saviomobile.data.local.database.MIGRATION_59_60
+import re.melchior.saviomobile.data.local.database.MIGRATION_60_61
+import re.melchior.saviomobile.data.local.database.MIGRATION_61_62
+import re.melchior.saviomobile.data.local.database.MIGRATION_62_63
 import re.melchior.saviomobile.data.local.dao.PendingClientDao
 import re.melchior.saviomobile.data.local.database.SavioDatabase
 import re.melchior.saviomobile.data.local.dao.PendingInterventionDao
@@ -145,6 +148,9 @@ object DatabaseModule {
             MIGRATION_57_58,
             MIGRATION_58_59,
             MIGRATION_59_60,
+            MIGRATION_60_61,
+            MIGRATION_61_62,
+            MIGRATION_62_63,
         )
         .fallbackToDestructiveMigration()
         .build()

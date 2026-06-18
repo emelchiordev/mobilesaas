@@ -18,6 +18,11 @@ data class CustomerSearchRowDto(
     @SerializedName("street") val street: String,
     @SerializedName("city") val city: String,
     @SerializedName("postalCode") val postalCode: String,
+    @SerializedName("veStatus") val veStatus: String? = null,
+    @SerializedName("lastVeCompletedAt") val lastVeCompletedAt: String? = null,
+    @SerializedName("nextVePrevisionalMonth") val nextVePrevisionalMonth: String? = null,
+    @SerializedName("displayContractStatus") val displayContractStatus: String? = null,
+    @SerializedName("contractStatus") val contractStatus: String? = null,
 ) {
     fun resolvedDisplayName(): String =
         customerDisplayName.ifBlank {

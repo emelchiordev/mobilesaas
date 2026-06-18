@@ -31,6 +31,7 @@ fun ContractVeSummaryCard(
     contractInfo: ContractSummary?,
     lastVe: LastVeSummary?,
     nextVe: NextVeDisplay?,
+    coverage: VeCoverageSummary? = null,
     today: LocalDate = LocalDate.now(),
     modifier: Modifier = Modifier,
 ) {
@@ -74,13 +75,22 @@ fun ContractVeSummaryCard(
                 SavioClotureKvRow(
                     label = "Dernier entretien",
                     value = "${formatClosureDate(lastVe.completedAt)}$tech",
-                    showDivider = nextVe != null,
+                    showDivider = formatVeCoverageHint(coverage) != null || nextVe != null,
                 )
             } else {
                 SavioClotureKvRow(
                     label = "Dernier entretien",
                     value = "Aucun enregistré",
                     isMuted = true,
+                    showDivider = formatVeCoverageHint(coverage) != null || nextVe != null,
+                )
+            }
+
+            formatVeCoverageHint(coverage)?.let { label ->
+                SavioClotureKvRow(
+                    label = "Couverture attestations",
+                    value = label,
+                    isWarning = (coverage?.attested ?: 0) < (coverage?.expected ?: 0),
                     showDivider = nextVe != null,
                 )
             }
@@ -157,6 +167,19 @@ fun ContractVeSummaryCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontStyle = FontStyle.Italic,
+                )
+            }
+
+            formatVeCoverageHint(coverage)?.let { label ->
+                SummaryRow(
+                    label = "Couverture attestations",
+                    value = label,
+                    valueColor =
+                        if ((coverage?.attested ?: 0) < (coverage?.expected ?: 0)) {
+                            Color(0xFFE65100)
+                        } else {
+                            null
+                        },
                 )
             }
 

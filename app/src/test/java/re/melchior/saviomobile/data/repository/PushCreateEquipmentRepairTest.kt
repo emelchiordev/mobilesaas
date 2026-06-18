@@ -81,6 +81,14 @@ class PushCreateEquipmentRepairTest {
     }
 
     @Test
+    fun matchesEquipmentOrder_fromPayloadJson() {
+        val payload =
+            """{"interventionId":"int-1","order":101,"unitId":"unit-1"}"""
+        assertTrue(PushCreateEquipmentRepair.matchesEquipmentOrder(payload, 101))
+        assertFalse(PushCreateEquipmentRepair.matchesEquipmentOrder(payload, 102))
+    }
+
+    @Test
     fun buildPayload_includes_intervention_and_unit() {
         val equipment = EquipmentEntity(
             interventionId = "int-1",

@@ -5,10 +5,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import re.melchior.saviomobile.data.local.dao.InterventionDao
 import re.melchior.saviomobile.data.local.dao.InvoiceDao
 import re.melchior.saviomobile.data.local.dao.InvoiceLineDao
 import re.melchior.saviomobile.data.local.dao.InvoicePaymentDao
 import re.melchior.saviomobile.data.local.dao.PendingUpdateDao
+import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.InvoiceEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.InvoicePaymentEntity
@@ -23,6 +25,8 @@ import java.util.Base64
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import re.melchior.saviomobile.util.parseInterventionPolicySnapshot
+import re.melchior.saviomobile.util.requiresInvoiceValidation
 
 sealed class SubmitInvoiceFullPayloadResult {
     data class Ok(
@@ -53,7 +57,9 @@ class InvoiceRepository @Inject constructor(
     private val invoiceDao: InvoiceDao,
     private val invoiceLineDao: InvoiceLineDao,
     private val invoicePaymentDao: InvoicePaymentDao,
-    private val pendingUpdateDao: PendingUpdateDao
+    private val pendingUpdateDao: PendingUpdateDao,
+    private val settingsDao: SettingsDao,
+    private val interventionDao: InterventionDao,
 ) {
 
     private val gson = Gson()
@@ -526,12 +532,24 @@ class InvoiceRepository @Inject constructor(
                 consumptionLines = buildConsumptionLinesPayload(invoice.id),
             )
         }
+        val intervention = interventionDao.getInterventionByIdOnce(interventionId)
+        val snapshot = parseInterventionPolicySnapshot(intervention?.policySnapshotJson)
+        val requireValidation =
+            if (snapshot != null) {
+                requiresInvoiceValidation(snapshot)
+            } else {
+                settingsDao.getSettingsOnce()?.requireInvoiceValidation == true
+            }
+        val closureSubmitStatus = resolveClosureSubmitStatus(refreshed, requireValidation)
+        val closureDocumentType = resolveClosureDocumentType(refreshed)
         return buildSubmitInvoiceFullPayloadForPush(
             invoiceId = invoice.id,
             interventionId = interventionId,
             unitId = unitId,
             technicianId = technicianId,
             requireLocalHamonFile = true,
+            closureSubmitStatus = closureSubmitStatus,
+            closureDocumentType = closureDocumentType,
         )
     }
 
@@ -566,6 +584,10 @@ class InvoiceRepository @Inject constructor(
         technicianId: String? = null,
         /** true = clôture : fichier Hamon obligatoire en local. false = push : tenter l’API (idempotence). */
         requireLocalHamonFile: Boolean = false,
+        /** Statut SUBMIT_INVOICE_FULL à la clôture (ignore le statut local prématuré invoiced). */
+        closureSubmitStatus: String? = null,
+        /** Type document explicite à la clôture (quote ou invoice). */
+        closureDocumentType: String? = null,
     ): SubmitInvoiceFullPayloadResult {
         val invoice = invoiceDao.getById(invoiceId) ?: return SubmitInvoiceFullPayloadResult.InvoiceNotFound
         val resolvedInterventionId =
@@ -591,16 +613,27 @@ class InvoiceRepository @Inject constructor(
         }
         val resolvedUnitId = unitId?.trim().orEmpty()
         val resolvedTechId = technicianId?.trim().orEmpty()
+        val submitStatus = closureSubmitStatus?.trim()?.takeIf { it.isNotEmpty() } ?: invoice.status
+        val documentType =
+            closureDocumentType?.trim()?.takeIf { it.isNotEmpty() }
+                ?: resolveClosureDocumentType(invoice)
         val payload =
             buildSyncPayload(
                 interventionId = resolvedInterventionId,
                 unitId = resolvedUnitId,
                 technicianId = resolvedTechId,
-                status = invoice.status,
+                type = documentType,
+                status = submitStatus,
                 invoiceId = invoiceId,
                 acceptedAt = invoice.acceptedAt,
-                invoicedAt = invoice.invoicedAt,
-                paidAt = invoice.paidAt,
+                invoicedAt =
+                    when (submitStatus) {
+                        "invoiced", "paid" ->
+                            invoice.invoicedAt?.trim()?.takeIf { it.isNotEmpty() }
+                                ?: Instant.now().toString()
+                        else -> if (closureSubmitStatus != null) null else invoice.invoicedAt
+                    },
+                paidAt = if (closureSubmitStatus != null && submitStatus != "paid") null else invoice.paidAt,
                 devisSignatureBase64 = devisSignatureBase64,
                 hamonSignatureBase64 = hamonSignatureBase64,
                 hamonRequested = hamonRequested,
@@ -636,6 +669,7 @@ class InvoiceRepository @Inject constructor(
         interventionId: String,
         unitId: String,
         technicianId: String,
+        type: String,
         status: String,
         invoiceId: String,
         acceptedAt: String? = null,
@@ -672,6 +706,7 @@ class InvoiceRepository @Inject constructor(
             "interventionId" to interventionId,
             "unitId" to unitId,
             "technicianId" to technicianId,
+            "type" to type,
             "status" to status,
             "acceptedAt" to acceptedAt,
             "invoicedAt" to invoicedAt,

@@ -94,6 +94,9 @@ fun TourneeCardTablet(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                if (intervention.followUpPending) {
+                    FollowUpBadge()
+                }
                 if (intervention.status == "in_progress" && intervention.elapsedTime.isNotBlank()) {
                     Text(
                         text = intervention.elapsedTime,

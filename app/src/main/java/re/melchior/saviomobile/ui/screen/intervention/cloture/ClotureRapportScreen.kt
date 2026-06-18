@@ -205,6 +205,7 @@ fun ClotureRapportScreen(
                         contractInfo = uiState.contractInfo,
                         lastVe = uiState.lastVe,
                         nextVe = uiState.nextVe,
+                        coverage = uiState.coverage,
                     )
 
                     ClosureConsequencesCard(consequences = uiState.consequences)
@@ -428,6 +429,7 @@ private fun ClotureRapportScreenLegacy(
                     contractInfo = uiState.contractInfo,
                     lastVe = uiState.lastVe,
                     nextVe = uiState.nextVe,
+                    coverage = uiState.coverage,
                 )
 
                 ClosureConsequencesCard(consequences = uiState.consequences)

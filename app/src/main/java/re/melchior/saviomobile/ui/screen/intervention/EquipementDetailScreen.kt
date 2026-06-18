@@ -81,8 +81,11 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioRefonte
-import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
 import re.melchior.saviomobile.ui.theme.SavioUi
+import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
+import re.melchior.saviomobile.util.attestableFrom
+import re.melchior.saviomobile.util.isPartOfHybrideAsPac
+import re.melchior.saviomobile.util.suggestedAttestationType
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
@@ -97,6 +100,9 @@ import re.melchior.saviomobile.ui.refonte.SavioEquipSpecRow
 import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+import re.melchior.saviomobile.util.attestableFrom
+import re.melchior.saviomobile.util.isPartOfHybrideAsPac
+import re.melchior.saviomobile.util.suggestedAttestationType
 import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
@@ -287,59 +293,31 @@ fun EquipementDetailScreen(
                             eq.hybridePacEquipmentId == equipment.id
                     }
                 }
-                val isPacEquipment = typeCodeNorm == "PAC" ||
-                    typeCodeNorm == "PAC A/E" ||
-                    typeCodeNorm == "PAC A/A"
-                val isPartOfHybrideAsPac = chauffageHybride != null && isPacEquipment
-
-                val suggestedAttestationType = remember(
-                    equipment.typeCode,
-                    equipment.energyCode,
-                    equipment.hybridePacEquipmentId,
-                ) {
-                    val tc = (equipment.typeCode ?: "").uppercase()
-                    val ec = (equipment.energyCode ?: "").uppercase()
-                    val isHybride = equipment.hybridePacEquipmentId?.isNotBlank() == true
-                    when {
-                        tc == "CHAUDIERE" && isHybride ->
-                            if (ec.contains("FIOUL") || ec.contains("FUEL")) {
-                                "PAC_HYBRIDE_FIOUL"
-                            } else {
-                                "PAC_HYBRIDE_GAZ"
-                            }
-
-                        tc == "CHAUDIERE" ->
-                            when {
-                                ec.contains("FIOUL") || ec.contains("FUEL") || tc.contains("FIOUL") -> "FIOUL"
-                                ec.contains("GAZ") || tc.contains("GAZ") -> "GAZ"
-                                else -> null
-                            }
-
-                        tc.contains("PAC") &&
-                            (tc.contains("HYBRIDE") || ec.contains("GAZ")) &&
-                            ec.contains("GAZ") -> "PAC_HYBRIDE_GAZ"
-
-                        tc.contains("PAC") &&
-                            (tc.contains("HYBRIDE") ||
-                                ec.contains("FIOUL") ||
-                                ec.contains("FUEL")) &&
-                            (ec.contains("FIOUL") || ec.contains("FUEL")) -> "PAC_HYBRIDE_FIOUL"
-
-                        tc.contains("PAC") ||
-                            tc.contains("THERMODYNAMIQUE") -> "PAC"
-
-                        ec.contains("GAZ") ||
-                            tc.contains("GAZ") -> "GAZ"
-
-                        ec.contains("FIOUL") ||
-                            ec.contains("FUEL") ||
-                            tc.contains("FIOUL") -> "FIOUL"
-
-                        ec.contains("BOIS") ||
-                            tc.contains("BOIS") -> "BOIS"
-
-                        else -> null
+                val unitAttestableInputs = remember(interventionEquipments) {
+                    interventionEquipments.map { eq ->
+                        attestableFrom(
+                            id = eq.id,
+                            typeCode = eq.typeCode,
+                            energyCode = eq.energyCode,
+                            hybridePacEquipmentId = eq.hybridePacEquipmentId,
+                        )
                     }
+                }
+                val equipmentAttestable = remember(equipment) {
+                    attestableFrom(
+                        id = equipment.id,
+                        typeCode = equipment.typeCode,
+                        energyCode = equipment.energyCode,
+                        hybridePacEquipmentId = equipment.hybridePacEquipmentId,
+                    )
+                }
+                val isPartOfHybrideAsPac =
+                    remember(equipmentAttestable, unitAttestableInputs) {
+                        isPartOfHybrideAsPac(equipmentAttestable, unitAttestableInputs)
+                    }
+
+                val suggestedAttestationType = remember(equipmentAttestable) {
+                    suggestedAttestationType(equipmentAttestable)
                 }
 
                 var showAttestationPicker by remember(equipment.id) {

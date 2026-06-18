@@ -47,6 +47,12 @@ interface PendingOperationDao {
     @Query("SELECT * FROM pending_operations WHERE id = :id AND type = :type LIMIT 1")
     suspend fun getByIdAndType(id: String, type: String): PendingOperationEntity?
 
+    @Query("SELECT * FROM pending_operations WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): PendingOperationEntity?
+
+    @Query("UPDATE pending_operations SET id = :newId WHERE id = :oldId")
+    suspend fun rekeyId(oldId: String, newId: String)
+
     @Query(
         """
         SELECT * FROM pending_operations

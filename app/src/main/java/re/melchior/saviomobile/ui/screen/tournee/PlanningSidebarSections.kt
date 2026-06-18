@@ -17,6 +17,7 @@ import re.melchior.saviomobile.util.InterventionTimeSlot
 import re.melchior.saviomobile.util.compareInterventionsForPlanning
 
 enum class PlanningSidebarSection(val title: String) {
+    A_REVOIR("À revoir"),
     URGENT("Urgent"),
     MATIN("Matin"),
     APRES_MIDI("Après-midi"),
@@ -25,13 +26,21 @@ enum class PlanningSidebarSection(val title: String) {
 
 fun groupInterventionsForPlanningSidebar(
     items: List<InterventionItem>,
+    followUpItems: List<InterventionItem> = emptyList(),
 ): List<Pair<PlanningSidebarSection, List<InterventionItem>>> {
     fun sorted(list: List<InterventionItem>): List<InterventionItem> =
         list.sortedWith { a, b ->
             compareInterventionsForPlanning(a.toPlanningSortKey(), b.toPlanningSortKey())
         }
 
+    val dayIds = items.map { it.id }.toSet()
+    val followUpOnly = sorted(
+        followUpItems.filter { it.followUpPending && it.id !in dayIds },
+    )
+
     return buildList {
+        if (followUpOnly.isNotEmpty()) add(PlanningSidebarSection.A_REVOIR to followUpOnly)
+
         val urgent = sorted(items.filter { it.isUrgent })
         if (urgent.isNotEmpty()) add(PlanningSidebarSection.URGENT to urgent)
 
@@ -74,6 +83,8 @@ fun PlanningSectionHeader(
 @Composable
 private fun sectionColors(section: PlanningSidebarSection): Pair<Color, Color> =
     when (section) {
+        PlanningSidebarSection.A_REVOIR ->
+            Color(0xFFFFEDD5) to Color(0xFF9A3412)
         PlanningSidebarSection.URGENT ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         PlanningSidebarSection.MATIN ->

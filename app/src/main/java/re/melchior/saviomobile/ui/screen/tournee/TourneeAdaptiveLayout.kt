@@ -31,6 +31,7 @@ import re.melchior.saviomobile.ui.navigation.Screen
 fun TourneeAdaptiveLayout(
     modifier: Modifier = Modifier.fillMaxSize(),
     interventions: List<InterventionItem>,
+    followUpItems: List<InterventionItem> = emptyList(),
     pendingCreating: List<PendingInterventionEntity> = emptyList(),
     onPendingCreatingClick: () -> Unit = {},
     detailNavController: NavHostController,
@@ -54,7 +55,9 @@ fun TourneeAdaptiveLayout(
 ) {
     val navEntry by detailNavController.currentBackStackEntryAsState()
     val selectedId = navEntry?.arguments?.getString("interventionId")
-    val selectedIntervention = selectedId?.let { id -> interventions.find { it.id == id } }
+    val selectedIntervention = selectedId?.let { id ->
+        interventions.find { it.id == id } ?: followUpItems.find { it.id == id }
+    }
     val remainingCount = interventions.count { !it.isCompleted }
 
     Column(modifier.fillMaxSize()) {
@@ -102,6 +105,7 @@ fun TourneeAdaptiveLayout(
                 TourneeSidebar(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     interventions = interventions,
+                    followUpItems = followUpItems,
                     pendingCreating = pendingCreating,
                     selectedId = selectedId,
                     onSelect = { id ->

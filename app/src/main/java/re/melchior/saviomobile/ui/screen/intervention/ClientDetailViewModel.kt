@@ -16,6 +16,12 @@ import re.melchior.saviomobile.data.remote.api.CustomerApi
 import re.melchior.saviomobile.data.remote.api.DocumentApi
 import re.melchior.saviomobile.data.repository.PendingUpdateRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.data.repository.UnitVeRepository
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ContractSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.LastVeSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.NextVeDisplay
+import re.melchior.saviomobile.ui.screen.intervention.cloture.VeCoverageSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.formatVeCoverageLabel
 import javax.inject.Inject
 
 data class ClientDetailUiState(
@@ -40,6 +46,10 @@ data class ClientDetailUiState(
     val addressLine2: String = "",
     val updatesRequireValidation: Boolean = false,
     val contextInterventionId: String = "",
+    val contractInfo: ContractSummary? = null,
+    val lastVe: LastVeSummary? = null,
+    val nextVe: NextVeDisplay? = null,
+    val coverage: VeCoverageSummary? = null,
 ) {
     val titleName: String
         get() {
@@ -62,11 +72,19 @@ data class ClientDetailUiState(
             contextInterventionId.isBlank() &&
                 resolvedUnitId.isNotBlank() &&
                 !isEditing
+
+    val showVeSummary: Boolean
+        get() =
+            contractInfo != null ||
+                lastVe != null ||
+                nextVe != null ||
+                formatVeCoverageLabel(coverage) != null
 }
 
 @HiltViewModel
 class ClientDetailViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val unitVeRepository: UnitVeRepository,
     private val pendingUpdateRepository: PendingUpdateRepository,
     private val settingsDao: SettingsDao,
     private val customerApi: CustomerApi,
@@ -110,6 +128,7 @@ class ClientDetailViewModel @Inject constructor(
                 val history = syncRepository.getHistoryForUnit(navUnitId)
                 _uiState.update { it.copy(history = history) }
                 loadHistoryPhotoUrls(history)
+                loadVeContext(navUnitId, interventionHint = null)
             }
 
             try {
@@ -138,11 +157,32 @@ class ClientDetailViewModel @Inject constructor(
                 syncRepository.getInterventionByCustomerId(customerId).collect { intervention ->
                     if (intervention == null) {
                         _uiState.update { it.copy(isLoading = false) }
+                        if (navUnitId.isNotBlank()) {
+                            loadVeContext(navUnitId, interventionHint = null)
+                        }
                         return@collect
                     }
                     applyInterventionData(intervention)
                 }
             }
+        }
+    }
+
+    private suspend fun loadVeContext(
+        unitId: String,
+        interventionHint: InterventionEntity?,
+    ) {
+        val context = unitVeRepository.getVeContextForUnit(
+            unitId = unitId,
+            interventionHint = interventionHint,
+        )
+        _uiState.update {
+            it.copy(
+                contractInfo = context.contractInfo,
+                lastVe = context.lastVe,
+                nextVe = context.nextVe,
+                coverage = context.coverage,
+            )
         }
     }
 
@@ -184,6 +224,10 @@ class ClientDetailViewModel @Inject constructor(
                 isLoading = false,
             )
         }
+        loadVeContext(
+            unitId = effectiveUnitId.ifBlank { intervention.unitId },
+            interventionHint = intervention,
+        )
     }
 
     private fun loadHistoryPhotoUrls(history: List<InterventionHistoryEntity>) {

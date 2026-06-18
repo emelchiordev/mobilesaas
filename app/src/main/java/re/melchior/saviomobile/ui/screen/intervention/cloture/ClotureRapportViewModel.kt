@@ -25,6 +25,7 @@ import re.melchior.saviomobile.data.local.dao.ReferentielDao
 import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.local.entity.AnomalyDraftEntity
 import re.melchior.saviomobile.data.local.entity.AnomalyTypeEntity
+import re.melchior.saviomobile.data.local.entity.AttestationVeEntity
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InstallationCheckEntity
@@ -38,10 +39,12 @@ import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
 import re.melchior.saviomobile.observability.SavioSyncSentry
 import re.melchior.saviomobile.data.repository.InstallationCheckRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.data.repository.UnitVeRepository
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.utils.NetworkUtils
 import re.melchior.saviomobile.util.GAS_PIPE_EXPIRED_ANOMALY_CODE
 import re.melchior.saviomobile.util.SavioTimeZone
+import re.melchior.saviomobile.util.attestableFrom
 import re.melchior.saviomobile.util.formatScheduledAtDateReadable
 import re.melchior.saviomobile.util.isGasPipeExpiredWithoutAnomaly
 import java.time.LocalDate
@@ -60,6 +63,7 @@ data class ClotureRapportUiState(
     val contractInfo: ContractSummary? = null,
     val lastVe: LastVeSummary? = null,
     val nextVe: NextVeDisplay? = null,
+    val coverage: VeCoverageSummary? = null,
     val consequences: List<ClosureConsequence> = emptyList(),
     val anomalyDrafts: List<AnomalyDraftEntity> = emptyList(),
     val anomalyCatalog: List<AnomalyTypeEntity> = emptyList(),
@@ -122,6 +126,7 @@ private const val REPORT_GENERATION_OFFLINE =
 class ClotureRapportViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val syncRepository: SyncRepository,
+    private val unitVeRepository: UnitVeRepository,
     private val anomalyDraftRepository: AnomalyDraftRepository,
     private val installationCheckRepository: InstallationCheckRepository,
     private val equipmentDao: EquipmentDao,
@@ -144,15 +149,23 @@ class ClotureRapportViewModel @Inject constructor(
 
     private var updatesRequireValidation: Boolean = false
     private var hasLocalAttestationVe: Boolean = false
+    private var baseVeCoverage: VeCoverageSummary? = null
+    private var latestAttestations: List<AttestationVeEntity> = emptyList()
     private var installationCheck: InstallationCheckEntity? = null
     private var reportTechnicalFactsCount: Int = 0
 
     init {
         viewModelScope.launch {
             updatesRequireValidation = settingsDao.getSettingsOnce()?.updatesRequireValidation ?: false
-            hasLocalAttestationVe = attestationVeDao.countForIntervention(interventionId) > 0
-            refreshDerivedState()
             refreshReportGenerationGate()
+        }
+        viewModelScope.launch {
+            attestationVeDao.getByIntervention(interventionId).collect { attestations ->
+                latestAttestations = attestations
+                hasLocalAttestationVe = attestations.isNotEmpty()
+                refreshDerivedState()
+                refreshReportGenerationGate()
+            }
         }
         loadIntervention()
         loadCloseTypes()
@@ -218,6 +231,7 @@ class ClotureRapportViewModel @Inject constructor(
         viewModelScope.launch {
             equipmentDao.getRootEquipmentsByInterventionOnce(interventionId).let { roots ->
                 _uiState.update { it.copy(rootEquipments = roots) }
+                refreshClosureCoverage()
             }
         }
     }
@@ -286,18 +300,36 @@ class ClotureRapportViewModel @Inject constructor(
     }
 
     private suspend fun loadUnitVeContext(intervention: InterventionEntity) {
-        val lastHistory = syncRepository.getLastCompletedVeForUnit(intervention.unitId)
-        val lastVe = lastVeSummaryFrom(lastHistory)
-        val contract = contractSummaryFrom(intervention)
-        val nextDate = computeNextVeDate(lastVe, contract?.renewalDate)
-        val nextVe = nextDate?.let { nextVeDisplay(it) }
+        val context = unitVeRepository.getVeContextForUnit(
+            unitId = intervention.unitId,
+            interventionHint = intervention,
+        )
+        baseVeCoverage = context.coverage
         _uiState.update {
             it.copy(
-                contractInfo = contract,
-                lastVe = lastVe,
-                nextVe = nextVe,
+                contractInfo = context.contractInfo,
+                lastVe = context.lastVe,
+                nextVe = context.nextVe,
             )
         }
+        refreshClosureCoverage()
+    }
+
+    private fun refreshClosureCoverage() {
+        val state = _uiState.value
+        val closureIsVe = state.selectedCloseTypes.any { it.isVeType }
+        val equipmentInputs = state.rootEquipments.map { it.toAttestableInput() }
+        val orderById = state.rootEquipments.associate { it.id to it.order }
+        val coverage =
+            projectClosureCoverage(
+                base = baseVeCoverage,
+                closureIsVe = closureIsVe,
+                localAttestationEquipmentOrders =
+                    latestAttestations.map { it.equipmentOrder }.toSet(),
+                unitEquipments = equipmentInputs,
+                equipmentOrderForInput = { input -> orderById[input.id] },
+            )
+        _uiState.update { it.copy(coverage = coverage) }
     }
 
     private fun loadCloseTypes() {
@@ -349,6 +381,7 @@ class ClotureRapportViewModel @Inject constructor(
                 ),
             )
         }
+        refreshClosureCoverage()
     }
 
     fun toggleCloseType(type: InterventionTypeDto) {
@@ -666,3 +699,11 @@ private fun humanReadableApiError(e: Throwable): String {
     }
     return e.message ?: "Erreur réseau"
 }
+
+private fun EquipmentEntity.toAttestableInput() =
+    attestableFrom(
+        id = id,
+        typeCode = typeCode,
+        energyCode = energyCode,
+        hybridePacEquipmentId = hybridePacEquipmentId,
+    )

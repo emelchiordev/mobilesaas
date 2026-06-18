@@ -12,13 +12,23 @@ import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
+import re.melchior.saviomobile.data.local.dao.SettingsDao
 import re.melchior.saviomobile.data.remote.api.DocumentApi
+import re.melchior.saviomobile.data.repository.FollowUpResolveOutcome
+import re.melchior.saviomobile.data.repository.FollowUpResolveRepository
 import re.melchior.saviomobile.data.repository.InvoiceRepository
 import re.melchior.saviomobile.data.repository.MobileSyncOrchestrator
 import re.melchior.saviomobile.data.repository.PlanningUpdateOutcome
 import re.melchior.saviomobile.data.repository.PlanningUpdateRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
+import re.melchior.saviomobile.data.repository.UnitVeRepository
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ContractSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.LastVeSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.NextVeDisplay
+import re.melchior.saviomobile.ui.screen.intervention.cloture.VeCoverageSummary
+import re.melchior.saviomobile.ui.screen.intervention.cloture.formatVeCoverageLabel
 import re.melchior.saviomobile.util.MobilePlanningPermission
+import re.melchior.saviomobile.util.isFollowUpPending
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -31,16 +41,32 @@ data class InterventionDetailUiState(
     val isSyncRetrying: Boolean = false,
     val pendingInvoiceHamonIssue: Boolean = false,
     val planningPermission: MobilePlanningPermission = MobilePlanningPermission.LIMITED_EDIT,
+    val blockMobileFollowUpResolve: Boolean = false,
+    val isFollowUpResolving: Boolean = false,
     val isPlanningSaving: Boolean = false,
-    val errorMessage: String? = null
-)
+    val errorMessage: String? = null,
+    val contractInfo: ContractSummary? = null,
+    val lastVe: LastVeSummary? = null,
+    val nextVe: NextVeDisplay? = null,
+    val coverage: VeCoverageSummary? = null,
+) {
+    val showVeSummary: Boolean
+        get() =
+            contractInfo != null ||
+                lastVe != null ||
+                nextVe != null ||
+                formatVeCoverageLabel(coverage) != null
+}
 
 @HiltViewModel
 class InterventionDetailViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
+    private val unitVeRepository: UnitVeRepository,
     private val invoiceRepository: InvoiceRepository,
     private val mobileSyncOrchestrator: MobileSyncOrchestrator,
     private val planningUpdateRepository: PlanningUpdateRepository,
+    private val followUpResolveRepository: FollowUpResolveRepository,
+    private val settingsDao: SettingsDao,
     private val documentApi: DocumentApi,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -57,6 +83,10 @@ class InterventionDetailViewModel @Inject constructor(
             _uiState.update {
                 it.copy(planningPermission = planningUpdateRepository.currentPermission())
             }
+            val settings = settingsDao.getSettingsOnce()
+            _uiState.update {
+                it.copy(blockMobileFollowUpResolve = settings?.blockMobileFollowUpResolve == true)
+            }
         }
     }
 
@@ -67,9 +97,27 @@ class InterventionDetailViewModel @Inject constructor(
                     _uiState.update { it.copy(intervention = intervention) }
                     intervention?.let {
                         loadHistory(it.unitId)
+                        loadVeContext(it)
                         refreshInvoiceSyncState()
                     }
                 }
+        }
+    }
+
+    private fun loadVeContext(intervention: InterventionEntity) {
+        viewModelScope.launch {
+            val context = unitVeRepository.getVeContextForUnit(
+                unitId = intervention.unitId,
+                interventionHint = intervention,
+            )
+            _uiState.update {
+                it.copy(
+                    contractInfo = context.contractInfo,
+                    lastVe = context.lastVe,
+                    nextVe = context.nextVe,
+                    coverage = context.coverage,
+                )
+            }
         }
     }
 
@@ -171,4 +219,29 @@ class InterventionDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isPlanningSaving = false) }
         }
     }
+
+    fun resolveFollowUp() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isFollowUpResolving = true, errorMessage = null) }
+            when (val outcome = followUpResolveRepository.resolveFollowUp(interventionId)) {
+                FollowUpResolveOutcome.Success -> Unit
+                FollowUpResolveOutcome.BlockedBySettings ->
+                    _uiState.update {
+                        it.copy(errorMessage = "Clôture du suivi réservée au bureau")
+                    }
+                FollowUpResolveOutcome.NotPending ->
+                    _uiState.update {
+                        it.copy(errorMessage = "Aucun suivi « À revoir » en attente")
+                    }
+                is FollowUpResolveOutcome.Error ->
+                    _uiState.update { it.copy(errorMessage = outcome.message) }
+            }
+            _uiState.update { it.copy(isFollowUpResolving = false) }
+        }
+    }
+
+    fun isFollowUpPending(intervention: InterventionEntity?): Boolean =
+        intervention?.let {
+            isFollowUpPending(it.followUpStatus, it.followUpRequired, it.status)
+        } == true
 }

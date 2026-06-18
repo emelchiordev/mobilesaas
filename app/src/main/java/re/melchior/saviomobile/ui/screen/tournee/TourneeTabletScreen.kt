@@ -74,6 +74,7 @@ fun TourneeTabletScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val interventions by viewModel.interventions.collectAsStateWithLifecycle()
+    val followUpInterventions by viewModel.followUpInterventions.collectAsStateWithLifecycle()
     val pendingCreating by viewModel.pendingCreatingForDate.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
@@ -117,7 +118,8 @@ fun TourneeTabletScreen(
     }
 
     val items = interventions.map { it.toInterventionItem() }
-    val hasListContent = items.isNotEmpty() || pendingCreating.isNotEmpty()
+    val followUpItems = followUpInterventions.map { it.toInterventionItem() }
+    val hasListContent = items.isNotEmpty() || followUpItems.isNotEmpty() || pendingCreating.isNotEmpty()
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { msg ->
@@ -260,6 +262,7 @@ fun TourneeTabletScreen(
                             .weight(1f)
                             .fillMaxWidth(),
                         interventions = items,
+                        followUpItems = followUpItems,
                         pendingCreating = pendingCreating,
                         onPendingCreatingClick = { showPendingCreationSheet = true },
                         detailNavController = detailNavController,

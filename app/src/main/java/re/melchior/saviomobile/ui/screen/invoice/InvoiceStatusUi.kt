@@ -19,7 +19,7 @@ fun normalizeInvoiceStatus(raw: String): InvoiceMobileStatus =
     when (raw.lowercase(Locale.ROOT)) {
         "pending_validation" -> InvoiceMobileStatus.PENDING_VALIDATION
         "accepted" -> InvoiceMobileStatus.ACCEPTED
-        "invoiced", "validated", "partial" -> InvoiceMobileStatus.INVOICED
+        "invoiced", "validated", "issued", "partial" -> InvoiceMobileStatus.INVOICED
         "paid" -> InvoiceMobileStatus.PAID
         else -> InvoiceMobileStatus.DRAFT
     }

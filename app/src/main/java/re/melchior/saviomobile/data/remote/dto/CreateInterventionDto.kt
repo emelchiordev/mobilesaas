@@ -10,6 +10,7 @@ data class CreateInterventionRequestDto(
     @SerializedName("timeSlot") val timeSlot: String? = null,
     @SerializedName("isUrgent") val isUrgent: Boolean? = null,
     @SerializedName("notes") val notes: String?,
+    @SerializedName("createdFrom") val createdFrom: String = "mobile",
 )
 
 data class CreateInterventionResponseDto(

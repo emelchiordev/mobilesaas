@@ -95,7 +95,7 @@ import re.melchior.saviomobile.data.local.entity.UnitTypeEntity
         AnomalyDraftEntity::class,
         InstallationCheckEntity::class,
     ],
-    version = 60,
+    version = 63,
     exportSchema = true
 )
 abstract class SavioDatabase : RoomDatabase() {

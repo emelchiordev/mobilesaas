@@ -16,4 +16,12 @@ data class SettingsEntity(
     val requireInvoiceValidation: Boolean = false,
     val updatesRequireValidation: Boolean = false,
     val mobilePlanningPermission: String = "LIMITED_EDIT",
+    val blockMobileFollowUpResolve: Boolean = false,
+    val profile: String = "ARTISAN_SOLO",
+    val policyOverridesJson: String = "{}",
+    val resolvedInvoices: String = "AUTO_ISSUE",
+    val resolvedPlanning: String = "FREE",
+    val resolvedPlanningEdit: String = "FULL_EDIT",
+    val resolvedFieldModifications: String = "AUTO_APPLY",
+    val resolvedClosing: String = "TECH_CAN_CLOSE",
 )

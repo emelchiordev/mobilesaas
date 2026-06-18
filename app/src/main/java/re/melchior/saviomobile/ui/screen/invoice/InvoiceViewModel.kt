@@ -61,9 +61,6 @@ class InvoiceViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val _requireInvoiceValidation = MutableStateFlow(false)
-    val requireInvoiceValidation: StateFlow<Boolean> = _requireInvoiceValidation.asStateFlow()
-
     private val _showEmitConfirmDialog = MutableStateFlow(false)
     val showEmitConfirmDialog: StateFlow<Boolean> = _showEmitConfirmDialog.asStateFlow()
 
@@ -86,8 +83,6 @@ class InvoiceViewModel @Inject constructor(
     fun loadInvoice(interventionId: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            _requireInvoiceValidation.value =
-                settingsDao.getSettingsOnce()?.requireInvoiceValidation == true
             invoiceRepository.refreshInvoiceFromServer(interventionId)
             billingJob?.cancel()
             billingJob =
@@ -385,6 +380,7 @@ class InvoiceViewModel @Inject constructor(
                 .onSuccess {
                     _showEmitAdjustmentsSheet.value = false
                     _invoice.value = invoiceRepository.getInvoiceById(invoiceId)
+                    _emitSuccessMessage.value = "Facture émise"
                 }
                 .onFailure {
                     _error.value = it.message ?: "Erreur lors de l'émission"

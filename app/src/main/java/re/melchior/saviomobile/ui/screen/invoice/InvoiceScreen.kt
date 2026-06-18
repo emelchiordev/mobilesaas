@@ -104,7 +104,6 @@ fun InvoiceScreen(
     val payments by viewModel.payments.collectAsStateWithLifecycle()
     val remainingAmount by viewModel.remainingAmount.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val requireInvoiceValidation by viewModel.requireInvoiceValidation.collectAsStateWithLifecycle()
     val showEmitConfirmDialog by viewModel.showEmitConfirmDialog.collectAsStateWithLifecycle()
     val showEmitAdjustmentsSheet by viewModel.showEmitAdjustmentsSheet.collectAsStateWithLifecycle()
     val emitSuccessMessage by viewModel.emitSuccessMessage.collectAsStateWithLifecycle()
@@ -271,7 +270,7 @@ fun InvoiceScreen(
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        Button(
+                        OutlinedButton(
                             onClick = onNavigateToDevisSignature,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = lines.isNotEmpty(),
@@ -344,22 +343,12 @@ fun InvoiceScreen(
                         }
                         InvoiceSignaturesBlock(invoice = inv)
                         Spacer(Modifier.height(12.dp))
-                        if (requireInvoiceValidation) {
-                            Button(
-                                onClick = { viewModel.submitForValidation() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isLoading,
-                            ) {
-                                Text("Soumettre pour validation")
-                            }
-                        } else {
-                            Button(
-                                onClick = { viewModel.onEmitInvoiceClicked() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isLoading,
-                            ) {
-                                Text("Convertir en facture")
-                            }
+                        Button(
+                            onClick = { viewModel.onEmitInvoiceClicked() },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isLoading,
+                        ) {
+                            Text("Convertir en facture")
                         }
                     }
                 }

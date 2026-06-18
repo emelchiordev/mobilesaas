@@ -118,17 +118,16 @@ class PushRepository @Inject constructor(
             try {
                 android.util.Log.i(LOG_TAG, "push() — début (construction de la file)")
                 val pendingInterventions = interventionDao.getPendingSyncOnce()
-                val planningInterventionIds = pendingOperationDao.getPending()
-                    .filter { it.type == "UPDATE_INTERVENTION" }
-                    .map { it.interventionId }
+                val pendingOpInterventionIds = pendingOperationDao.getPending()
+                    .mapNotNull { it.interventionId?.takeIf { id -> id.isNotBlank() } }
                     .toSet()
                 val pushableInterventionIds =
-                    pendingInterventions.map { it.id }.toSet() + planningInterventionIds
+                    pendingInterventions.map { it.id }.toSet() + pendingOpInterventionIds
 
                 if (pushableInterventionIds.isEmpty()) {
                     android.util.Log.i(
                         LOG_TAG,
-                        "rien à pousser : aucune intervention clôturée (COMPLETED) ni replanification en attente",
+                        "rien à pousser : aucune intervention clôturée (COMPLETED) ni opération en attente",
                     )
                     return PushResult.NothingToPush
                 }
@@ -196,15 +195,25 @@ class PushRepository @Inject constructor(
 
                 pendingInterventions.forEach { intervention ->
                     intervention.startedAt?.let { startedAt ->
+                        val payload = mutableMapOf(
+                            "interventionId" to intervention.id,
+                            "startedAt" to startedAt,
+                        )
+                        intervention.policySnapshotJson?.let { json ->
+                            runCatching {
+                                val pushGson = com.google.gson.Gson()
+                                @Suppress("UNCHECKED_CAST")
+                                val map =
+                                    pushGson.fromJson(json, Map::class.java) as Map<String, Any>
+                                payload["policySnapshot"] = map
+                            }
+                        }
                         startOps.add(
                             PushOperationDto(
                                 id = "op-start-${intervention.id}",
                                 type = "START_INTERVENTION",
                                 occurredAt = startedAt,
-                                payload = mapOf(
-                                    "interventionId" to intervention.id,
-                                    "startedAt" to startedAt
-                                )
+                                payload = payload,
                             )
                         )
                     }
@@ -313,14 +322,16 @@ class PushRepository @Inject constructor(
 
                 for ((tier, tierOps) in tiers) {
                     val tierOpsForSend =
-                        if (isClosurePush && tier == 3) {
-                            refreshCloseOperationsForClosureTier(
-                                tierOps = tierOps,
-                                pendingInterventions = pendingInterventions,
-                                pushableInterventionIds = pushableInterventionIds,
-                            )
-                        } else {
-                            tierOps
+                        when {
+                            isClosurePush && tier == 3 ->
+                                refreshCloseOperationsForClosureTier(
+                                    tierOps = tierOps,
+                                    pendingInterventions = pendingInterventions,
+                                    pushableInterventionIds = pushableInterventionIds,
+                                )
+                            isClosurePush && tier > 1 ->
+                                refreshTierOpsPayloadsFromRoom(tierOps)
+                            else -> tierOps
                         }
                     val operationsToSend =
                         attachClientKnownVersions(tierOpsForSend, versionByIntervention)
@@ -999,8 +1010,18 @@ class PushRepository @Inject constructor(
             for (equipment in equipments) {
                 val existingCreate =
                     pendingOperationDao.getByIdAndType(equipment.id, "CREATE_EQUIPMENT")
+                        ?: findCreateOrReplaceOpForEquipmentOrder(
+                            interventionId,
+                            equipment.order,
+                            "CREATE_EQUIPMENT",
+                        )
                 val existingReplace =
                     pendingOperationDao.getByIdAndType(equipment.id, "REPLACE_EQUIPMENT")
+                        ?: findCreateOrReplaceOpForEquipmentOrder(
+                            interventionId,
+                            equipment.order,
+                            "REPLACE_EQUIPMENT",
+                        )
 
                 if (
                     PushCreateEquipmentRepair.shouldRequeueSentEquipmentOp(
@@ -1149,6 +1170,9 @@ class PushRepository @Inject constructor(
         equipmentDao.updateEquipmentId(interventionId, localId, serverId)
         coldMeasureDao.updateEquipmentId(interventionId, localId, serverId)
         remapEquipmentIdInPendingPayloads(interventionId, localId, serverId)
+        if (pendingOp.type == "CREATE_EQUIPMENT" || pendingOp.type == "REPLACE_EQUIPMENT") {
+            pendingOperationDao.rekeyId(localId, serverId)
+        }
         android.util.Log.i(
             LOG_TAG,
             "equipmentId remappé $localId → $serverId (intervention=$interventionId)",
@@ -1180,6 +1204,33 @@ class PushRepository @Inject constructor(
             }
         }
     }
+
+    private suspend fun refreshTierOpsPayloadsFromRoom(
+        tierOps: List<PushOperationDto>,
+    ): List<PushOperationDto> {
+        val gson = Gson()
+        val payloadById =
+            tierOps.mapNotNull { op ->
+                if (!PushClosurePayloadRefresh.isRoomBackedPendingOp(op)) return@mapNotNull null
+                val pending = pendingOperationDao.getById(op.id) ?: return@mapNotNull null
+                @Suppress("UNCHECKED_CAST")
+                val payload =
+                    gson.fromJson(pending.payload, Map::class.java) as? Map<String, Any?>
+                        ?: return@mapNotNull null
+                op.id to payload
+            }.toMap()
+        return PushClosurePayloadRefresh.refreshTierOpsPayloads(tierOps, payloadById)
+    }
+
+    private suspend fun findCreateOrReplaceOpForEquipmentOrder(
+        interventionId: String,
+        equipmentOrder: Int,
+        type: String,
+    ): PendingOperationEntity? =
+        pendingOperationDao.getByInterventionIdAndType(interventionId, type)
+            .firstOrNull { op ->
+                PushCreateEquipmentRepair.matchesEquipmentOrder(op.payload, equipmentOrder)
+            }
 
     private fun findClosurePushFailure(results: List<PushResultDto>): PushResultDto? =
         results.firstOrNull { PushOperationOrdering.isClosurePushFailureStatus(it.status) }

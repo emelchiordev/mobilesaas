@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import re.melchior.saviomobile.ui.screen.intervention.cloture.ContractVeSummaryCard
 import re.melchior.saviomobile.ui.component.ClientHistoryEmbeddedSection
 import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioClientInfoCard
@@ -362,23 +363,34 @@ private fun ClientDetailInfoSections(
         ClientValidationBanner()
     }
     if (refonte) {
-        SavioClientInfoCard(
-            addressLine = addressLine,
-            addressLine2 = uiState.addressLine2,
-            floor = uiState.floor,
-            doorCode = uiState.doorCode,
-            phone = uiState.phone,
-            email = uiState.email,
-            notes = uiState.notes,
-            isEditing = uiState.isEditing,
-            emailError = uiState.emailError,
-            onAddressLine2Change = viewModel::onAddressLine2Change,
-            onFloorChange = viewModel::onFloorChange,
-            onDoorCodeChange = viewModel::onDoorCodeChange,
-            onPhoneChange = viewModel::onPhoneChange,
-            onEmailChange = viewModel::onEmailChange,
-            onNotesChange = viewModel::onNotesChange,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SavioClientInfoCard(
+                addressLine = addressLine,
+                addressLine2 = uiState.addressLine2,
+                floor = uiState.floor,
+                doorCode = uiState.doorCode,
+                phone = uiState.phone,
+                email = uiState.email,
+                notes = uiState.notes,
+                isEditing = uiState.isEditing,
+                emailError = uiState.emailError,
+                onAddressLine2Change = viewModel::onAddressLine2Change,
+                onFloorChange = viewModel::onFloorChange,
+                onDoorCodeChange = viewModel::onDoorCodeChange,
+                onPhoneChange = viewModel::onPhoneChange,
+                onEmailChange = viewModel::onEmailChange,
+                onNotesChange = viewModel::onNotesChange,
+            )
+            if (uiState.showVeSummary) {
+                ContractVeSummaryCard(
+                    contractInfo = uiState.contractInfo,
+                    lastVe = uiState.lastVe,
+                    nextVe = uiState.nextVe,
+                    coverage = uiState.coverage,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
         return
     }
     ClientAccessSection(
@@ -402,6 +414,15 @@ private fun ClientDetailInfoSections(
         onEmailChange = viewModel::onEmailChange,
         onNotesChange = viewModel::onNotesChange,
     )
+    if (uiState.showVeSummary) {
+        ContractVeSummaryCard(
+            contractInfo = uiState.contractInfo,
+            lastVe = uiState.lastVe,
+            nextVe = uiState.nextVe,
+            coverage = uiState.coverage,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable

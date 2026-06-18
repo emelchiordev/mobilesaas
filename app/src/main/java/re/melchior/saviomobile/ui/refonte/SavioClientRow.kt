@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import re.melchior.saviomobile.ui.screen.intervention.cloture.VeHintUrgency
 import re.melchior.saviomobile.ui.theme.SavioRefonte
 
 @Composable
@@ -38,6 +39,8 @@ fun SavioClientRow(
     modifier: Modifier = Modifier,
     phone: String? = null,
     tag: String? = null,
+    veHint: String? = null,
+    veHintUrgency: VeHintUrgency? = null,
     incomplete: Boolean = false,
     showDivider: Boolean = true,
 ) {
@@ -109,6 +112,15 @@ fun SavioClientRow(
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
+                veHint?.let { hint ->
+                    Text(
+                        text = hint,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = veHintColor(veHintUrgency),
+                        modifier = Modifier.padding(top = if (tag != null) 4.dp else 6.dp),
+                    )
+                }
             }
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
@@ -126,3 +138,11 @@ fun SavioClientRow(
         }
     }
 }
+
+private fun veHintColor(urgency: VeHintUrgency?): Color =
+    when (urgency) {
+        VeHintUrgency.OK -> Color(0xFF1F7A4C)
+        VeHintUrgency.SOON -> Color(0xFFB7791F)
+        VeHintUrgency.OVERDUE -> Color(0xFFC0392B)
+        VeHintUrgency.NEUTRAL, null -> SavioRefonte.Muted
+    }
