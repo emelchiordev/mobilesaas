@@ -31,6 +31,15 @@ interface EquipmentDao {
     @Query(
         """
         SELECT * FROM equipments
+        WHERE interventionId IN (:interventionIds)
+        ORDER BY interventionId ASC, `order` ASC, id ASC
+        """,
+    )
+    suspend fun getEquipmentsForInterventions(interventionIds: List<String>): List<EquipmentEntity>
+
+    @Query(
+        """
+        SELECT * FROM equipments
         WHERE interventionId = :interventionId
         AND (parent_equipment_id IS NULL OR parent_equipment_id = '')
         ORDER BY `order` ASC, id ASC

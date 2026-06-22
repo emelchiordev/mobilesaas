@@ -328,6 +328,20 @@ fun EquipementDetailScreen(
                     typeCodeNorm in setOf("PAC", "PAC A/E", "PAC A/A", "CLIMATISEUR")
                 }
 
+                val attestationNavOnPacCard =
+                    refonte &&
+                    isPacOrClim &&
+                    !isReplaced &&
+                    !isBruleur &&
+                    !isPartOfHybrideAsPac
+
+                val attestationNavSubtitle =
+                    if (suggestedAttestationType != null) {
+                        "Suggestion : ${attestationTypeLabel(suggestedAttestationType)}"
+                    } else {
+                        "Choisir le type d'attestation"
+                    }
+
                 val showMeasures = remember(equipment.typeCode) {
                     listOf(
                         "CHAUDIERE",
@@ -796,7 +810,7 @@ fun EquipementDetailScreen(
                             SavioRefonteCard {
                                 SavioEquipNavRow(
                                     icon = Icons.Filled.AcUnit,
-                                    title = "Mesures froid",
+                                    title = "Mesures PAC",
                                     subtitle = "Saisie terrain",
                                     onClick = {
                                         onPacMeasureClick(
@@ -818,6 +832,15 @@ fun EquipementDetailScreen(
                                     },
                                     showDivider = true,
                                 )
+                                if (attestationNavOnPacCard) {
+                                    SavioEquipNavRow(
+                                        icon = Icons.Filled.Assignment,
+                                        title = "Attestation d'entretien",
+                                        subtitle = attestationNavSubtitle,
+                                        onClick = { showAttestationPicker = true },
+                                        showDivider = true,
+                                    )
+                                }
                             }
                         }
                     } else if (showMeasures && !isReplaced) {
@@ -912,7 +935,7 @@ fun EquipementDetailScreen(
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "Mesures froid",
+                                            "Mesures PAC",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Medium,
                                         )
@@ -1042,22 +1065,17 @@ fun EquipementDetailScreen(
                                 }
                             }
                             }
-                        } else if (refonte) {
+                        } else if (refonte && !attestationNavOnPacCard) {
                             SavioRefonteCard {
                                 SavioEquipNavRow(
                                     icon = Icons.Filled.Assignment,
                                     title = "Attestation d'entretien",
-                                    subtitle =
-                                        if (suggestedAttestationType != null) {
-                                            "Suggestion : ${attestationTypeLabel(suggestedAttestationType)}"
-                                        } else {
-                                            "Choisir le type d'attestation"
-                                        },
+                                    subtitle = attestationNavSubtitle,
                                     onClick = { showAttestationPicker = true },
                                     showDivider = false,
                                 )
                             }
-                        } else {
+                        } else if (!refonte) {
                             Surface(
                                 onClick = { showAttestationPicker = true },
                                 modifier = Modifier.fillMaxWidth(),

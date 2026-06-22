@@ -3,6 +3,7 @@ package re.melchior.saviomobile.ui.screen.tournee
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.util.InterventionTimeSlot
 import re.melchior.saviomobile.util.PlanningSortKey
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
 import re.melchior.saviomobile.util.formatPlanningLabel
 import re.melchior.saviomobile.util.formatScheduledAtTime
 import re.melchior.saviomobile.util.isFollowUpPending
@@ -28,6 +29,7 @@ data class InterventionItem(
     val conflictResolveAttempts: Int = 0,
     val conflictBannerText: String? = null,
     val followUpPending: Boolean = false,
+    val energyBadges: List<UnitEnergySummaryItem> = emptyList(),
 )
 
 fun InterventionItem.toPlanningSortKey(): PlanningSortKey =
@@ -48,7 +50,9 @@ fun InterventionEntity.detailHeaderSubtitle(): String {
     return parts.joinToString(" · ")
 }
 
-fun InterventionEntity.toInterventionItem(): InterventionItem {
+fun InterventionEntity.toInterventionItem(
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
+): InterventionItem {
     val slot = parseInterventionTimeSlot(timeSlot)
     val planningLabel = formatPlanningLabel(slot, scheduledAt)
     val time = formatScheduledAtTime(scheduledAt)
@@ -86,6 +90,7 @@ fun InterventionEntity.toInterventionItem(): InterventionItem {
         conflictResolveAttempts = conflictResolveAttempts,
         conflictBannerText = conflictBannerText(),
         followUpPending = isFollowUpPending(),
+        energyBadges = energyBadges,
     )
 }
 

@@ -95,8 +95,7 @@ import re.melchior.saviomobile.ui.screen.tournee.FollowUpPendingBanner
 import re.melchior.saviomobile.ui.screen.tournee.PlanningEditSection
 import re.melchior.saviomobile.ui.screen.tournee.detailHeaderSubtitle
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
-import re.melchior.saviomobile.util.formatScheduledAtDate
-import re.melchior.saviomobile.util.formatScheduledAtTime
+import re.melchior.saviomobile.util.formatCompletedAtDisplay
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.PhotoEntity
 import re.melchior.saviomobile.ui.component.ClientHistoryEmbeddedSection
@@ -108,6 +107,10 @@ import re.melchior.saviomobile.ui.component.PhotoViewerDialog
 import re.melchior.saviomobile.ui.designsystem.SectionDivider
 import re.melchior.saviomobile.ui.refonte.SavioHeaderStyle
 import re.melchior.saviomobile.ui.refonte.SavioInterventionDetailContent
+import re.melchior.saviomobile.util.UnitEnergyEquipmentInput
+import re.melchior.saviomobile.util.UnitEnergySummary
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
+import re.melchior.saviomobile.ui.refonte.UnitEnergyBadges
 import re.melchior.saviomobile.ui.screen.intervention.cloture.ContractVeSummaryCard
 import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
@@ -149,6 +152,18 @@ fun InterventionDetailScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val refonte = useSavioRefonteUi()
+
+    val energyBadges =
+        remember(uiState.equipments) {
+            UnitEnergySummary.compute(
+                uiState.equipments.map {
+                    UnitEnergyEquipmentInput(
+                        energyCode = it.energyCode,
+                        parentEquipmentId = it.parentEquipmentId,
+                    )
+                },
+            )
+        }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -486,6 +501,7 @@ fun InterventionDetailScreen(
                                 if (refonte) {
                                     SavioInterventionDetailContent(
                                         intervention = intervention,
+                                        energyBadges = energyBadges,
                                         onClientClick = onClientClick,
                                         onCallClick = { phone ->
                                             context.startActivity(
@@ -511,6 +527,7 @@ fun InterventionDetailScreen(
                                 } else {
                                     DetailPage(
                                         intervention = intervention,
+                                        energyBadges = energyBadges,
                                         onClientClick = onClientClick,
                                         onCallClick = { phone ->
                                             context.startActivity(
@@ -822,6 +839,7 @@ private fun DetailPage(
     onClientClick: (customerId: String) -> Unit,
     onCallClick: (String) -> Unit,
     onNavigateClick: () -> Unit,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -867,6 +885,10 @@ private fun DetailPage(
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                    if (energyBadges.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        UnitEnergyBadges(items = energyBadges)
                     }
                 }
             }
@@ -1211,7 +1233,7 @@ private fun RapportPage(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "${formatScheduledAtDate(completedAt)} à ${formatScheduledAtTime(completedAt)}",
+                                text = formatCompletedAtDisplay(completedAt),
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold
                             )

@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.runCatching
 
 sealed class PushResult {
     data class Success(
@@ -195,7 +196,7 @@ class PushRepository @Inject constructor(
 
                 pendingInterventions.forEach { intervention ->
                     intervention.startedAt?.let { startedAt ->
-                        val payload = mutableMapOf(
+                        val payload = mutableMapOf<String, Any?>(
                             "interventionId" to intervention.id,
                             "startedAt" to startedAt,
                         )
@@ -883,7 +884,13 @@ class PushRepository @Inject constructor(
         ctx: PushApplyContext,
         result: PushResultDto,
     ) {
-        val pendingOp = ctx.pendingOps.find { it.id == result.operationId }
+        val opId =
+            result.operationId
+                ?: run {
+                    android.util.Log.w(LOG_TAG, "push result ok sans operationId — ignoré")
+                    return
+                }
+        val pendingOp = ctx.pendingOps.find { it.id == opId }
         if (pendingOp?.type == "CREATE_EQUIPMENT" || pendingOp?.type == "REPLACE_EQUIPMENT") {
             remapEquipmentIdFromPushResult(result, pendingOp)
         }
@@ -894,34 +901,34 @@ class PushRepository @Inject constructor(
             pendingOperationDao.updateStatus(it.id, "sent")
         }
         applyVersionAfterVersionedOp(result, pendingOp?.type)
-        ctx.dirtyColdMeasures.find { it.id == result.operationId }?.let {
+        ctx.dirtyColdMeasures.find { it.id == opId }?.let {
             coldMeasureRepository.markClean(it.id)
         }
         ctx.dirtyMeasures.find {
-            result.operationId == it.interventionId + "_measure_" + it.equipmentOrder
+            opId == it.interventionId + "_measure_" + it.equipmentOrder
         }?.let {
             measureRepository.markClean(it.interventionId, it.equipmentOrder)
         }
         ctx.dirtyPacMeasures.find {
-            result.operationId == it.interventionId + "_pac_measure_" + it.equipmentOrder
+            opId == it.interventionId + "_pac_measure_" + it.equipmentOrder
         }?.let {
             pacMeasureRepository.markClean(it.interventionId, it.equipmentOrder)
         }
         ctx.dirtyAttestations.find {
-            result.operationId ==
+            opId ==
                 it.interventionId + "_attestation_" + it.equipmentOrder + "_" + it.type
         }?.let {
             attestationVeRepository.markClean(it.interventionId, it.equipmentOrder, it.type)
         }
         ctx.dirtyInstallationChecks.find {
-            result.operationId == InstallationCheckRepository.pendingOpId(it.interventionId)
+            opId == InstallationCheckRepository.pendingOpId(it.interventionId)
         }?.let {
             installationCheckRepository.markClean(it.interventionId)
         }
 
         when {
-            result.operationId.startsWith("op-close-") -> {
-                val interventionId = result.operationId.removePrefix("op-close-")
+            opId.startsWith("op-close-") -> {
+                val interventionId = opId.removePrefix("op-close-")
                 interventionDao.markAsSynced(interventionId)
                 ctx.dirtyColdMeasures
                     .filter { it.interventionId == interventionId }
@@ -950,17 +957,17 @@ class PushRepository @Inject constructor(
                     .forEach { installationCheckRepository.markClean(it.interventionId) }
                 applyInvoiceCloseResult(interventionId, result.resultPayload())
             }
-            result.operationId.startsWith("op-complete-") -> {
-                val interventionId = result.operationId.removePrefix("op-complete-")
+            opId.startsWith("op-complete-") -> {
+                val interventionId = opId.removePrefix("op-complete-")
                 interventionDao.markAsSynced(interventionId)
             }
-            result.operationId.startsWith("op-update-") -> {
-                val updateId = result.operationId.removePrefix("op-update-")
+            opId.startsWith("op-update-") -> {
+                val updateId = opId.removePrefix("op-update-")
                 pendingUpdateDao.markAsSynced(updateId)
             }
-            result.operationId.startsWith("op-update-invoice-") -> {
+            opId.startsWith("op-update-invoice-") -> {
                 val targetInvoiceId =
-                    ctx.pendingUpdates.find { it.id == result.operationId }?.targetId
+                    ctx.pendingUpdates.find { it.id == opId }?.targetId
                 result.resultPayload()?.let { data ->
                     val serverStatus = data["invoiceStatus"] as? String
                     val serverId = data["invoiceId"] as? String
@@ -984,7 +991,7 @@ class PushRepository @Inject constructor(
                         }
                     }
                 }
-                pendingUpdateDao.markAsSynced(result.operationId)
+                pendingUpdateDao.markAsSynced(opId)
             }
         }
     }

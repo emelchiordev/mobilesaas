@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.ui.theme.SavioInterventionColors
 import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
 import re.melchior.saviomobile.util.formatPlanningLabel
 import re.melchior.saviomobile.util.parseInterventionTimeSlot
 
@@ -47,13 +48,17 @@ fun SavioInterventionDetailContent(
     onClientClick: (String) -> Unit,
     onCallClick: (String) -> Unit,
     onNavigateClick: () -> Unit,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        SavioInterventionMetaCard(intervention = intervention)
+        SavioInterventionMetaCard(
+            intervention = intervention,
+            energyBadges = energyBadges,
+        )
         if (!intervention.notes.isNullOrBlank()) {
             SavioInterventionNotesCard(notes = intervention.notes)
         }
@@ -70,7 +75,10 @@ fun SavioInterventionDetailContent(
 }
 
 @Composable
-private fun SavioInterventionMetaCard(intervention: InterventionEntity) {
+private fun SavioInterventionMetaCard(
+    intervention: InterventionEntity,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
+) {
     SavioRefonteCard {
         Column(
             modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
@@ -100,6 +108,10 @@ private fun SavioInterventionMetaCard(intervention: InterventionEntity) {
                 color = SavioRefonte.Navy,
                 fontWeight = FontWeight.Medium,
             )
+            if (energyBadges.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                UnitEnergyBadges(items = energyBadges)
+            }
         }
     }
 }

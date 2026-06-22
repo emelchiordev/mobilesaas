@@ -120,6 +120,7 @@ fun TourneeScreen(
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val pendingOfflineInterventionCount by viewModel.pendingOfflineInterventionCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
+    val energyBadgesByInterventionId by viewModel.energyBadgesByInterventionId.collectAsStateWithLifecycle()
     val pendingCreating by viewModel.pendingCreatingForDate.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
@@ -450,6 +451,7 @@ fun TourneeScreen(
                             if (refonte) {
                                 SavioPlanningCard(
                                     intervention = intervention,
+                                    energyBadges = energyBadgesByInterventionId[intervention.id].orEmpty(),
                                     onClick = { onInterventionClick(intervention.id) },
                                 )
                             } else {

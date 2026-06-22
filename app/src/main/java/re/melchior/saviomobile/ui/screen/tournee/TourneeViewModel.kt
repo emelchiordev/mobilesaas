@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
 import re.melchior.saviomobile.util.compareInterventionsForPlanning
 import re.melchior.saviomobile.util.toPlanningSortKey
 import kotlinx.coroutines.launch
@@ -113,7 +115,20 @@ class TourneeViewModel @Inject constructor(
             initialValue = emptyList(),
         )
 
+    private val _energyBadgesByInterventionId =
+        MutableStateFlow<Map<String, List<UnitEnergySummaryItem>>>(emptyMap())
+    val energyBadgesByInterventionId: StateFlow<Map<String, List<UnitEnergySummaryItem>>> =
+        _energyBadgesByInterventionId.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            combine(interventions, followUpInterventions) { main, followUp ->
+                (main + followUp).map { it.id }.distinct()
+            }.collect { ids ->
+                _energyBadgesByInterventionId.value =
+                    syncRepository.computeEnergyBadgesByInterventionId(ids)
+            }
+        }
         viewModelScope.launch {
             _resumeCandidate.value = syncRepository.getInProgressIntervention()
         }

@@ -42,9 +42,9 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +71,8 @@ import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.refonte.SavioActiveInterventionDetailBody
+import re.melchior.saviomobile.util.UnitEnergyEquipmentInput
+import re.melchior.saviomobile.util.UnitEnergySummary
 import re.melchior.saviomobile.ui.refonte.SavioEquipListHeader
 import re.melchior.saviomobile.ui.refonte.SavioEquipListItem
 import re.melchior.saviomobile.ui.refonte.SavioEquipNavRow
@@ -107,6 +109,17 @@ fun InterventionDetailTab(
     val intervention = uiState.intervention ?: return
     val refonte = useSavioRefonteUi()
     val context = LocalContext.current
+    val energyBadges =
+        remember(uiState.equipments) {
+            UnitEnergySummary.compute(
+                uiState.equipments.map {
+                    UnitEnergyEquipmentInput(
+                        energyCode = it.energyCode,
+                        parentEquipmentId = it.parentEquipmentId,
+                    )
+                },
+            )
+        }
 
     if (refonte) {
         LazyColumn(
@@ -125,6 +138,7 @@ fun InterventionDetailTab(
             item {
                 SavioActiveInterventionDetailBody(
                     intervention = intervention,
+                    energyBadges = energyBadges,
                     onClientClick = onClientClick,
                     onCallClick = { phone ->
                         context.startActivity(

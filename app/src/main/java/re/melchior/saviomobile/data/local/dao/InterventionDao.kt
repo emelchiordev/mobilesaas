@@ -193,6 +193,22 @@ abstract class InterventionDao {
 
     @Query(
         """
+        UPDATE interventions
+        SET followUpRequired = :required,
+            followUpNote = :note,
+            followUpStatus = :status
+        WHERE id = :id
+        """,
+    )
+    abstract suspend fun updateFollowUpFromPull(
+        id: String,
+        required: Boolean,
+        note: String?,
+        status: String,
+    )
+
+    @Query(
+        """
         SELECT * FROM interventions
         WHERE followUpStatus = 'pending'
            OR (followUpRequired = 1 AND status IN ('completed', 'pending_validation') AND followUpStatus != 'done')

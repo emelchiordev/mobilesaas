@@ -72,7 +72,7 @@ fun PacMeasureScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Mesures froid") },
+                title = { Text("Mesures PAC") },
                 navigationIcon = {
                     IconButton(onClick = ::leave) {
                         Icon(

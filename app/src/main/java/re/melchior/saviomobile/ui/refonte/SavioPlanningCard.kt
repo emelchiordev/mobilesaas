@@ -33,6 +33,7 @@ import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.ui.screen.tournee.FollowUpBadge
 import re.melchior.saviomobile.ui.screen.tournee.InterventionItem
 import re.melchior.saviomobile.ui.screen.tournee.toInterventionItem
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
 import re.melchior.saviomobile.ui.theme.SavioDimens
 import re.melchior.saviomobile.ui.theme.SavioRefonte
 
@@ -128,6 +129,10 @@ fun SavioPlanningCard(
                     letterSpacing = (-0.01).sp,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                UnitEnergyBadges(items = item.energyBadges)
+                if (item.energyBadges.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
                 Text(
                     text = item.clientName,
                     fontSize = 14.sp,
@@ -187,9 +192,10 @@ fun SavioPlanningCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
 ) {
     SavioPlanningCard(
-        item = intervention.toInterventionItem(),
+        item = intervention.toInterventionItem(energyBadges = energyBadges),
         onClick = onClick,
         modifier = modifier,
         selected = selected,

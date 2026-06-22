@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
 import re.melchior.saviomobile.ui.theme.SavioInterventionColors
 import re.melchior.saviomobile.ui.theme.SavioRefonte
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -49,6 +50,7 @@ fun SavioActiveInterventionDetailBody(
     onClientClick: (String) -> Unit,
     onCallClick: (String) -> Unit,
     onNavigateClick: () -> Unit,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     SavioRefonteCard(modifier = modifier) {
@@ -59,6 +61,14 @@ fun SavioActiveInterventionDetailBody(
                 subtitle = formatInterventionTime(intervention.scheduledAt),
                 showDivider = true,
             )
+
+            if (energyBadges.isNotEmpty()) {
+                UnitEnergyBadges(
+                    items = energyBadges,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+                SavioRowLine()
+            }
 
             intervention.customerId?.let { customerId ->
                 ActiveDetailClientRow(

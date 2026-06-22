@@ -78,6 +78,7 @@ fun TourneeTabletScreen(
     val pendingCreating by viewModel.pendingCreatingForDate.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val resumeCandidate by viewModel.resumeCandidate.collectAsStateWithLifecycle()
+    val energyBadgesByInterventionId by viewModel.energyBadgesByInterventionId.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
     val detailNavController = rememberNavController()
@@ -117,8 +118,14 @@ fun TourneeTabletScreen(
         }
     }
 
-    val items = interventions.map { it.toInterventionItem() }
-    val followUpItems = followUpInterventions.map { it.toInterventionItem() }
+    val items =
+        interventions.map {
+            it.toInterventionItem(energyBadges = energyBadgesByInterventionId[it.id].orEmpty())
+        }
+    val followUpItems =
+        followUpInterventions.map {
+            it.toInterventionItem(energyBadges = energyBadgesByInterventionId[it.id].orEmpty())
+        }
     val hasListContent = items.isNotEmpty() || followUpItems.isNotEmpty() || pendingCreating.isNotEmpty()
 
     LaunchedEffect(uiState.errorMessage) {

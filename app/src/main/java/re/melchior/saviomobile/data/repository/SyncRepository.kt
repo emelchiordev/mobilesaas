@@ -25,6 +25,10 @@ import re.melchior.saviomobile.data.local.entity.EquipmentTypeEntity
 import re.melchior.saviomobile.data.local.entity.UnitTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionActualTypeEntity
 import re.melchior.saviomobile.data.local.entity.InterventionEntity
+import re.melchior.saviomobile.util.UnitEnergyEquipmentInput
+import re.melchior.saviomobile.util.UnitEnergySummary
+import re.melchior.saviomobile.util.UnitEnergySummaryItem
+import re.melchior.saviomobile.util.shouldApplyFollowUpFromPull
 import re.melchior.saviomobile.data.local.entity.InterventionHistoryEntity
 import re.melchior.saviomobile.data.local.entity.toEntity
 import re.melchior.saviomobile.data.local.entity.toEntityFromLegacyReferentiel
@@ -32,6 +36,7 @@ import re.melchior.saviomobile.data.local.entity.SettingsEntity
 import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.dto.InterventionDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
+import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.util.buildInterventionPolicySnapshot
 import re.melchior.saviomobile.util.interventionPolicySnapshotToJson
 import re.melchior.saviomobile.util.policyOverridesToJson
@@ -82,6 +87,25 @@ class SyncRepository @Inject constructor(
 
     fun getEquipmentsByIntervention(interventionId: String) =
         equipmentDao.getEquipmentsByIntervention(interventionId)
+
+    suspend fun computeEnergyBadgesByInterventionId(
+        interventionIds: List<String>,
+    ): Map<String, List<UnitEnergySummaryItem>> {
+        if (interventionIds.isEmpty()) return emptyMap()
+        return equipmentDao
+            .getEquipmentsForInterventions(interventionIds)
+            .groupBy { it.interventionId }
+            .mapValues { (_, equipments) ->
+                UnitEnergySummary.compute(
+                    equipments.map {
+                        UnitEnergyEquipmentInput(
+                            energyCode = it.energyCode,
+                            parentEquipmentId = it.parentEquipmentId,
+                        )
+                    },
+                )
+            }
+    }
 
     suspend fun startIntervention(interventionId: String) {
         ensureInterventionVersionFresh(interventionId)
@@ -235,16 +259,38 @@ class SyncRepository @Inject constructor(
     }
 
     // Méthode au niveau de la classe — pas à l'intérieur de pull()
+    private suspend fun mergeFollowUpFromPullIfNeeded(
+        existing: InterventionEntity,
+        remote: InterventionEntity,
+    ) {
+        if (!shouldApplyFollowUpFromPull(existing, remote)) return
+        interventionDao.updateFollowUpFromPull(
+            id = remote.id,
+            required = remote.followUpRequired,
+            note = remote.followUpNote,
+            status = remote.followUpStatus,
+        )
+        android.util.Log.d(
+            "InsertAllSafe",
+            "→ merge follow-up ${remote.id} (${existing.followUpStatus} → ${remote.followUpStatus})",
+        )
+    }
+
     private suspend fun insertAllSafe(interventions: List<InterventionEntity>) {
         interventions.forEach { entity ->
-            // Pull ne crée ni ne met à jour les lignes clôturées (même si le serveur les renvoyait).
+            val existing = interventionDao.getInterventionByIdOnce(entity.id)
+
+            // Pull ne crée ni ne remplace les lignes clôturées — mais le suivi « à revoir » peut être fusionné.
             if (entity.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL) {
+                if (existing != null) {
+                    mergeFollowUpFromPullIfNeeded(existing, entity)
+                }
                 return@forEach
             }
-            val existing = interventionDao.getInterventionByIdOnce(entity.id)
 
             when {
                 existing?.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL -> {
+                    mergeFollowUpFromPullIfNeeded(existing!!, entity)
                     android.util.Log.d("InsertAllSafe", "→ skip closed local ${entity.id}")
                 }
 
