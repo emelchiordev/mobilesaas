@@ -34,10 +34,12 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -83,27 +85,21 @@ import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.SavioInterventionTabIndicator
-import re.melchior.saviomobile.util.attestableFrom
+import re.melchior.saviomobile.util.isEcsControlEquipment
 import re.melchior.saviomobile.util.isPartOfHybrideAsPac
 import re.melchior.saviomobile.util.suggestedAttestationType
+import re.melchior.saviomobile.util.toAttestableInput
+import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
 import re.melchior.saviomobile.ui.refonte.SavioEdgeToEdgeScaffoldInsets
 import re.melchior.saviomobile.ui.refonte.SavioNavyHeader
 import re.melchior.saviomobile.ui.refonte.SavioGhostButton
-import re.melchior.saviomobile.ui.refonte.SavioEquipActionButtons
 import re.melchior.saviomobile.ui.refonte.SavioEquipBrandCard
-import re.melchior.saviomobile.ui.refonte.SavioEquipInfoBlock
-import re.melchior.saviomobile.ui.refonte.SavioEquipNavRow
-import re.melchior.saviomobile.ui.refonte.SavioEquipSpecRow
 import re.melchior.saviomobile.ui.refonte.SavioRefonteCard
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
-import re.melchior.saviomobile.util.attestableFrom
-import re.melchior.saviomobile.util.isPartOfHybrideAsPac
-import re.melchior.saviomobile.util.suggestedAttestationType
-import re.melchior.saviomobile.ui.component.BrandLogo
 import re.melchior.saviomobile.data.local.entity.EquipmentEntity
 import re.melchior.saviomobile.ui.screen.intervention.attestation.AttestationTypePickerSheet
 import re.melchior.saviomobile.ui.screen.intervention.attestation.attestationTypeLabel
@@ -272,9 +268,17 @@ fun EquipementDetailScreen(
                 val catalogQuery by viewModel.catalogQuery.collectAsStateWithLifecycle()
                 val catalogResults by viewModel.catalogResults.collectAsStateWithLifecycle()
                 val isNew by viewModel.isNewEquipment.collectAsStateWithLifecycle()
+                val hasCatalogNotice =
+                    !equipment.equipmentCatalogId.isNullOrBlank() &&
+                        !catalogEquipment?.noticeUrl.isNullOrBlank()
 
                 var showSerialDialog by remember(equipment.id) { mutableStateOf(false) }
                 var serialDraft by remember(equipment.id) { mutableStateOf(equipment.serialNumber.orEmpty()) }
+                var showEnergySheet by remember(equipment.id) { mutableStateOf(false) }
+                var energyDraftId by remember(equipment.id) { mutableStateOf("") }
+                val energies by viewModel.energies.collectAsStateWithLifecycle(initialValue = emptyList())
+                val pendingCatalogChange by viewModel.pendingCatalogChange.collectAsStateWithLifecycle()
+                val pendingCatalogEnergyId by viewModel.pendingCatalogEnergyId.collectAsStateWithLifecycle()
                 LaunchedEffect(equipment.serialNumber) {
                     serialDraft = equipment.serialNumber.orEmpty()
                 }
@@ -294,22 +298,10 @@ fun EquipementDetailScreen(
                     }
                 }
                 val unitAttestableInputs = remember(interventionEquipments) {
-                    interventionEquipments.map { eq ->
-                        attestableFrom(
-                            id = eq.id,
-                            typeCode = eq.typeCode,
-                            energyCode = eq.energyCode,
-                            hybridePacEquipmentId = eq.hybridePacEquipmentId,
-                        )
-                    }
+                    interventionEquipments.map { it.toAttestableInput() }
                 }
                 val equipmentAttestable = remember(equipment) {
-                    attestableFrom(
-                        id = equipment.id,
-                        typeCode = equipment.typeCode,
-                        energyCode = equipment.energyCode,
-                        hybridePacEquipmentId = equipment.hybridePacEquipmentId,
-                    )
+                    equipment.toAttestableInput()
                 }
                 val isPartOfHybrideAsPac =
                     remember(equipmentAttestable, unitAttestableInputs) {
@@ -355,6 +347,10 @@ fun EquipementDetailScreen(
                     )
                 }
 
+                val showEcsControl = remember(equipmentAttestable) {
+                    isEcsControlEquipment(equipmentAttestable)
+                }
+
                 if (showSerialDialog) {
                     AlertDialog(
                         onDismissRequest = { showSerialDialog = false },
@@ -382,6 +378,51 @@ fun EquipementDetailScreen(
                                 Text("Annuler")
                             }
                         },
+                    )
+                }
+
+                if (showEnergySheet && !isBruleur) {
+                    EquipmentEnergyPickerSheet(
+                        title = "Énergie raccordée",
+                        modelLabel = equipment.model?.takeIf { it.isNotBlank() } ?: "—",
+                        subtitle =
+                            listOfNotNull(
+                                equipment.brand?.takeIf { it.isNotBlank() },
+                                equipment.typeCode?.takeIf { it.isNotBlank() },
+                            ).joinToString(" · ").ifBlank { null },
+                        catalogEnergyHint =
+                            catalogEquipment?.let { cat ->
+                                energies.find { it.id == cat.energyId }?.label
+                            },
+                        energies = energies,
+                        selectedEnergyId = energyDraftId,
+                        onEnergySelected = { energyDraftId = it },
+                        onConfirm = {
+                            if (energyDraftId.isNotBlank()) {
+                                viewModel.saveEnergy(energyDraftId)
+                            }
+                            showEnergySheet = false
+                        },
+                        onDismiss = { showEnergySheet = false },
+                    )
+                }
+
+                pendingCatalogChange?.let { pendingRow ->
+                    val pendingEnergyId = pendingCatalogEnergyId ?: pendingRow.equipment.energyId
+                    EquipmentEnergyPickerSheet(
+                        title = "Énergie raccordée",
+                        modelLabel = pendingRow.equipment.model,
+                        subtitle =
+                            listOfNotNull(
+                                pendingRow.brandLabel,
+                                pendingRow.typeLabel,
+                            ).joinToString(" · ").ifBlank { null },
+                        catalogEnergyHint = pendingRow.energyLabel,
+                        energies = energies,
+                        selectedEnergyId = pendingEnergyId,
+                        onEnergySelected = viewModel::updatePendingCatalogEnergyId,
+                        onConfirm = viewModel::confirmPendingCatalogChange,
+                        onDismiss = viewModel::dismissPendingCatalogChange,
                     )
                 }
 
@@ -553,7 +594,53 @@ fun EquipementDetailScreen(
                     }
                     }
 
-                    if (interventionInProgress && !isReplaced) {
+                    if (!refonte && hasCatalogNotice) {
+                        Surface(
+                            onClick = {
+                                viewModel.openNotice(
+                                    checkNotNull(equipment.equipmentCatalogId),
+                                    context,
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                            shadowElevation = 0.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.PictureAsPdf,
+                                    contentDescription = null,
+                                    tint = SavioUi.BusinessAccent,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Notice constructeur",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        "Consulter le PDF",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    tint = SavioUi.BusinessAccent,
+                                )
+                            }
+                        }
+                    }
+
+                    if (!refonte && interventionInProgress && !isReplaced) {
                         SavioGhostButton(
                             text = "Aide au diagnostic (Beta)",
                             icon = Icons.Outlined.Search,
@@ -641,70 +728,124 @@ fun EquipementDetailScreen(
                     if (refonte) {
                         val serialTodo = equipment.serialNumber.isNullOrBlank()
                         val installTodo = equipment.installDate.isNullOrBlank()
-                        SavioRefonteCard {
-                            SavioEquipSpecRow(
-                                icon = Icons.Filled.Edit,
-                                label = "N° série",
-                                value =
-                                    equipment.serialNumber?.takeIf { it.isNotBlank() }
-                                        ?: "À renseigner",
-                                isTodo = serialTodo,
-                                onActionClick =
-                                    if (!isReplaced) {
-                                        {
-                                            serialDraft = equipment.serialNumber.orEmpty()
-                                            showSerialDialog = true
-                                        }
-                                    } else {
-                                        null
+                        val energyTodo = isEnergyTodo(equipment.energyCode)
+                        val energyDisplayValue = resolveEnergyDisplayLabel(equipment.energyCode, energies)
+                        val hybrideChaudiereLabel =
+                            remember(chauffageHybride) {
+                                chauffageHybride?.let { ch ->
+                                    listOfNotNull(
+                                        ch.brand?.takeIf { it.isNotBlank() },
+                                        ch.model?.takeIf { it.isNotBlank() },
+                                    ).joinToString(" ").takeIf { it.isNotBlank() }
+                                }
+                            }
+                        EquipementDetailRefonteContent(
+                            isReplaced = isReplaced,
+                            isBruleur = isBruleur,
+                            isNew = isNew,
+                            hasCatalogNotice = hasCatalogNotice,
+                            interventionInProgress = interventionInProgress,
+                            showMeasures = showMeasures,
+                            showEcsControl = showEcsControl,
+                            isPacOrClim = isPacOrClim,
+                            attestationNavOnPacCard = attestationNavOnPacCard,
+                            attestationNavSubtitle = attestationNavSubtitle,
+                            isPartOfHybrideAsPac = isPartOfHybrideAsPac,
+                            hybrideChaudiereLabel = hybrideChaudiereLabel,
+                            serialDisplayValue =
+                                equipment.serialNumber?.takeIf { it.isNotBlank() }
+                                    ?: "À renseigner",
+                            installDisplayValue =
+                                if (installTodo) {
+                                    "À renseigner"
+                                } else {
+                                    formatCommissioningDate(equipment.installDate)
+                                },
+                            serialTodo = serialTodo,
+                            installTodo = installTodo,
+                            energyDisplayValue = energyDisplayValue,
+                            energyTodo = energyTodo,
+                            onSerialEditClick = {
+                                serialDraft = equipment.serialNumber.orEmpty()
+                                showSerialDialog = true
+                            },
+                            onInstallDateEditClick = {
+                                val cal = Calendar.getInstance()
+                                equipment.installDate?.take(10)?.let { s ->
+                                    try {
+                                        val ld = LocalDate.parse(s)
+                                        cal.set(ld.year, ld.monthValue - 1, ld.dayOfMonth)
+                                    } catch (_: Exception) {
+                                    }
+                                }
+                                DatePickerDialog(
+                                    context,
+                                    { _, y, m, d ->
+                                        val iso =
+                                            String.format(
+                                                Locale.US,
+                                                "%04d-%02d-%02d",
+                                                y,
+                                                m + 1,
+                                                d,
+                                            )
+                                        viewModel.saveCommissioningDate(iso)
                                     },
-                                showDivider = false,
-                            )
-                            SavioEquipSpecRow(
-                                icon = Icons.Filled.CalendarToday,
-                                label = "Mise en service",
-                                value =
-                                    if (installTodo) {
-                                        "À renseigner"
-                                    } else {
-                                        formatCommissioningDate(equipment.installDate)
-                                    },
-                                isTodo = installTodo,
-                                onActionClick =
-                                    if (!isReplaced) {
-                                        {
-                                            val cal = Calendar.getInstance()
-                                            equipment.installDate?.take(10)?.let { s ->
-                                                try {
-                                                    val ld = LocalDate.parse(s)
-                                                    cal.set(ld.year, ld.monthValue - 1, ld.dayOfMonth)
-                                                } catch (_: Exception) {
-                                                }
-                                            }
-                                            DatePickerDialog(
-                                                context,
-                                                { _, y, m, d ->
-                                                    val iso =
-                                                        String.format(
-                                                            Locale.US,
-                                                            "%04d-%02d-%02d",
-                                                            y,
-                                                            m + 1,
-                                                            d,
-                                                        )
-                                                    viewModel.saveCommissioningDate(iso)
-                                                },
-                                                cal.get(Calendar.YEAR),
-                                                cal.get(Calendar.MONTH),
-                                                cal.get(Calendar.DAY_OF_MONTH),
-                                            ).show()
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                showDivider = true,
-                            )
-                        }
+                                    cal.get(Calendar.YEAR),
+                                    cal.get(Calendar.MONTH),
+                                    cal.get(Calendar.DAY_OF_MONTH),
+                                ).show()
+                            },
+                            onEnergyEditClick = {
+                                energyDraftId = resolveEnergyIdForCode(equipment.energyCode, energies)
+                                showEnergySheet = true
+                            },
+                            onNoticeClick = {
+                                viewModel.openNotice(
+                                    checkNotNull(equipment.equipmentCatalogId),
+                                    context,
+                                )
+                            },
+                            onDiagnosticClick = { showDiagnosticAide = true },
+                            onMeasureClick = {
+                                onMeasureClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                )
+                            },
+                            onEcsControlClick = {
+                                onAttestationVeClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                    "ECS",
+                                )
+                            },
+                            onPacMeasureClick = {
+                                onPacMeasureClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                )
+                            },
+                            onCerfaClick = {
+                                onCerfaClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.id,
+                                )
+                            },
+                            onAttestationClick = { showAttestationPicker = true },
+                            onCorrect = { viewModel.setChangeMode(true) },
+                            onReplace =
+                                if (!isNew) {
+                                    {
+                                        onReplaceClick(
+                                            viewModel.currentInterventionId,
+                                            equipment.id,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                        )
                     } else {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -785,65 +926,41 @@ fun EquipementDetailScreen(
                                         null
                                     },
                             )
+                            if (!isBruleur) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    thickness = 0.5.dp,
+                                    color = SavioUi.CardBorder,
+                                )
+                                FieldTerrainRow(
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Bolt,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = SavioUi.BusinessAccent,
+                                        )
+                                    },
+                                    label = "Énergie raccordée",
+                                    valueText = resolveEnergyDisplayLabel(equipment.energyCode, energies),
+                                    trailingSquareIcon = Icons.Filled.Bolt,
+                                    onTrailingClick =
+                                        if (!isReplaced) {
+                                            {
+                                                energyDraftId =
+                                                    resolveEnergyIdForCode(equipment.energyCode, energies)
+                                                showEnergySheet = true
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                )
+                            }
                         }
                     }
                     }
 
-                    if (refonte) {
-                        if (showMeasures && !isReplaced) {
-                            SavioRefonteCard {
-                                SavioEquipNavRow(
-                                    icon = Icons.Filled.Analytics,
-                                    title = "Mesures",
-                                    subtitle = "Saisir les mesures de combustion",
-                                    onClick = {
-                                        onMeasureClick(
-                                            viewModel.currentInterventionId,
-                                            equipment.order ?: 0,
-                                        )
-                                    },
-                                    showDivider = false,
-                                )
-                            }
-                        }
-                        if (isPacOrClim && !isReplaced) {
-                            SavioRefonteCard {
-                                SavioEquipNavRow(
-                                    icon = Icons.Filled.AcUnit,
-                                    title = "Mesures PAC",
-                                    subtitle = "Saisie terrain",
-                                    onClick = {
-                                        onPacMeasureClick(
-                                            viewModel.currentInterventionId,
-                                            equipment.order ?: 0,
-                                        )
-                                    },
-                                    showDivider = false,
-                                )
-                                SavioEquipNavRow(
-                                    icon = Icons.Filled.Description,
-                                    title = "CERFA fluides frigorigènes",
-                                    subtitle = "Remplir ou consulter",
-                                    onClick = {
-                                        onCerfaClick(
-                                            viewModel.currentInterventionId,
-                                            equipment.id,
-                                        )
-                                    },
-                                    showDivider = true,
-                                )
-                                if (attestationNavOnPacCard) {
-                                    SavioEquipNavRow(
-                                        icon = Icons.Filled.Assignment,
-                                        title = "Attestation d'entretien",
-                                        subtitle = attestationNavSubtitle,
-                                        onClick = { showAttestationPicker = true },
-                                        showDivider = true,
-                                    )
-                                }
-                            }
-                        }
-                    } else if (showMeasures && !isReplaced) {
+                    if (!refonte && showMeasures && !isReplaced) {
                         Surface(
                             onClick = {
                                 onMeasureClick(
@@ -876,6 +993,51 @@ fun EquipementDetailScreen(
                                     )
                                     Text(
                                         "Saisir les mesures de combustion",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    tint = SavioUi.BusinessAccent,
+                                )
+                            }
+                        }
+                    } else if (!refonte && showEcsControl && !isReplaced) {
+                        Surface(
+                            onClick = {
+                                onAttestationVeClick(
+                                    viewModel.currentInterventionId,
+                                    equipment.order ?: 0,
+                                    "ECS",
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(0.5.dp, SavioUi.CardBorder),
+                            shadowElevation = 0.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.WaterDrop,
+                                    contentDescription = null,
+                                    tint = SavioUi.BusinessAccent,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Contrôle ECS",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        "Contrôle chauffe-eau / ballon ECS",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -1014,7 +1176,7 @@ fun EquipementDetailScreen(
                     }
 
                     // Attestation VE — après Mesures ; pas sur le brûleur (rattaché à la chaudière)
-                    if (!isReplaced && !isBruleur) {
+                    if (!refonte && !isReplaced && !isBruleur && !showEcsControl) {
                         if (isPartOfHybrideAsPac) {
                             val ch = checkNotNull(chauffageHybride)
                             val chaudiereLabel =
@@ -1022,13 +1184,6 @@ fun EquipementDetailScreen(
                                     ch.brand?.takeIf { it.isNotBlank() },
                                     ch.model?.takeIf { it.isNotBlank() },
                                 ).joinToString(" ")
-                            if (refonte) {
-                                SavioEquipInfoBlock(
-                                    title = "Système PAC Hybride",
-                                    body =
-                                        "L'attestation se démarre depuis la chaudière $chaudiereLabel.",
-                                )
-                            } else {
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface,
@@ -1064,18 +1219,7 @@ fun EquipementDetailScreen(
                                     }
                                 }
                             }
-                            }
-                        } else if (refonte && !attestationNavOnPacCard) {
-                            SavioRefonteCard {
-                                SavioEquipNavRow(
-                                    icon = Icons.Filled.Assignment,
-                                    title = "Attestation d'entretien",
-                                    subtitle = attestationNavSubtitle,
-                                    onClick = { showAttestationPicker = true },
-                                    showDivider = false,
-                                )
-                            }
-                        } else if (!refonte) {
+                        } else {
                             Surface(
                                 onClick = { showAttestationPicker = true },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1122,33 +1266,7 @@ fun EquipementDetailScreen(
                     }
 
                     // Corriger / Remplacer — bas de fiche (après Mesures + Attestation)
-                    if (!isReplaced) {
-                        if (refonte) {
-                            SavioEquipActionButtons(
-                                onCorrect = { viewModel.setChangeMode(true) },
-                                onReplace =
-                                    if (!isNew) {
-                                        {
-                                            onReplaceClick(
-                                                viewModel.currentInterventionId,
-                                                equipment.id,
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    },
-                            )
-                            if (isNew) {
-                                Text(
-                                    text =
-                                        "Appareil ajouté pendant cette intervention — " +
-                                            "supprimez-le si vous voulez l'annuler",
-                                    fontSize = 12.sp,
-                                    color = SavioRefonte.Muted,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        } else {
+                    if (!refonte && !isReplaced) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1207,7 +1325,6 @@ fun EquipementDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
-                        }
                         }
                     }
 

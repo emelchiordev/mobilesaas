@@ -49,6 +49,7 @@ import re.melchior.saviomobile.ui.refonte.SavioInterventionTabItem
 import re.melchior.saviomobile.ui.screen.tournee.displayTypeLabel
 import re.melchior.saviomobile.ui.theme.SavioRefonte
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
+import re.melchior.saviomobile.ui.utils.rememberIsSavioTablet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +93,7 @@ fun InterventionActiveScreen(
 
     var selectedTab by rememberSaveable { mutableStateOf(InterventionTab.DETAIL) }
     val refonte = useSavioRefonteUi()
+    val isTablet = rememberIsSavioTablet()
     val interventionTabs =
         remember {
             InterventionTab.entries.map { tab ->
@@ -153,6 +155,7 @@ fun InterventionActiveScreen(
                             onClientClick = onClientClick,
                             elapsedLabel = uiState.elapsedSeconds.toElapsedLabel(),
                             startTimeLabel = uiState.startTimeLabel,
+                            isTablet = isTablet,
                         )
 
                     InterventionTab.EQUIPEMENTS ->
@@ -161,6 +164,7 @@ fun InterventionActiveScreen(
                             newEquipmentIds = newEquipmentIds,
                             onEquipementClick = onEquipementClick,
                             onAddEquipment = onAddEquipment,
+                            isTablet = isTablet,
                         )
 
                     InterventionTab.PHOTOS ->

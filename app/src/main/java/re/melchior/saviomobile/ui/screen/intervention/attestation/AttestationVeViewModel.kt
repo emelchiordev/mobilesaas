@@ -50,7 +50,21 @@ class AttestationVeViewModel @Inject constructor(
     val points: StateFlow<Map<String, String>> =
         _points.asStateFlow()
 
-    val controlPoints = AttestationVeControlPoints.getPointsForType(type)
+    private val _controlPoints =
+        MutableStateFlow(AttestationVeControlPoints.getPointsForType(type))
+    val controlPoints: StateFlow<List<AttestationVeControlPoints.ControlPoint>> =
+        _controlPoints.asStateFlow()
+
+    private val _installationControlPoints =
+        MutableStateFlow(
+            AttestationVeControlPoints.getInstallationPointsForType(type),
+        )
+    val installationControlPoints:
+        StateFlow<List<AttestationVeControlPoints.ControlPoint>> =
+        _installationControlPoints.asStateFlow()
+
+    private val _energyCode = MutableStateFlow<String?>(null)
+    val energyCode: StateFlow<String?> = _energyCode.asStateFlow()
 
     val validatedCount: StateFlow<Int> = _points
         .map { map -> map.values.count { it == "V" } }
@@ -96,8 +110,23 @@ class AttestationVeViewModel @Inject constructor(
 
         viewModelScope.launch {
             equipmentDao.getEquipmentsByIntervention(interventionId).collect { list ->
-                _evacuationMode.value = list.find { it.order == equipmentOrder }
-                    ?.evacuationMode
+                val equipment = list.find { it.order == equipmentOrder }
+                _evacuationMode.value = equipment?.evacuationMode
+                _energyCode.value = equipment?.energyCode
+                val energy = equipment?.energyCode
+                val typeCode = equipment?.typeCode
+                _controlPoints.value =
+                    AttestationVeControlPoints.getPointsForType(
+                        type,
+                        energy,
+                        typeCode,
+                    )
+                _installationControlPoints.value =
+                    AttestationVeControlPoints.getInstallationPointsForType(
+                        type,
+                        energy,
+                        typeCode,
+                    )
             }
         }
     }

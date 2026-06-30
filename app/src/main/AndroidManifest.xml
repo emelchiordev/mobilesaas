@@ -20,6 +20,9 @@
         <meta-data
             android:name="io.sentry.auto-init"
             android:value="false" />
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
         <!-- SHA-256 du certificat release / debug : voir public/.well-known/ASSETLINKS_INSTRUCTIONS.txt (front web) -->
         <activity
             android:name=".MainActivity"

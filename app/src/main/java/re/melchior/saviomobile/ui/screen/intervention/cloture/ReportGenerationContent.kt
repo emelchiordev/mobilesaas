@@ -6,6 +6,7 @@ import re.melchior.saviomobile.data.local.entity.InstallationCheckEntity
 import re.melchior.saviomobile.data.local.entity.InvoiceLineEntity
 import re.melchior.saviomobile.data.local.entity.MeasureEntity
 import re.melchior.saviomobile.data.local.entity.PacMeasureEntity
+import re.melchior.saviomobile.ui.util.hasMeaningfulData
 
 data class ReportGenerationContentAssessment(
     val technicalFactsCount: Int,
@@ -22,6 +23,7 @@ fun assessReportGenerationContent(
     pacMeasures: List<PacMeasureEntity>,
     coldMeasureCount: Int,
     installationCheck: InstallationCheckEntity?,
+    attestationPoints: Map<AttestationPointsKey, Map<String, String>> = emptyMap(),
 ): ReportGenerationContentAssessment {
     val hasExplicitContent =
         !technicianNotes.isNullOrBlank() ||
@@ -40,8 +42,13 @@ fun assessReportGenerationContent(
     if (attestations.isNotEmpty()) {
         technicalFactsCount +=
             attestations.count { att ->
-                formatAttestationCombustion(att) != null ||
-                    formatExpansionPressure(att, null) != null
+                val points = attestationPoints[attestationPointsKey(att.equipmentOrder, att.type)].orEmpty()
+                when {
+                    att.type == "ECS" -> att.hasMeaningfulData(points)
+                    else ->
+                        formatAttestationCombustion(att) != null ||
+                            formatExpansionPressure(att, null) != null
+                }
             }
     }
     if (pacMeasures.isNotEmpty()) {

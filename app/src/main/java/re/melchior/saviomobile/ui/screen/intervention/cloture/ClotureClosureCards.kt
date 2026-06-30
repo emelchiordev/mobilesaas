@@ -1,6 +1,9 @@
 package re.melchior.saviomobile.ui.screen.intervention.cloture
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +22,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import re.melchior.saviomobile.ui.refonte.SavioClotureBlockCard
+import re.melchior.saviomobile.ui.refonte.SavioClotureDashedAddButton
 import re.melchior.saviomobile.ui.refonte.SavioClotureInfoCard
 import re.melchior.saviomobile.ui.refonte.SavioClotureKvRow
 import re.melchior.saviomobile.ui.refonte.SavioClotureWillRow
@@ -33,6 +37,10 @@ fun ContractVeSummaryCard(
     nextVe: NextVeDisplay?,
     coverage: VeCoverageSummary? = null,
     today: LocalDate = LocalDate.now(),
+    showRenewCta: Boolean = false,
+    renewPriceTtc: String? = null,
+    renewLoading: Boolean = false,
+    onRenewClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val refonte = useSavioRefonteUi()
@@ -106,8 +114,23 @@ fun ContractVeSummaryCard(
                     label = "Prochain entretien",
                     value = formatClosureDate(next.date) + suffix,
                     isWarning = next.urgency == VeDueUrgency.OVERDUE,
-                    showDivider = false,
+                    showDivider = !showRenewCta,
                 )
+            }
+
+            if (showRenewCta) {
+                Spacer(modifier = Modifier.height(8.dp))
+                if (renewLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    SavioClotureDashedAddButton(
+                        text = renewContractButtonLabel(renewPriceTtc),
+                        onClick = onRenewClick,
+                    )
+                }
             }
         }
         return
@@ -200,8 +223,30 @@ fun ContractVeSummaryCard(
                     valueColor = color,
                 )
             }
+
+            if (showRenewCta) {
+                Spacer(modifier = Modifier.height(8.dp))
+                if (renewLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onRenewClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(renewContractButtonLabel(renewPriceTtc))
+                    }
+                }
+            }
         }
     }
+}
+
+private fun renewContractButtonLabel(priceTtc: String?): String {
+    val amount = priceTtc?.trim().orEmpty()
+    return if (amount.isNotEmpty()) "Renouveler le contrat · $amount € TTC" else "Renouveler le contrat"
 }
 
 @Composable

@@ -1,7 +1,9 @@
 [versions]
 accompanistPermissions = "0.37.3"
 agp = "8.7.3"
-cameraCore = "1.6.0"
+cameraCore = "1.4.2"
+objectbox = "4.2.0"
+mlkitTextRecognitionPlayServices = "19.0.1"
 coilCompose = "2.7.0"
 coreKtx = "1.15.0"
 junit = "4.13.2"
@@ -21,7 +23,7 @@ work = "2.10.0"
 hilt-ext = "1.2.0"
 datastore = "1.1.2"
 coil = "3.0.4"
-sentry = "7.21.0"
+sentry = "8.17.0"
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
@@ -64,6 +66,9 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
+objectbox-android = { group = "io.objectbox", name = "objectbox-android", version.ref = "objectbox" }
+objectbox-processor = { group = "io.objectbox", name = "objectbox-processor", version.ref = "objectbox" }
+mlkit-text-recognition-play-services = { group = "com.google.android.gms", name = "play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognitionPlayServices" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -17,6 +17,7 @@ import re.melchior.saviomobile.data.remote.api.SyncApi
 import re.melchior.saviomobile.data.remote.api.TenantArticleApi
 import re.melchior.saviomobile.data.remote.api.TourneeApi
 import re.melchior.saviomobile.data.remote.api.UnitsApi
+import re.melchior.saviomobile.data.remote.api.ContractsApi
 import retrofit2.Retrofit
 import javax.inject.Singleton
 
@@ -88,4 +89,9 @@ object ApiModule {
     @Singleton
     fun provideUnitsApi(retrofit: Retrofit): UnitsApi =
         retrofit.create(UnitsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideContractsApi(retrofit: Retrofit): ContractsApi =
+        retrofit.create(ContractsApi::class.java)
 }

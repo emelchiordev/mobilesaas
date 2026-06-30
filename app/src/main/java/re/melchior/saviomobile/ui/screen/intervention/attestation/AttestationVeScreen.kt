@@ -84,6 +84,9 @@ fun AttestationVeScreen(
     val points by viewModel.points.collectAsStateWithLifecycle()
     val validatedCount by viewModel.validatedCount.collectAsStateWithLifecycle()
     val nonValidatedCount by viewModel.nonValidatedCount.collectAsStateWithLifecycle()
+    val controlPoints by viewModel.controlPoints.collectAsStateWithLifecycle()
+    val installationControlPoints by viewModel.installationControlPoints.collectAsStateWithLifecycle()
+    val energyCode by viewModel.energyCode.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -101,8 +104,11 @@ fun AttestationVeScreen(
         "PAC" -> "PAC"
         "PAC_HYBRIDE_GAZ" -> "PAC Hybride Gaz"
         "PAC_HYBRIDE_FIOUL" -> "PAC Hybride Fioul"
+        "ECS" -> "Chauffe-eau / ECS"
         else -> type
     }
+
+    val screenTitle = if (type == "ECS") "Contrôle ECS" else "Attestation $typeLabel"
 
     val refonte = useSavioRefonteUi()
     Scaffold(
@@ -111,7 +117,7 @@ fun AttestationVeScreen(
         topBar = {
             if (refonte) {
                 SavioNavyHeader(
-                    title = "Attestation $typeLabel",
+                    title = screenTitle,
                     leading = {
                         IconButton(onClick = ::leave) {
                             Icon(
@@ -131,7 +137,7 @@ fun AttestationVeScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("Attestation $typeLabel") },
+                    title = { Text(screenTitle) },
                     navigationIcon = {
                         IconButton(onClick = ::leave) {
                             Icon(
@@ -212,14 +218,20 @@ fun AttestationVeScreen(
                     0 -> AttestationInstallationTab(
                         attestation = attestation,
                         type = type,
+                        energyCode = energyCode,
                         evacuationMode = evacuationMode,
+                        installationControlPoints = installationControlPoints,
+                        points = points,
                         onFieldChange = { key, value ->
                             viewModel.updateField(key, value)
                             viewModel.scheduleAutoSave()
                         },
+                        onPointToggle = { cle, resultat ->
+                            viewModel.togglePoint(cle, resultat)
+                        },
                     )
                     1 -> AttestationPointsControleTab(
-                        controlPoints = viewModel.controlPoints,
+                        controlPoints = controlPoints,
                         points = points,
                         onToggle = { cle, resultat ->
                             viewModel.togglePoint(cle, resultat)
@@ -283,8 +295,12 @@ private fun AttestationTopBarBadges(
 fun AttestationInstallationTab(
     attestation: AttestationVeEntity?,
     type: String,
+    energyCode: String? = null,
     evacuationMode: String?,
+    installationControlPoints: List<AttestationVeControlPoints.ControlPoint> = emptyList(),
+    points: Map<String, String> = emptyMap(),
     onFieldChange: (String, String) -> Unit,
+    onPointToggle: (String, String) -> Unit = { _, _ -> },
 ) {
     LazyColumn(
         modifier = Modifier
@@ -320,6 +336,25 @@ fun AttestationInstallationTab(
         }
 
         when (type) {
+            "ECS" -> {
+                item {
+                    AttestationNumericField(
+                        value = attestation?.tempAmbiante ?: "",
+                        onValueChange = { onFieldChange("tempAmbiante", it) },
+                        label = "T° eau mesurée (°C)",
+                    )
+                }
+                if (AttestationVeControlPoints.isGazNatOrProp(energyCode)) {
+                    item {
+                        AttestationNumericField(
+                            value = attestation?.co ?: "",
+                            onValueChange = { onFieldChange("co", it) },
+                            label = "CO ambiant mesuré (ppm)",
+                            isNegative = false,
+                        )
+                    }
+                }
+            }
             "GAZ", "PAC_HYBRIDE_GAZ" -> {
                 item {
                     AttestationNumericField(
@@ -766,32 +801,56 @@ fun AttestationInstallationTab(
             }
         }
 
+        if (installationControlPoints.isNotEmpty()) {
+            item {
+                AttestationSectionTitle("Contrôles visuels terrain")
+            }
+            items(installationControlPoints, key = { it.cle }) { point ->
+                AttestationControlPointRow(
+                    point = point,
+                    resultat = points[point.cle] ?: "",
+                    onToggle = onPointToggle,
+                )
+            }
+        }
+
         item {
             AttestationSectionTitle("Remarques")
         }
-        item {
-            AttestationTextField(
-                value = attestation?.remarquesHydraulique ?: "",
-                onValueChange = { onFieldChange("remarquesHydraulique", it) },
-                label = "Remarques réseau hydraulique",
-                minLines = 3,
-            )
-        }
-        item {
-            AttestationTextField(
-                value = attestation?.remarquesRegulation ?: "",
-                onValueChange = { onFieldChange("remarquesRegulation", it) },
-                label = "Remarques régulation",
-                minLines = 3,
-            )
-        }
-        item {
-            AttestationTextField(
-                value = attestation?.remarquesGenerateur ?: "",
-                onValueChange = { onFieldChange("remarquesGenerateur", it) },
-                label = "Remarques générateur",
-                minLines = 3,
-            )
+        if (type == "ECS") {
+            item {
+                AttestationTextField(
+                    value = attestation?.remarquesHydraulique ?: "",
+                    onValueChange = { onFieldChange("remarquesHydraulique", it) },
+                    label = "Remarques",
+                    minLines = 3,
+                )
+            }
+        } else {
+            item {
+                AttestationTextField(
+                    value = attestation?.remarquesHydraulique ?: "",
+                    onValueChange = { onFieldChange("remarquesHydraulique", it) },
+                    label = "Remarques réseau hydraulique",
+                    minLines = 3,
+                )
+            }
+            item {
+                AttestationTextField(
+                    value = attestation?.remarquesRegulation ?: "",
+                    onValueChange = { onFieldChange("remarquesRegulation", it) },
+                    label = "Remarques régulation",
+                    minLines = 3,
+                )
+            }
+            item {
+                AttestationTextField(
+                    value = attestation?.remarquesGenerateur ?: "",
+                    onValueChange = { onFieldChange("remarquesGenerateur", it) },
+                    label = "Remarques générateur",
+                    minLines = 3,
+                )
+            }
         }
     }
 }
@@ -846,58 +905,70 @@ fun AttestationPointsControleTab(
                 }
 
                 AttestationVeControlPoints.LineType.BODY -> {
-                    val resultat = points[point.cle] ?: ""
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when (resultat) {
-                                "V" -> Color(0xFFE8F5E9)
-                                "N" -> Color(0xFFFFEBEE)
-                                "S" -> Color(0xFFF5F5F5)
-                                else -> MaterialTheme.colorScheme.surfaceContainerLow
-                            },
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(
-                                horizontal = 12.dp,
-                                vertical = 8.dp,
-                            ),
-                        ) {
-                            Text(
-                                text = point.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                AttestationChip(
-                                    label = "✓ Validé",
-                                    selected = resultat == "V",
-                                    selectedColor = Color(0xFF388E3C),
-                                    onClick = { onToggle(point.cle, "V") },
-                                )
-                                if (point.hasSansObjet) {
-                                    AttestationChip(
-                                        label = "○ S/O",
-                                        selected = resultat == "S",
-                                        selectedColor = Color(0xFF757575),
-                                        onClick = { onToggle(point.cle, "S") },
-                                    )
-                                }
-                                AttestationChip(
-                                    label = "✗ Non validé",
-                                    selected = resultat == "N",
-                                    selectedColor = Color(0xFFD32F2F),
-                                    onClick = { onToggle(point.cle, "N") },
-                                )
-                            }
-                        }
-                    }
+                    AttestationControlPointRow(
+                        point = point,
+                        resultat = points[point.cle] ?: "",
+                        onToggle = onToggle,
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun AttestationControlPointRow(
+    point: AttestationVeControlPoints.ControlPoint,
+    resultat: String,
+    onToggle: (String, String) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (resultat) {
+                "V" -> Color(0xFFE8F5E9)
+                "N" -> Color(0xFFFFEBEE)
+                "S" -> Color(0xFFF5F5F5)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = 12.dp,
+                vertical = 8.dp,
+            ),
+        ) {
+            Text(
+                text = point.description,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AttestationChip(
+                    label = "✓ Validé",
+                    selected = resultat == "V",
+                    selectedColor = Color(0xFF388E3C),
+                    onClick = { onToggle(point.cle, "V") },
+                )
+                if (point.hasSansObjet) {
+                    AttestationChip(
+                        label = "○ S/O",
+                        selected = resultat == "S",
+                        selectedColor = Color(0xFF757575),
+                        onClick = { onToggle(point.cle, "S") },
+                    )
+                }
+                AttestationChip(
+                    label = "✗ Non validé",
+                    selected = resultat == "N",
+                    selectedColor = Color(0xFFD32F2F),
+                    onClick = { onToggle(point.cle, "N") },
+                )
             }
         }
     }

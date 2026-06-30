@@ -125,6 +125,7 @@ class InterventionActiveViewModel @Inject constructor(
 
     private fun loadEquipments() {
         viewModelScope.launch {
+            syncRepository.hydrateInterventionEquipmentsIfEmpty(interventionId)
             syncRepository.getEquipmentsByIntervention(interventionId)
                 .collect { equipments ->
                     _uiState.update { it.copy(equipments = equipments) }

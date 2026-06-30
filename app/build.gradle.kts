@@ -63,6 +63,12 @@ android {
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -174,13 +180,14 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
-    // CameraX
-    implementation("androidx.camera:camera-core:1.3.4")
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
+    // CameraX (>= 1.4.2 requis pour libimage_processing_util_jni.so alignée 16 KB)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
-    implementation("com.google.mlkit:text-recognition:16.0.1")
+    // OCR plaque : modèle via Google Play Services (évite libmlkit_google_ocr_pipeline.so embarquée)
+    implementation(libs.mlkit.text.recognition.play.services)
 
     implementation("androidx.concurrent:concurrent-futures:1.3.0")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")
@@ -196,8 +203,8 @@ dependencies {
 
     implementation(libs.sentry.android)
 
-    implementation("io.objectbox:objectbox-android:3.8.0")
-    kapt("io.objectbox:objectbox-processor:3.8.0")
+    implementation(libs.objectbox.android)
+    kapt(libs.objectbox.processor)
 
     implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 

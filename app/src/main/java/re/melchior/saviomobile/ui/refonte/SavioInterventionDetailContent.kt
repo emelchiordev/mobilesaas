@@ -117,7 +117,7 @@ private fun SavioInterventionMetaCard(
 }
 
 @Composable
-private fun SavioInterventionNotesCard(notes: String) {
+internal fun SavioInterventionNotesCard(notes: String) {
     SavioRefonteCard {
         Row(
             modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
@@ -146,6 +146,165 @@ private fun SavioInterventionNotesCard(notes: String) {
                         modifier = Modifier.padding(10.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SavioInterventionClientBlockCard(
+    intervention: InterventionEntity,
+    onClientClick: (String) -> Unit,
+    onCallClick: (String) -> Unit = {},
+) {
+    val customerId = intervention.customerId
+    val clientName =
+        listOfNotNull(intervention.customerFirstName, intervention.customerLastName)
+            .joinToString(" ")
+            .trim()
+            .ifBlank { "Non renseigné" }
+
+    SavioRefonteCard {
+        Column {
+            Text(
+                text = "Client",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SavioRefonte.Muted,
+                modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+            )
+            SavioRowLine()
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (customerId != null) {
+                                Modifier.clickable { onClientClick(customerId) }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .padding(horizontal = 15.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(13.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
+                            .background(SavioRefonte.Tint),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = interventionDetailInitials(intervention.customerFirstName, intervention.customerLastName),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SavioRefonte.Navy,
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = clientName,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SavioRefonte.Ink,
+                    )
+                    Text(
+                        text = "Particulier",
+                        fontSize = 13.sp,
+                        color = SavioRefonte.Muted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                if (customerId != null) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = "Fiche client",
+                        tint = ChevronColor,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            intervention.customerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                SavioRowLine()
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onCallClick(phone) }
+                            .padding(horizontal = 15.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SavioInfoIconBox(icon = Icons.Filled.Call)
+                    Text(
+                        text = phone,
+                        fontSize = 14.sp,
+                        color = SavioRefonte.Link,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = ChevronColor,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SavioInterventionAddressBlockCard(
+    intervention: InterventionEntity,
+    onNavigateClick: () -> Unit,
+    onCallClick: (String) -> Unit,
+) {
+    SavioRefonteCard {
+        Column {
+            Text(
+                text = "Adresse",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SavioRefonte.Muted,
+                modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+            )
+            SavioRowLine()
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 15.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                SavioInfoIconBox(icon = Icons.Filled.LocationOn)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = intervention.unitStreet,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SavioRefonte.Ink,
+                    )
+                    Text(
+                        text = "${intervention.unitPostalCode} ${intervention.unitCity}",
+                        fontSize = 13.sp,
+                        color = SavioRefonte.Muted,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+            SavioInfoActionsRow {
+                SavioGhostButton(
+                    text = "Itinéraire",
+                    icon = Icons.Filled.Directions,
+                    onClick = onNavigateClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

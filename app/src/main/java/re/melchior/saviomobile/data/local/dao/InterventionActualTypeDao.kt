@@ -21,4 +21,50 @@ interface InterventionActualTypeDao {
 
     @Query("DELETE FROM intervention_actual_types WHERE interventionId = :interventionId")
     suspend fun deleteForIntervention(interventionId: String)
+
+    /** Avant suppression bulk des interventions SYNCED ouvertes du jour (pull vide). */
+    @Query(
+        """
+        DELETE FROM intervention_actual_types
+        WHERE interventionId IN (
+            SELECT id FROM interventions
+            WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
+            AND syncStatus = 'SYNCED'
+            AND status NOT IN ('completed', 'pending_validation')
+        )
+        """,
+    )
+    suspend fun deleteForSyncedOpenInterventionsOnDate(startIso: String, endIso: String)
+
+    /** Avant suppression bulk des interventions SYNCED absentes du pull. */
+    @Query(
+        """
+        DELETE FROM intervention_actual_types
+        WHERE interventionId IN (
+            SELECT id FROM interventions
+            WHERE scheduledAt >= :startIso AND scheduledAt < :endIso
+            AND syncStatus = 'SYNCED'
+            AND status NOT IN ('completed', 'pending_validation')
+            AND id NOT IN (:keepIds)
+        )
+        """,
+    )
+    suspend fun deleteForSyncedOpenOnDateNotInKeepList(
+        startIso: String,
+        endIso: String,
+        keepIds: List<String>,
+    )
+
+    /** Avant [InterventionDao.deleteOlderThan]. */
+    @Query(
+        """
+        DELETE FROM intervention_actual_types
+        WHERE interventionId IN (
+            SELECT id FROM interventions
+            WHERE scheduledAt < :beforeIso
+            AND status NOT IN ('completed', 'pending_validation')
+        )
+        """,
+    )
+    suspend fun deleteOlderThanForOpenInterventions(beforeIso: String)
 }

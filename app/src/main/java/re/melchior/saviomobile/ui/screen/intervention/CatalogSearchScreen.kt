@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -33,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -41,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import re.melchior.saviomobile.ui.theme.SavioPalette
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import androidx.compose.runtime.Composable
@@ -54,11 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import re.melchior.saviomobile.data.local.entity.CatalogEquipmentSearchRow
 import re.melchior.saviomobile.ui.component.BrandLogo
+import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +83,11 @@ fun CatalogSearchScreen(
     val results by viewModel.results.collectAsStateWithLifecycle()
     val brands by viewModel.brands.collectAsStateWithLifecycle(initialValue = emptyList())
     val equipmentTypes by viewModel.equipmentTypes.collectAsStateWithLifecycle(initialValue = emptyList())
+    val energies by viewModel.energies.collectAsStateWithLifecycle(initialValue = emptyList())
+    val pendingSelection by viewModel.pendingSelection.collectAsStateWithLifecycle()
     val isCreating by viewModel.isCreating.collectAsStateWithLifecycle()
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         viewModel.createdEquipmentId.collect { newId ->
@@ -244,7 +253,7 @@ fun CatalogSearchScreen(
                             row = row,
                             onClick = {
                                 if (!isCreating) {
-                                    viewModel.selectEquipment(
+                                    viewModel.requestSelectEquipment(
                                         row = row,
                                         interventionId = interventionId,
                                         unitId = unitId,
@@ -255,6 +264,99 @@ fun CatalogSearchScreen(
                             },
                         )
                     }
+                }
+            }
+        }
+    }
+
+    pendingSelection?.let { pending ->
+        val typeCode = pending.row.typeCode?.trim()?.uppercase().orEmpty()
+        val isBruleur = typeCode == "BRULEUR"
+        val catalogEnergyLabel = pending.row.energyLabel?.takeIf { it.isNotBlank() } ?: "—"
+        var energyMenuExpanded by remember(pending.row.equipment.id) { mutableStateOf(false) }
+        val selectedEnergy = energies.find { it.id == pending.selectedEnergyId }
+        val selectedEnergyLabel = selectedEnergy?.label ?: catalogEnergyLabel
+
+        ModalBottomSheet(
+            onDismissRequest = viewModel::dismissPendingSelection,
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Énergie raccordée",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = pending.row.equipment.model,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = listOfNotNull(pending.row.brandLabel, pending.row.typeLabel)
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!isBruleur) {
+                    Text(
+                        text = "Catalogue : $catalogEnergyLabel — modifiable si le raccordement diffère.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ExposedDropdownMenuBox(
+                        expanded = energyMenuExpanded,
+                        onExpandedChange = { energyMenuExpanded = !energyMenuExpanded },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedEnergyLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Énergie raccordée") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = energyMenuExpanded)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    type = MenuAnchorType.PrimaryNotEditable,
+                                    enabled = true,
+                                ),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = energyMenuExpanded,
+                            onDismissRequest = { energyMenuExpanded = false },
+                        ) {
+                            energies.forEach { energy ->
+                                DropdownMenuItem(
+                                    text = { Text("${energy.label} (${energy.code})") },
+                                    onClick = {
+                                        viewModel.updatePendingEnergyId(energy.id)
+                                        energyMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                Button(
+                    onClick = viewModel::confirmPendingSelection,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = isBruleur || pending.selectedEnergyId.isNotBlank(),
+                ) {
+                    Text("Confirmer")
+                }
+                TextButton(
+                    onClick = viewModel::dismissPendingSelection,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Annuler")
                 }
             }
         }
@@ -280,7 +382,7 @@ private fun CatalogEquipmentRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val typeUpper = row.typeLabel?.uppercase() ?: ""
-                val (iconRes, iconColor, _) = when {
+                val (iconRes, iconColor, typeChipBg) = when {
                     typeUpper.contains("CHAUDIERE") ->
                         Triple(
                             Icons.Filled.LocalFireDepartment,
@@ -355,53 +457,37 @@ private fun CatalogEquipmentRow(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Text(
+                        text = row.brandLabel ?: "—",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp),
-                    ) {
-                        Text(
-                            text = row.brandLabel ?: "—",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (!row.energyLabel.isNullOrBlank()) {
-                            Text(
-                                text = "·",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            val energyUpper = row.energyLabel.uppercase()
-                            val (energyBg, energyFg) = when {
-                                energyUpper.contains("GAZ") ->
-                                    Pair(Color(0xFFE3F2FD), Color(0xFF1565C0))
-                                energyUpper.contains("CLIM") ->
-                                    Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
-                                energyUpper.contains("PAC") ->
-                                    Pair(Color(0xFFEDE7F6), Color(0xFF4527A0))
-                                energyUpper.contains("FIOUL") ->
-                                    Pair(Color(0xFFFFF3E0), Color(0xFFE65100))
-                                energyUpper.contains("ELEC") ->
-                                    Pair(Color(0xFFFFFDE7), Color(0xFFF9A825))
-                                else ->
-                                    Pair(
-                                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val typeLabel =
+                        row.typeLabel?.takeIf { it.isNotBlank() }
+                            ?: formatEquipmentTypeLabel(row.typeCode).takeIf { it.isNotBlank() }
+                    val energyLabel = row.energyLabel?.takeIf { it.isNotBlank() }
+                    if (typeLabel != null || energyLabel != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp),
+                        ) {
+                            if (typeLabel != null) {
+                                CatalogMetaChip(
+                                    text = typeLabel,
+                                    background = typeChipBg,
+                                    content = iconColor,
+                                )
                             }
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = energyBg,
-                            ) {
-                                Text(
-                                    text = row.energyLabel,
-                                    modifier = Modifier.padding(
-                                        horizontal = 6.dp,
-                                        vertical = 2.dp,
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = energyFg,
-                                    fontWeight = FontWeight.Medium,
+                            if (energyLabel != null) {
+                                val (energyBg, energyFg) = catalogEnergyChipColors(energyLabel)
+                                CatalogMetaChip(
+                                    text = energyLabel,
+                                    background = energyBg,
+                                    content = energyFg,
                                 )
                             }
                         }
@@ -428,5 +514,45 @@ private fun CatalogEquipmentRow(
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun CatalogMetaChip(
+    text: String,
+    background: Color,
+    content: Color,
+) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = background,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = content,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun catalogEnergyChipColors(energyLabel: String): Pair<Color, Color> {
+    val energyUpper = energyLabel.uppercase()
+    return when {
+        energyUpper.contains("GAZ") ->
+            Color(0xFFE3F2FD) to Color(0xFF1565C0)
+        energyUpper.contains("CLIM") ->
+            Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+        energyUpper.contains("PAC") ->
+            Color(0xFFEDE7F6) to Color(0xFF4527A0)
+        energyUpper.contains("FIOUL") ->
+            Color(0xFFFFF3E0) to Color(0xFFE65100)
+        energyUpper.contains("ELEC") ->
+            Color(0xFFFFFDE7) to Color(0xFFF9A825)
+        else ->
+            Color(0xFFF5F5F5) to Color(0xFF616161)
     }
 }

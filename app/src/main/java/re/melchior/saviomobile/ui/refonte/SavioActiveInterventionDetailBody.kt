@@ -120,6 +120,119 @@ fun SavioActiveInterventionDetailBody(
 }
 
 @Composable
+fun SavioActiveInterventionTabletDetailBody(
+    intervention: InterventionEntity,
+    onClientClick: (String) -> Unit,
+    onCallClick: (String) -> Unit,
+    onNavigateClick: () -> Unit,
+    energyBadges: List<UnitEnergySummaryItem> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        SavioTabletTwoColumnGrid(
+            left = {
+            SavioRefonteCard {
+                Column {
+                    Text(
+                        text = "Rendez-vous & client",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SavioRefonte.Muted,
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                    )
+                    SavioRowLine()
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 15.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SavioInfoIconBox(icon = Icons.Filled.CalendarToday)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = formatInterventionDate(intervention.scheduledAt),
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SavioRefonte.Ink,
+                            )
+                            Text(
+                                text = formatInterventionTime(intervention.scheduledAt),
+                                fontSize = 13.sp,
+                                color = SavioRefonte.Muted,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                        if (energyBadges.isNotEmpty()) {
+                            UnitEnergyBadges(items = energyBadges)
+                        }
+                    }
+                    intervention.customerId?.let { customerId ->
+                        SavioRowLine()
+                        ActiveDetailClientRow(
+                            intervention = intervention,
+                            onClick = { onClientClick(customerId) },
+                        )
+                    }
+                    intervention.contractType?.let { type ->
+                        SavioRowLine()
+                        ActiveDetailContractRow(
+                            type = type,
+                            renewalDate = intervention.contractRenewalDate,
+                        )
+                    }
+                    intervention.notes?.takeIf { it.isNotBlank() }?.let { notes ->
+                        SavioRowLine()
+                        ActiveDetailNotesRow(notes = notes)
+                    }
+                }
+            }
+            },
+            right = {
+            SavioRefonteCard {
+                Column {
+                    Text(
+                        text = "Adresse",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SavioRefonte.Muted,
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                    )
+                    SavioRowLine()
+                    ActiveDetailInfoRow(
+                        icon = Icons.Filled.LocationOn,
+                        title = intervention.unitStreet,
+                        subtitle = "${intervention.unitPostalCode} ${intervention.unitCity}",
+                        showDivider = false,
+                    )
+                    SavioInfoActionsRow {
+                        SavioGhostButton(
+                            text = "Itinéraire",
+                            icon = Icons.Filled.Directions,
+                            onClick = onNavigateClick,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        intervention.customerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                            SavioGhostButton(
+                                text = "Appeler",
+                                icon = Icons.Filled.Call,
+                                onClick = { onCallClick(phone) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
+            },
+        )
+    }
+}
+
+@Composable
 private fun ActiveDetailInfoRow(
     icon: ImageVector,
     title: String,

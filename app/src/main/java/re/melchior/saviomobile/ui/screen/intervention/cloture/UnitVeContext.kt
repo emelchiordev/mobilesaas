@@ -254,13 +254,11 @@ fun mergeUnitVeContextWithApi(
 
     val nextVe =
 
-        local.nextVe
+        parseVePrevisionalMonth(api.nextVePrevisionalMonth)?.let { monthStart ->
 
-            ?: parseVePrevisionalMonth(api.nextVePrevisionalMonth)?.let { monthStart ->
+            nextVeDisplay(monthStart, today)
 
-                nextVeDisplay(monthStart, today)
-
-            }
+        } ?: local.nextVe
 
 
 

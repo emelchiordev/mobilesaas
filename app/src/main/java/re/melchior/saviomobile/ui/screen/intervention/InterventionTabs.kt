@@ -71,6 +71,7 @@ import re.melchior.saviomobile.ui.theme.SavioUi
 import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 import re.melchior.saviomobile.ui.refonte.SavioActiveInterventionDetailBody
+import re.melchior.saviomobile.ui.refonte.SavioActiveInterventionTabletDetailBody
 import re.melchior.saviomobile.util.UnitEnergyEquipmentInput
 import re.melchior.saviomobile.util.UnitEnergySummary
 import re.melchior.saviomobile.ui.refonte.SavioEquipListHeader
@@ -105,6 +106,7 @@ fun InterventionDetailTab(
     onClientClick: (customerId: String) -> Unit,
     elapsedLabel: String = "",
     startTimeLabel: String = "",
+    isTablet: Boolean = false,
 ) {
     val intervention = uiState.intervention ?: return
     val refonte = useSavioRefonteUi()
@@ -122,6 +124,26 @@ fun InterventionDetailTab(
         }
 
     if (refonte) {
+        val onCallClick: (String) -> Unit = { phone ->
+            context.startActivity(
+                Intent(Intent.ACTION_DIAL).apply {
+                    data = Uri.parse("tel:$phone")
+                },
+            )
+        }
+        val onNavigateClick: () -> Unit = {
+            val lat = intervention.unitLatitude
+            val lng = intervention.unitLongitude
+            val address =
+                "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+            val uri =
+                if (lat != null && lng != null) {
+                    Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                } else {
+                    Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                }
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
         LazyColumn(
             modifier =
                 Modifier
@@ -136,31 +158,23 @@ fun InterventionDetailTab(
                 )
             }
             item {
-                SavioActiveInterventionDetailBody(
-                    intervention = intervention,
-                    energyBadges = energyBadges,
-                    onClientClick = onClientClick,
-                    onCallClick = { phone ->
-                        context.startActivity(
-                            Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:$phone")
-                            },
-                        )
-                    },
-                    onNavigateClick = {
-                        val lat = intervention.unitLatitude
-                        val lng = intervention.unitLongitude
-                        val address =
-                            "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
-                        val uri =
-                            if (lat != null && lng != null) {
-                                Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
-                            } else {
-                                Uri.parse("geo:0,0?q=${Uri.encode(address)}")
-                            }
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                    },
-                )
+                if (isTablet) {
+                    SavioActiveInterventionTabletDetailBody(
+                        intervention = intervention,
+                        energyBadges = energyBadges,
+                        onClientClick = onClientClick,
+                        onCallClick = onCallClick,
+                        onNavigateClick = onNavigateClick,
+                    )
+                } else {
+                    SavioActiveInterventionDetailBody(
+                        intervention = intervention,
+                        energyBadges = energyBadges,
+                        onClientClick = onClientClick,
+                        onCallClick = onCallClick,
+                        onNavigateClick = onNavigateClick,
+                    )
+                }
             }
         }
         return
@@ -401,6 +415,7 @@ fun InterventionEquipementsTab(
     newEquipmentIds: Set<String>,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
     onAddEquipment: (interventionId: String, unitId: String, parentEquipmentId: String?) -> Unit,
+    isTablet: Boolean = false,
 ) {
     val intervention = uiState.intervention ?: return
     var subTab by remember { mutableIntStateOf(0) }
@@ -434,6 +449,7 @@ fun InterventionEquipementsTab(
                         newEquipmentIds = newEquipmentIds,
                         onEquipementClick = onEquipementClick,
                         onAddEquipment = onAddEquipment,
+                        isTablet = isTablet,
                     )
                 1 ->
                     InstallationCheckTab(
@@ -450,6 +466,7 @@ private fun InterventionAppareilsTab(
     newEquipmentIds: Set<String>,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
     onAddEquipment: (interventionId: String, unitId: String, parentEquipmentId: String?) -> Unit,
+    isTablet: Boolean = false,
 ) {
     val intervention = uiState.intervention ?: return
     val refonte = useSavioRefonteUi()
@@ -482,6 +499,7 @@ private fun InterventionAppareilsTab(
                     newEquipmentIds = newEquipmentIds,
                     interventionId = intervention.id,
                     onEquipementClick = onEquipementClick,
+                    isTablet = isTablet,
                 )
             }
             return@Column
@@ -666,6 +684,7 @@ private fun InterventionEquipmentsRefonteList(
     newEquipmentIds: Set<String>,
     interventionId: String,
     onEquipementClick: (interventionId: String, equipmentId: String) -> Unit,
+    isTablet: Boolean = false,
 ) {
     val allActive = equipments.filter { it.typeCode != "replaced" }
     val allReplaced = equipments.filter { it.typeCode == "replaced" }
@@ -699,6 +718,64 @@ private fun InterventionEquipmentsRefonteList(
         )
     val hybrideIds = hybrideEquipmentIds(hybrideGroups)
     val normalRootAndOrphans = (rootEquipments + orphans).filter { it.id !in hybrideIds }
+
+    val gridSpacing = 14.dp
+    val renderCard: @Composable (PlanningActiveEquipGridItem) -> Unit = { item ->
+        when (item) {
+            is PlanningActiveEquipGridItem.Hybride ->
+                HybrideGroupCard(
+                    group = item.group,
+                    newEquipmentIds = newEquipmentIds,
+                    interventionId = interventionId,
+                    interactive = true,
+                    onEquipementClick = onEquipementClick,
+                )
+            is PlanningActiveEquipGridItem.Root ->
+                InterventionEquipmentGroupCard(
+                    parent = item.parent,
+                    children = childrenByParent[item.parent.id].orEmpty(),
+                    newEquipmentIds = newEquipmentIds,
+                    interventionId = interventionId,
+                    interactive = true,
+                    onEquipementClick = onEquipementClick,
+                )
+            is PlanningActiveEquipGridItem.Replaced ->
+                InterventionEquipmentGroupCard(
+                    parent = item.parent,
+                    children = childrenByParent[item.parent.id].orEmpty(),
+                    newEquipmentIds = newEquipmentIds,
+                    interventionId = interventionId,
+                    interactive = true,
+                    onEquipementClick = onEquipementClick,
+                )
+        }
+    }
+
+    if (isTablet) {
+        val gridItems = buildList {
+            hybrideGroups.forEach { add(PlanningActiveEquipGridItem.Hybride(it)) }
+            normalRootAndOrphans.forEach { add(PlanningActiveEquipGridItem.Root(it)) }
+            rootReplaced.forEach { add(PlanningActiveEquipGridItem.Replaced(it)) }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(gridSpacing)) {
+            gridItems.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                ) {
+                    rowItems.forEach { item ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            renderCard(item)
+                        }
+                    }
+                    if (rowItems.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        return
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         hybrideGroups.forEach { group ->
@@ -1328,4 +1405,10 @@ private fun formatContractDate(date: String?): String {
     } catch (_: Exception) {
         date.take(10)
     }
+}
+
+private sealed interface PlanningActiveEquipGridItem {
+    data class Hybride(val group: HybrideGroup) : PlanningActiveEquipGridItem
+    data class Root(val parent: EquipmentEntity) : PlanningActiveEquipGridItem
+    data class Replaced(val parent: EquipmentEntity) : PlanningActiveEquipGridItem
 }

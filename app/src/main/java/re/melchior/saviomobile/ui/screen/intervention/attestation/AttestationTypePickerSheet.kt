@@ -32,6 +32,7 @@ fun attestationTypeLabel(type: String): String =
         "PAC" -> "PAC"
         "PAC_HYBRIDE_GAZ" -> "PAC Hybride Gaz"
         "PAC_HYBRIDE_FIOUL" -> "PAC Hybride Fioul"
+        "ECS" -> "Chauffe-eau / ECS"
         else -> type
     }
 

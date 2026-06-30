@@ -459,7 +459,121 @@ object AttestationVeControlPoints {
         ),
     )
 
-    fun getPointsForType(type: String): List<ControlPoint> {
+    val SANIT_ACCUMULATION = listOf(
+        ControlPoint(
+            "SANIT_HEAD",
+            "Production eau chaude sanitaire",
+            LineType.HEAD,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "SANIT_TEMP_CONSIGNE",
+            "Température de consigne ≥ 60°C",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "SANIT_ANTI_LEG",
+            "Cycle d'assainissement thermique actif et fonctionnel",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "SANIT_PURGE_SED",
+            "Dernière purge des sédiments < 12 mois",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "SANIT_GROUPE_SECU",
+            "Groupe de sécurité fonctionnel",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "SANIT_ANODE",
+            "État visuel anode magnésium",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+    )
+
+    private val ECS_GAZ_INSTALLATION_VISUEL = listOf(
+        ControlPoint(
+            "ECS_VENTIL_LOCAL",
+            "Ventilation du local correcte",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "ECS_EVAC_FUMEES",
+            "Évacuation des fumées visuelle correcte",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+    )
+
+    private val ECS_GAZ_CONTROLES = listOf(
+        ControlPoint(
+            "ECS_ETANCHEITE_GAZ",
+            "Étanchéité gaz vérifiée",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+        ControlPoint(
+            "ECS_BRULEUR",
+            "État du brûleur correct",
+            LineType.BODY,
+            hasSansObjet = false,
+        ),
+    )
+
+    fun isGazNatOrProp(energyCode: String?): Boolean {
+        val ec = energyCode?.trim()?.uppercase().orEmpty()
+        return ec == "GAZ NAT" || ec == "GAZ PROP"
+    }
+
+    fun resolveEcsPoints(
+        energyCode: String?,
+        equipmentTypeCode: String? = null,
+    ): List<ControlPoint> {
+        val tc = equipmentTypeCode?.trim()?.uppercase().orEmpty()
+        val ec = energyCode?.trim()?.uppercase().orEmpty()
+        val points = mutableListOf<ControlPoint>()
+        for (point in SANIT_ACCUMULATION) {
+            if (point.cle == "SANIT_ANODE") continue
+            points.add(point)
+        }
+        if (tc == "BALLON ECS" && ec.contains("ELEC")) {
+            points.add(
+                ControlPoint(
+                    "ECS_ANODE",
+                    "État visuel de l'anode magnésium correct",
+                    LineType.BODY,
+                    hasSansObjet = false,
+                ),
+            )
+        }
+        if (isGazNatOrProp(energyCode)) {
+            points.addAll(ECS_GAZ_CONTROLES)
+        }
+        return points
+    }
+
+    fun getInstallationPointsForType(
+        type: String,
+        energyCode: String? = null,
+        @Suppress("UNUSED_PARAMETER") equipmentTypeCode: String? = null,
+    ): List<ControlPoint> {
+        if (type != "ECS" || !isGazNatOrProp(energyCode)) return emptyList()
+        return ECS_GAZ_INSTALLATION_VISUEL
+    }
+
+    fun getPointsForType(
+        type: String,
+        energyCode: String? = null,
+        equipmentTypeCode: String? = null,
+    ): List<ControlPoint> {
         return when (type) {
             "GAZ" -> HYDRAULIQUE + REGULATION + GAZ_GENERATEUR
             "FIOUL" -> HYDRAULIQUE + REGULATION + FIOUL_GENERATEUR
@@ -469,6 +583,7 @@ object AttestationVeControlPoints {
                 PAC_HYDRAULIQUE + PAC_REGULATION + PAC_GENERATEUR + GAZ_GENERATEUR
             "PAC_HYBRIDE_FIOUL" ->
                 PAC_HYDRAULIQUE + PAC_REGULATION + PAC_GENERATEUR + FIOUL_GENERATEUR
+            "ECS" -> resolveEcsPoints(energyCode, equipmentTypeCode)
             else -> emptyList()
         }
     }

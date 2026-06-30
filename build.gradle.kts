@@ -4,7 +4,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("io.objectbox:objectbox-gradle-plugin:3.8.0")
+        classpath("io.objectbox:objectbox-gradle-plugin:4.2.0")
     }
 }
 

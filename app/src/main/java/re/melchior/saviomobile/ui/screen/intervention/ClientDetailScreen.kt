@@ -90,7 +90,7 @@ fun ClientDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
-    val isTablet = rememberSavioWindowSize(windowSizeClass) == SavioWindowSize.EXPANDED
+    val isTablet = rememberSavioWindowSize(windowSizeClass) == SavioWindowSize.TABLET
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { msg ->

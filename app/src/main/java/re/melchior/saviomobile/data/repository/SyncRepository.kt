@@ -48,7 +48,9 @@ import re.melchior.saviomobile.util.ClosingPolicy
 import re.melchior.saviomobile.util.MobilePlanningPermissionPolicy
 import re.melchior.saviomobile.util.UserProfile
 import re.melchior.saviomobile.data.remote.dto.SettingsDto
+import re.melchior.saviomobile.util.SavioTimeZone
 import re.melchior.saviomobile.util.toScheduledAtIsoRange
+import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -87,6 +89,25 @@ class SyncRepository @Inject constructor(
 
     fun getEquipmentsByIntervention(interventionId: String) =
         equipmentDao.getEquipmentsByIntervention(interventionId)
+
+    /**
+     * Les équipements du logement sont copiés en local au pull mobile.
+     * Si la liste est vide (ex. intervention ouverte avant fin du sync), on force un pull
+     * sur la date planifiée pour hydrater depuis le serveur.
+     */
+    suspend fun hydrateInterventionEquipmentsIfEmpty(interventionId: String) {
+        if (equipmentDao.getEquipmentsByInterventionOnce(interventionId).isNotEmpty()) return
+        val intervention = interventionDao.getInterventionByIdOnce(interventionId) ?: return
+        if (intervention.unitId.isBlank()) return
+        if (intervention.syncStatus == "PENDING") return
+        val pullDate =
+            runCatching {
+                Instant.parse(intervention.scheduledAt)
+                    .atZone(SavioTimeZone.appZone)
+                    .toLocalDate()
+            }.getOrNull() ?: return
+        pull(pullDate, force = true)
+    }
 
     suspend fun computeEnergyBadgesByInterventionId(
         interventionIds: List<String>,
@@ -142,7 +163,14 @@ class SyncRepository @Inject constructor(
                 else -> Unit
             }
         }
-        pull(LocalDate.now(), force = true)
+        val intervention = interventionDao.getInterventionByIdOnce(interventionId)
+        val pullDate =
+            intervention?.scheduledAt?.let { iso ->
+                runCatching {
+                    Instant.parse(iso).atZone(SavioTimeZone.appZone).toLocalDate()
+                }.getOrNull()
+            } ?: LocalDate.now()
+        pull(pullDate, force = true)
     }
 
     private suspend fun snapshotEquipments(interventionId: String) {
@@ -375,12 +403,21 @@ class SyncRepository @Inject constructor(
                     dayRange.startIso,
                     dayRange.endIso,
                 )
+                interventionActualTypeDao.deleteForSyncedOpenInterventionsOnDate(
+                    dayRange.startIso,
+                    dayRange.endIso,
+                )
                 interventionDao.deleteSyncedOpenInterventionsForDateWhenPullEmpty(
                     dayRange.startIso,
                     dayRange.endIso,
                 )
             } else {
                 equipmentDao.deleteEquipmentsForSyncedInterventionsNotInKeepList(
+                    dayRange.startIso,
+                    dayRange.endIso,
+                    returnedInterventionIds,
+                )
+                interventionActualTypeDao.deleteForSyncedOpenOnDateNotInKeepList(
                     dayRange.startIso,
                     dayRange.endIso,
                     returnedInterventionIds,
@@ -392,7 +429,9 @@ class SyncRepository @Inject constructor(
                 )
             }
 
-            // Appel correct ici
+            // Équipements avant interventions : évite d'ouvrir une intervention visible sans appareils locaux.
+            mergePullEquipmentsFromResponse(response.interventions)
+
             insertAllSafe(interventionEntities)
 
             val cutoff48h = java.time.Instant.now()
@@ -404,7 +443,11 @@ class SyncRepository @Inject constructor(
                 val existing = interventionDao.getInterventionByIdOnce(dto.id)
                 val preserveLocalClosed =
                     existing?.status in IMMUTABLE_INTERVENTION_STATUSES_FOR_PULL
-                if (!preserveLocalClosed && dto.actualTypes.isNotEmpty()) {
+                if (
+                    !preserveLocalClosed &&
+                    dto.actualTypes.isNotEmpty() &&
+                    interventionDao.getInterventionByIdOnce(dto.id) != null
+                ) {
                     interventionActualTypeDao.deleteForIntervention(dto.id)
                     interventionActualTypeDao.insertAll(
                         dto.actualTypes.map { at ->
@@ -448,79 +491,6 @@ class SyncRepository @Inject constructor(
             if (historyEntities.isNotEmpty()) {
                 interventionHistoryDao.insertAll(historyEntities)
             }
-
-
-
-
-            // Dédupliquer les équipements — prioriser l'intervention active
-            val equipmentMap = mutableMapOf<String, EquipmentEntity>()
-            response.interventions
-                .sortedByDescending { it.status == INTERVENTION_STATUS_COMPLETED }
-                .forEach { intervention ->
-                    val existingIntervention =
-                        interventionDao.getInterventionByIdOnce(intervention.id)
-                    val blockLocalSync = existingIntervention?.syncStatus == "IN_PROGRESS" ||
-                        existingIntervention?.syncStatus == "PENDING"
-
-                    // Aligné sur deleteEquipmentsNotInList : seul IN_PROGRESS / PENDING bloque le serveur
-                    if (!blockLocalSync) {
-                        intervention.equipment.forEachIndexed { index, eq ->
-                            val catalogBrandId = eq.catalogBrandId?.takeIf { it.isNotBlank() }
-                                ?: eq.equipmentCatalogId?.let { cid ->
-                                    catalogEquipmentDao.getBrandIdForCatalogEquipment(cid)
-                                }
-                            val ord = eq.order ?: (index + 1)
-                            val mapKey = "${intervention.id}_$ord"
-                            equipmentMap[mapKey] = EquipmentEntity(
-                                interventionId = intervention.id,
-                                order = ord,
-                                id = eq.id,
-                                unitId = intervention.unit.id,
-                                brand = eq.brand,
-                                model = eq.model,
-                                typeCode = eq.typeCode,
-                                energyCode = eq.energyCode,
-                                serialNumber = eq.serialNumber,
-                                installDate = eq.installDate,
-                                isPrimary = eq.isPrimary,
-                                equipmentCatalogId = eq.equipmentCatalogId,
-                                catalogBrandId = catalogBrandId,
-                                parentEquipmentId = eq.parentEquipmentId,
-                                powerKw = eq.powerKw?.let { p ->
-                                    if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
-                                },
-                                evacuationMode = eq.evacuationMode,
-                                hybridePacEquipmentId = eq.hybridePacEquipmentId,
-                                attrsJson = eq.attrs?.toString(),
-                            )
-                        }
-                    }
-                }
-
-            // Pour chaque intervention de la réponse : retirer les équipements de l'intervention
-            // absents côté serveur (sauf sync local IN_PROGRESS / PENDING).
-            response.interventions.forEach { intervention ->
-                val existingIntervention =
-                    interventionDao.getInterventionByIdOnce(intervention.id)
-                val isInProgress = existingIntervention?.syncStatus == "IN_PROGRESS"
-                val isPendingPush = existingIntervention?.syncStatus == "PENDING"
-
-                if (!isInProgress && !isPendingPush) {
-                    val serverOrders = intervention.equipment.mapIndexed { index, eq ->
-                        eq.order ?: (index + 1)
-                    }
-                    equipmentDao.deleteEquipmentsNotInList(
-                        interventionId = intervention.id,
-                        keepOrders = if (serverOrders.isEmpty()) {
-                            listOf(-1)
-                        } else {
-                            serverOrders
-                        },
-                    )
-                }
-            }
-
-            equipmentDao.insertAll(equipmentMap.values.toList())
 
             response.interventions.forEach { intervention ->
                 val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
@@ -612,44 +582,16 @@ class SyncRepository @Inject constructor(
                 )
             )
 
-            response.interventions.forEach { intervention ->
-                val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
-                val isInProgress = existingIntervention?.syncStatus == "IN_PROGRESS"
-                val isPendingPush = existingIntervention?.syncStatus == "PENDING"
-
-                android.util.Log.d("EQ_PURGE",
-                    "intervention=${intervention.id} " +
-                            "willPurge=${!isInProgress && !isPendingPush} " +
-                            "serverOrders=${
-                                intervention.equipment.mapIndexed { index, eq ->
-                                    eq.order ?: (index + 1)
-                                }
-                            }",
-                )
-
-                if (!isInProgress && !isPendingPush) {
-                    val serverOrders = intervention.equipment.mapIndexed { index, eq ->
-                        eq.order ?: (index + 1)
-                    }
-                    equipmentDao.deleteEquipmentsNotInList(
-                        interventionId = intervention.id,
-                        keepOrders = if (serverOrders.isEmpty()) {
-                            listOf(-1)
-                        } else {
-                            serverOrders
-                        },
-                    )
-                }
-            }
-
             val cutoffBeforeIso = date.minusDays(7).toScheduledAtIsoRange().startIso
             equipmentDao.deleteOlderThan(cutoffBeforeIso)
+            interventionActualTypeDao.deleteOlderThanForOpenInterventions(cutoffBeforeIso)
             interventionDao.deleteOlderThan(cutoffBeforeIso)
 
             SyncResult.Success
 
         } catch (e: Exception) {
-            SyncResult.Error(e.message ?: "Erreur de synchronisation")
+            android.util.Log.e("SYNC", "Pull échoué", e)
+            SyncResult.Error(pullErrorMessage(e))
         }
     }
 
@@ -741,6 +683,81 @@ class SyncRepository @Inject constructor(
 
         interventionActualTypeDao.deleteForIntervention(interventionId)
         interventionDao.resetToScheduledAfterAbandon(interventionId)
+    }
+
+    private suspend fun mergePullEquipmentsFromResponse(interventions: List<InterventionDto>) {
+        val equipmentMap = mutableMapOf<String, EquipmentEntity>()
+        interventions
+            .sortedByDescending { it.status == INTERVENTION_STATUS_COMPLETED }
+            .forEach { intervention ->
+                val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
+                val blockLocalSync = existingIntervention?.syncStatus == "IN_PROGRESS" ||
+                    existingIntervention?.syncStatus == "PENDING"
+                if (!blockLocalSync) {
+                    intervention.equipment.forEachIndexed { index, eq ->
+                        val catalogBrandId = eq.catalogBrandId?.takeIf { it.isNotBlank() }
+                            ?: eq.equipmentCatalogId?.let { cid ->
+                                catalogEquipmentDao.getBrandIdForCatalogEquipment(cid)
+                            }
+                        val ord = eq.order ?: (index + 1)
+                        val mapKey = "${intervention.id}_$ord"
+                        equipmentMap[mapKey] = EquipmentEntity(
+                            interventionId = intervention.id,
+                            order = ord,
+                            id = eq.id,
+                            unitId = intervention.unit.id,
+                            brand = eq.brand,
+                            model = eq.model,
+                            typeCode = eq.typeCode,
+                            energyCode = eq.energyCode,
+                            serialNumber = eq.serialNumber,
+                            installDate = eq.installDate,
+                            isPrimary = eq.isPrimary,
+                            equipmentCatalogId = eq.equipmentCatalogId,
+                            catalogBrandId = catalogBrandId,
+                            parentEquipmentId = eq.parentEquipmentId,
+                            powerKw = eq.powerKw?.let { p ->
+                                if (p % 1.0 == 0.0) p.toInt().toString() else p.toString()
+                            },
+                            evacuationMode = eq.evacuationMode,
+                            hybridePacEquipmentId = eq.hybridePacEquipmentId,
+                            attrsJson = eq.attrs?.toString(),
+                        )
+                    }
+                }
+            }
+
+        interventions.forEach { intervention ->
+            val existingIntervention = interventionDao.getInterventionByIdOnce(intervention.id)
+            val isInProgress = existingIntervention?.syncStatus == "IN_PROGRESS"
+            val isPendingPush = existingIntervention?.syncStatus == "PENDING"
+            if (!isInProgress && !isPendingPush) {
+                val serverOrders = intervention.equipment.mapIndexed { index, eq ->
+                    eq.order ?: (index + 1)
+                }
+                equipmentDao.deleteEquipmentsNotInList(
+                    interventionId = intervention.id,
+                    keepOrders = if (serverOrders.isEmpty()) {
+                        listOf(-1)
+                    } else {
+                        serverOrders
+                    },
+                )
+            }
+        }
+
+        if (equipmentMap.isNotEmpty()) {
+            equipmentDao.insertAll(equipmentMap.values.toList())
+        }
+    }
+
+    private fun pullErrorMessage(e: Exception): String {
+        val raw = e.message.orEmpty()
+        return if (raw.contains("FOREIGN KEY", ignoreCase = true)) {
+            "Synchronisation impossible. Réessayez dans un instant."
+        } else {
+            e.message ?: "Erreur de synchronisation"
+        }
     }
 
     private companion object {

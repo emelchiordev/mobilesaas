@@ -9,12 +9,16 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import re.melchior.saviomobile.data.local.dao.AttestationVeDao
+import re.melchior.saviomobile.data.local.dao.AttestationVePointControleDao
 import re.melchior.saviomobile.data.local.dao.ColdMeasureDao
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
 import re.melchior.saviomobile.data.local.dao.InvoiceDao
@@ -36,6 +40,9 @@ import re.melchior.saviomobile.data.remote.dto.GenerateReportRequestDto
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
 import re.melchior.saviomobile.data.remote.dto.stableKey
 import re.melchior.saviomobile.data.repository.AnomalyDraftRepository
+import re.melchior.saviomobile.data.repository.ContractRenewalRepository
+import re.melchior.saviomobile.data.repository.InvoiceRepository
+import re.melchior.saviomobile.data.repository.RenewalEligibility
 import re.melchior.saviomobile.observability.SavioSyncSentry
 import re.melchior.saviomobile.data.repository.InstallationCheckRepository
 import re.melchior.saviomobile.data.repository.SyncRepository
@@ -44,7 +51,7 @@ import re.melchior.saviomobile.ui.theme.formatEquipmentTypeLabel
 import re.melchior.saviomobile.ui.utils.NetworkUtils
 import re.melchior.saviomobile.util.GAS_PIPE_EXPIRED_ANOMALY_CODE
 import re.melchior.saviomobile.util.SavioTimeZone
-import re.melchior.saviomobile.util.attestableFrom
+import re.melchior.saviomobile.util.toAttestableInput
 import re.melchior.saviomobile.util.formatScheduledAtDateReadable
 import re.melchior.saviomobile.util.isGasPipeExpiredWithoutAnomaly
 import java.time.LocalDate
@@ -76,7 +83,17 @@ data class ClotureRapportUiState(
     val canGenerateReport: Boolean = false,
     val followUpRequired: Boolean = false,
     val followUpNote: String = "",
+    val renewalEligibility: RenewalEligibility? = null,
+    val renewalLoading: Boolean = false,
+    val renewalError: String? = null,
 ) {
+    val showRenewContractCta: Boolean
+        get() =
+            shouldShowRenewContractCta(
+                renewable = renewalEligibility?.renewable == true,
+                hasVeTypeSelected = selectedCloseTypes.any { it.isVeType },
+            )
+
     val isAbsent: Boolean get() = selectedCloseTypes.any { it.code == "ABS" }
 
     val showClientSignature: Boolean
@@ -85,14 +102,18 @@ data class ClotureRapportUiState(
     val showReport: Boolean get() = selectedCloseTypes.any { it.requireReport }
 
     val isVeChanged: Boolean
-        get() = intervention?.typeCode == "VE"
-            && selectedCloseTypes.isNotEmpty()
-            && selectedCloseTypes.none { it.isVeType }
+        get() {
+            val planned = resolvePlannedType(intervention, closeTypes)
+            return isPlannedVeChanged(planned, selectedCloseTypes)
+        }
 
     val canProceed: Boolean
         get() {
             if (closeTypesLoading || closeTypesError != null) return false
             if (selectedCloseTypes.isEmpty() || closeTypes.isEmpty()) return false
+            if (blocksClosureForMissingCommissioning(selectedCloseTypes, rootEquipments)) {
+                return false
+            }
             if (!showReport) return true
             return report.isNotBlank()
         }
@@ -121,12 +142,18 @@ private const val REPORT_GENERATION_ERROR =
     "Génération impossible, saisissez manuellement"
 private const val REPORT_GENERATION_OFFLINE =
     "Réseau requis pour cette fonctionnalité"
+private const val REPORT_RENEWAL_OFFLINE =
+    "Réseau requis pour renouveler le contrat"
+private const val REPORT_RENEWAL_ERROR =
+    "Impossible de créer la facture de renouvellement"
 
 @HiltViewModel
 class ClotureRapportViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val syncRepository: SyncRepository,
     private val unitVeRepository: UnitVeRepository,
+    private val contractRenewalRepository: ContractRenewalRepository,
+    private val invoiceRepository: InvoiceRepository,
     private val anomalyDraftRepository: AnomalyDraftRepository,
     private val installationCheckRepository: InstallationCheckRepository,
     private val equipmentDao: EquipmentDao,
@@ -135,6 +162,7 @@ class ClotureRapportViewModel @Inject constructor(
     private val interventionApi: InterventionApi,
     private val referentielDao: ReferentielDao,
     private val attestationVeDao: AttestationVeDao,
+    private val attestationVePointControleDao: AttestationVePointControleDao,
     private val measureDao: MeasureDao,
     private val coldMeasureDao: ColdMeasureDao,
     private val pacMeasureDao: PacMeasureDao,
@@ -146,6 +174,9 @@ class ClotureRapportViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ClotureRapportUiState())
     val uiState: StateFlow<ClotureRapportUiState> = _uiState.asStateFlow()
+
+    private val _navigateToInvoice = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navigateToInvoice: SharedFlow<String> = _navigateToInvoice.asSharedFlow()
 
     private var updatesRequireValidation: Boolean = false
     private var hasLocalAttestationVe: Boolean = false
@@ -188,6 +219,7 @@ class ClotureRapportViewModel @Inject constructor(
                 return@launch
             }
             val attestations = attestationVeDao.getByIntervention(interventionId).first()
+            val attestationPoints = loadAttestationPointsMap(attestations)
             val measures = measureDao.getByIntervention(interventionId)
             val pacMeasures = pacMeasureDao.observeByInterventionId(interventionId).first()
             val coldCount = coldMeasureDao.countForIntervention(interventionId)
@@ -197,6 +229,7 @@ class ClotureRapportViewModel @Inject constructor(
                     invoiceLines = state.invoiceLines,
                     anomalyDrafts = state.anomalyDrafts,
                     attestations = attestations,
+                    attestationPoints = attestationPoints,
                     measures = measures,
                     pacMeasures = pacMeasures,
                     coldMeasureCount = coldCount,
@@ -232,8 +265,61 @@ class ClotureRapportViewModel @Inject constructor(
             equipmentDao.getRootEquipmentsByInterventionOnce(interventionId).let { roots ->
                 _uiState.update { it.copy(rootEquipments = roots) }
                 refreshClosureCoverage()
+                loadRenewalEligibility()
             }
         }
+    }
+
+    private fun resolvePrimaryEquipmentId(): String? {
+        val roots = _uiState.value.rootEquipments
+        if (roots.isEmpty()) return null
+        return roots.firstOrNull { it.isPrimary }?.id ?: roots.first().id
+    }
+
+    private fun loadRenewalEligibility() {
+        viewModelScope.launch {
+            if (!NetworkUtils.isOnline(context)) return@launch
+            val equipmentId = resolvePrimaryEquipmentId() ?: return@launch
+            runCatching {
+                contractRenewalRepository.getRenewalEligibility(equipmentId)
+            }.onSuccess { eligibility ->
+                _uiState.update { it.copy(renewalEligibility = eligibility, renewalError = null) }
+            }
+        }
+    }
+
+    fun renewContractOnSite() {
+        viewModelScope.launch {
+            val eligibility = _uiState.value.renewalEligibility
+            val lineId = eligibility?.contractLineId?.trim().orEmpty()
+            if (lineId.isEmpty()) {
+                _uiState.update { it.copy(renewalError = "Renouvellement indisponible pour cet appareil.") }
+                return@launch
+            }
+            if (!NetworkUtils.isOnline(context)) {
+                _uiState.update { it.copy(renewalError = REPORT_RENEWAL_OFFLINE) }
+                return@launch
+            }
+            _uiState.update { it.copy(renewalLoading = true, renewalError = null) }
+            runCatching {
+                contractRenewalRepository.createRenewalInvoice(lineId, interventionId)
+                invoiceRepository.refreshInvoiceFromServer(interventionId)
+            }.onSuccess {
+                _uiState.update { it.copy(renewalLoading = false) }
+                _navigateToInvoice.emit(interventionId)
+            }.onFailure { err ->
+                val message =
+                    when (err) {
+                        is HttpException -> err.message() ?: REPORT_RENEWAL_ERROR
+                        else -> err.message ?: REPORT_RENEWAL_ERROR
+                    }
+                _uiState.update { it.copy(renewalLoading = false, renewalError = message) }
+            }
+        }
+    }
+
+    fun clearRenewalError() {
+        _uiState.update { it.copy(renewalError = null) }
     }
 
     fun openAddAnomalySheet() {
@@ -354,7 +440,7 @@ class ClotureRapportViewModel @Inject constructor(
         val types = _uiState.value.closeTypes
         if (types.isEmpty()) return
         _uiState.update {
-            it.copy(selectedCloseTypes = listOf(resolveDefaultSingle(inv, types)))
+            it.copy(selectedCloseTypes = listOf(resolveDefaultCloseType(inv, types)))
         }
     }
 
@@ -374,9 +460,11 @@ class ClotureRapportViewModel @Inject constructor(
                 contractInfo = contract,
                 consequences = computeClosureConsequences(
                     selectedTypes = state.selectedCloseTypes,
-                    plannedTypeCode = state.intervention?.typeCode,
+                    plannedType = resolvePlannedType(state.intervention, state.closeTypes),
                     hasLocalAttestationVe = hasLocalAttestationVe,
                     updatesRequireValidation = updatesRequireValidation,
+                    equipmentsMissingCommissioning =
+                        countEquipmentsMissingCommissioning(state.rootEquipments),
                     gasPipeExpiredWithoutAnomaly = gasPipeExpiredWithoutAnomaly,
                 ),
             )
@@ -537,14 +625,34 @@ class ClotureRapportViewModel @Inject constructor(
 
     private suspend fun buildEstablishedDocuments(): List<String> {
         val docs = mutableListOf<String>()
-        if (attestationVeDao.countForIntervention(interventionId) > 0) {
+        val attestations = attestationVeDao.getByIntervention(interventionId).first()
+        if (attestations.any { it.type != "ECS" }) {
             docs.add("Attestation d'entretien")
+        }
+        if (attestations.any { it.type == "ECS" }) {
+            docs.add("Contrôle ECS")
         }
         if (hasLocalMeasures()) {
             docs.add("Prises de mesures")
         }
         return docs
     }
+
+    private suspend fun loadAttestationPointsMap(
+        attestations: List<AttestationVeEntity>,
+    ): Map<AttestationPointsKey, Map<String, String>> =
+        buildMap {
+            for (att in attestations) {
+                val points =
+                    attestationVePointControleDao
+                        .getByAttestationOnce(
+                            att.interventionId,
+                            att.equipmentOrder,
+                            att.type,
+                        ).associate { it.cle to it.resultat }
+                put(attestationPointsKey(att.equipmentOrder, att.type), points)
+            }
+        }
 
     private suspend fun hasLocalMeasures(): Boolean =
         measureDao.getByIntervention(interventionId).isNotEmpty() ||
@@ -574,15 +682,18 @@ class ClotureRapportViewModel @Inject constructor(
         val anomalySummaries = buildAnomalySummaries(state.anomalyDrafts, state.anomalyCatalog)
             .ifEmpty { null }
         val establishedDocuments = buildEstablishedDocuments().ifEmpty { null }
+        val attestations = attestationVeDao.getByIntervention(interventionId).first()
+        val attestationPoints = loadAttestationPointsMap(attestations)
         val structuredFacts = buildStructuredFactsBlocks(
             equipments = state.rootEquipments,
-            attestations = attestationVeDao.getByIntervention(interventionId).first(),
+            attestations = attestations,
             measures = measureDao.getByIntervention(interventionId),
             pacMeasures = pacMeasureDao.observeByInterventionId(interventionId).first(),
             anomalyDrafts = state.anomalyDrafts,
             anomalyCatalog = state.anomalyCatalog,
             invoiceLines = state.invoiceLines,
             installationCheck = installationCheck,
+            attestationPoints = attestationPoints,
         ).ifEmpty { null }
 
         return GenerateReportRequestDto(
@@ -601,17 +712,6 @@ class ClotureRapportViewModel @Inject constructor(
             technicalFactsCount = reportTechnicalFactsCount.takeIf { it > 0 },
         )
     }
-}
-
-private fun resolveDefaultSingle(
-    intervention: InterventionEntity,
-    types: List<InterventionTypeDto>,
-): InterventionTypeDto {
-    intervention.interventionTypeId?.let { id ->
-        types.find { it.id == id }?.let { return it }
-    }
-    types.find { it.code == intervention.typeCode }?.let { return it }
-    return types.first()
 }
 
 private fun hasText(value: String?): Boolean = !value.isNullOrBlank()
@@ -699,11 +799,3 @@ private fun humanReadableApiError(e: Throwable): String {
     }
     return e.message ?: "Erreur réseau"
 }
-
-private fun EquipmentEntity.toAttestableInput() =
-    attestableFrom(
-        id = id,
-        typeCode = typeCode,
-        energyCode = energyCode,
-        hybridePacEquipmentId = hybridePacEquipmentId,
-    )

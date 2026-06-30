@@ -6,6 +6,7 @@ interface AttestableEquipmentInput {
     val energyCode: String?
     val status: String?
     val hybridePacEquipmentId: String?
+    val sousType: String?
 }
 
 fun hybridePacEquipmentIdFrom(attrsHybridePacId: String?): String? {
@@ -19,6 +20,7 @@ data class SimpleAttestableEquipment(
     override val energyCode: String?,
     override val status: String? = null,
     override val hybridePacEquipmentId: String?,
+    override val sousType: String? = null,
 ) : AttestableEquipmentInput
 
 fun attestableFrom(
@@ -27,6 +29,7 @@ fun attestableFrom(
     energyCode: String?,
     status: String? = null,
     hybridePacEquipmentId: String?,
+    sousType: String? = null,
 ): AttestableEquipmentInput =
     SimpleAttestableEquipment(
         id = id,
@@ -34,6 +37,7 @@ fun attestableFrom(
         energyCode = energyCode,
         status = status,
         hybridePacEquipmentId = hybridePacEquipmentId,
+        sousType = sousType,
     )
 
 fun isEquipmentReplaced(equipment: AttestableEquipmentInput): Boolean {
@@ -62,35 +66,17 @@ fun isPartOfHybrideAsPac(
     }
 }
 
-/** Même heuristique que `ve-attestable-equipment.util.ts` (suggestedAttestationType). */
-fun suggestedAttestationType(equipment: AttestableEquipmentInput): String? {
-    val tc = equipment.typeCode?.uppercase().orEmpty()
-    val ec = equipment.energyCode?.uppercase().orEmpty()
-    val isHybride = hybridePacEquipmentIdFrom(equipment.hybridePacEquipmentId) != null
+fun isEcsControlEquipment(equipment: AttestableEquipmentInput): Boolean =
+    resolveVeScope(equipment) == VeScope.ECS_ACCUMULATION
 
-    if (tc == "CHAUDIERE" && isHybride) {
-        return if (ec.contains("FIOUL") || ec.contains("FUEL")) "PAC_HYBRIDE_FIOUL" else "PAC_HYBRIDE_GAZ"
-    }
-    if (tc == "CHAUDIERE") {
-        if (ec.contains("FIOUL") || ec.contains("FUEL") || tc.contains("FIOUL")) return "FIOUL"
-        if (ec.contains("GAZ") || tc.contains("GAZ")) return "GAZ"
-        return null
-    }
-    if (tc.contains("PAC") && (tc.contains("HYBRIDE") || ec.contains("GAZ")) && ec.contains("GAZ")) {
-        return "PAC_HYBRIDE_GAZ"
-    }
-    if (
-        tc.contains("PAC") &&
-        (tc.contains("HYBRIDE") || ec.contains("FIOUL") || ec.contains("FUEL")) &&
-        (ec.contains("FIOUL") || ec.contains("FUEL"))
-    ) {
-        return "PAC_HYBRIDE_FIOUL"
-    }
-    if (tc.contains("PAC") || tc.contains("THERMODYNAMIQUE")) return "PAC"
-    if (ec.contains("GAZ") || tc.contains("GAZ")) return "GAZ"
-    if (ec.contains("FIOUL") || ec.contains("FUEL") || tc.contains("FIOUL")) return "FIOUL"
-    if (ec.contains("BOIS") || tc.contains("BOIS")) return "BOIS"
-    return null
+fun suggestedEcsControlType(equipment: AttestableEquipmentInput): String? =
+    if (isEcsControlEquipment(equipment)) "ECS" else null
+
+/** Clé attestation légale dérivée du scope VE (`ve-scope.util.ts`). ECS exclu. */
+fun suggestedAttestationType(equipment: AttestableEquipmentInput): String? {
+    val scope = resolveVeScope(equipment) ?: return null
+    if (scope == VeScope.ECS_ACCUMULATION) return null
+    return attestationTypeKeyFromScope(scope)
 }
 
 fun isAttestable(

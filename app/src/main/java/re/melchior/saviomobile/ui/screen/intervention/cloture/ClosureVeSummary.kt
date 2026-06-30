@@ -64,7 +64,7 @@ fun computeNextVeDate(
     lastVe: LastVeSummary?,
     contractRenewal: LocalDate?,
 ): LocalDate? =
-    lastVe?.completedAt?.plusYears(1) ?: contractRenewal
+    lastVe?.completedAt?.plusYears(1)
 
 fun nextVeDisplay(nextDate: LocalDate, today: LocalDate = LocalDate.now(SavioTimeZone.appZone)): NextVeDisplay {
     val urgency = when {

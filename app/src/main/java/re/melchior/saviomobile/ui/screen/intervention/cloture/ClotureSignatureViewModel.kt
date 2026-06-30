@@ -54,9 +54,10 @@ data class ClotureSignatureUiState(
     val showReport: Boolean get() = selectedCloseTypes.any { it.requireReport }
 
     val isVeChanged: Boolean
-        get() = intervention?.typeCode == "VE"
-            && selectedCloseTypes.isNotEmpty()
-            && selectedCloseTypes.none { it.isVeType }
+        get() {
+            val planned = resolvePlannedType(intervention, closeTypes)
+            return isPlannedVeChanged(planned, selectedCloseTypes)
+        }
 
     val canComplete: Boolean
         get() {
@@ -149,7 +150,7 @@ class ClotureSignatureViewModel @Inject constructor(
                 return
             }
         }
-        _uiState.update { it.copy(selectedCloseTypes = listOf(resolveDefaultSingle(inv, types))) }
+        _uiState.update { it.copy(selectedCloseTypes = listOf(resolveDefaultCloseType(inv, types))) }
     }
 
     fun toggleCloseType(type: InterventionTypeDto) {
@@ -320,17 +321,6 @@ class ClotureSignatureViewModel @Inject constructor(
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
-}
-
-private fun resolveDefaultSingle(
-    intervention: InterventionEntity,
-    types: List<InterventionTypeDto>
-): InterventionTypeDto {
-    intervention.interventionTypeId?.let { id ->
-        types.find { it.id == id }?.let { return it }
-    }
-    types.find { it.code == intervention.typeCode }?.let { return it }
-    return types.first()
 }
 
 data class DrawPoint(

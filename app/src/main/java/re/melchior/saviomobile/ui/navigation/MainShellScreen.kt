@@ -69,7 +69,7 @@ fun MainShellScreen(
 
     when (selectedTab) {
         0 -> {
-            if (savioWindowSize == SavioWindowSize.EXPANDED) {
+            if (savioWindowSize == SavioWindowSize.TABLET) {
                 TourneeTabletScreen(
                     parentNavController = parentNavController,
                     onResumeIntervention = { interventionId ->

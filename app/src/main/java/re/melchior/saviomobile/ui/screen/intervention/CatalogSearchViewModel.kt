@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import re.melchior.saviomobile.data.local.dao.EquipmentDao
@@ -49,6 +50,12 @@ class CatalogSearchViewModel @Inject constructor(
         catalogSyncRepository.searchEquipment(q, brand, type, null)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val energies = catalogSyncRepository.getEnergies()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _pendingSelection = MutableStateFlow<PendingCatalogSelection?>(null)
+    val pendingSelection: StateFlow<PendingCatalogSelection?> = _pendingSelection.asStateFlow()
+
     private val _isCreating = MutableStateFlow(false)
     val isCreating: StateFlow<Boolean> = _isCreating.asStateFlow()
 
@@ -69,12 +76,52 @@ class CatalogSearchViewModel @Inject constructor(
         _selectedTypeId.value = id
     }
 
-    fun selectEquipment(
+    fun requestSelectEquipment(
         row: CatalogEquipmentSearchRow,
         interventionId: String,
         unitId: String,
         parentEquipmentId: String? = null,
         existingEquipmentId: String? = null,
+    ) {
+        if (_isCreating.value) return
+        _pendingSelection.value = PendingCatalogSelection(
+            row = row,
+            interventionId = interventionId,
+            unitId = unitId,
+            parentEquipmentId = parentEquipmentId,
+            existingEquipmentId = existingEquipmentId,
+            selectedEnergyId = row.equipment.energyId,
+        )
+    }
+
+    fun updatePendingEnergyId(energyId: String) {
+        _pendingSelection.update { it?.copy(selectedEnergyId = energyId) }
+    }
+
+    fun dismissPendingSelection() {
+        _pendingSelection.value = null
+    }
+
+    fun confirmPendingSelection() {
+        val pending = _pendingSelection.value ?: return
+        _pendingSelection.value = null
+        selectEquipment(
+            row = pending.row,
+            interventionId = pending.interventionId,
+            unitId = pending.unitId,
+            parentEquipmentId = pending.parentEquipmentId,
+            existingEquipmentId = pending.existingEquipmentId,
+            installationEnergyId = pending.selectedEnergyId,
+        )
+    }
+
+    private fun selectEquipment(
+        row: CatalogEquipmentSearchRow,
+        interventionId: String,
+        unitId: String,
+        parentEquipmentId: String? = null,
+        existingEquipmentId: String? = null,
+        installationEnergyId: String,
     ) {
         if (_isCreating.value) return
         viewModelScope.launch {
@@ -86,7 +133,15 @@ class CatalogSearchViewModel @Inject constructor(
                 val newId = java.util.UUID.randomUUID().toString()
                 val brand = catalogSyncRepository.getNomenclatureById(row.equipment.brandId)
                 val type = catalogSyncRepository.getNomenclatureById(row.equipment.equipmentTypeId)
-                val energy = catalogSyncRepository.getNomenclatureById(row.equipment.energyId)
+                val typeCode = type?.code?.trim()?.uppercase().orEmpty()
+                val catalogEnergy = catalogSyncRepository.getNomenclatureById(row.equipment.energyId)
+                val installationEnergy =
+                    if (typeCode == "BRULEUR") {
+                        null
+                    } else {
+                        catalogSyncRepository.getNomenclatureById(installationEnergyId)
+                            ?: catalogEnergy
+                    }
 
                 if (existingEquipmentId != null) {
                     val oldEq = equipmentDao.getEquipmentsByInterventionOnce(interventionId)
@@ -103,7 +158,7 @@ class CatalogSearchViewModel @Inject constructor(
                         brand = brand?.label,
                         model = row.equipment.model,
                         typeCode = type?.code,
-                        energyCode = energy?.code,
+                        energyCode = installationEnergy?.code,
                         serialNumber = null,
                         installDate = null,
                         isPrimary = false,
@@ -126,8 +181,8 @@ class CatalogSearchViewModel @Inject constructor(
                         "brand" to (brand?.label ?: ""),
                         "brandCode" to (brand?.code ?: ""),
                         "typeCode" to (type?.code ?: ""),
-                        "energyLabel" to (energy?.label ?: ""),
-                        "energyCode" to (energy?.code ?: ""),
+                        "energyLabel" to (installationEnergy?.label ?: ""),
+                        "energyCode" to (installationEnergy?.code ?: ""),
                         "isPrimary" to false,
                         "equipmentCatalogId" to row.equipment.id,
                         "catalogBrandId" to row.equipment.brandId,
@@ -154,7 +209,7 @@ class CatalogSearchViewModel @Inject constructor(
                         brand = brand?.label,
                         model = row.equipment.model,
                         typeCode = type?.code,
-                        energyCode = energy?.code,
+                        energyCode = installationEnergy?.code,
                         serialNumber = null,
                         installDate = null,
                         isPrimary = false,
@@ -176,8 +231,8 @@ class CatalogSearchViewModel @Inject constructor(
                         "brand" to (brand?.label ?: ""),
                         "brandCode" to (brand?.code ?: ""),
                         "typeCode" to (type?.code ?: ""),
-                        "energyLabel" to (energy?.label ?: ""),
-                        "energyCode" to (energy?.code ?: ""),
+                        "energyLabel" to (installationEnergy?.label ?: ""),
+                        "energyCode" to (installationEnergy?.code ?: ""),
                         "isPrimary" to false,
                         "equipmentCatalogId" to row.equipment.id,
                         "catalogBrandId" to row.equipment.brandId,
@@ -204,3 +259,12 @@ class CatalogSearchViewModel @Inject constructor(
         }
     }
 }
+
+data class PendingCatalogSelection(
+    val row: CatalogEquipmentSearchRow,
+    val interventionId: String,
+    val unitId: String,
+    val parentEquipmentId: String?,
+    val existingEquipmentId: String?,
+    val selectedEnergyId: String,
+)

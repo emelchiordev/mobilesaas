@@ -131,6 +131,8 @@ import re.melchior.saviomobile.ui.theme.savioTabSelectedColor
 import re.melchior.saviomobile.ui.theme.savioTabUnselectedColor
 import re.melchior.saviomobile.ui.theme.savioTopAppBarColors
 import re.melchior.saviomobile.ui.theme.savioTopAppBarContentColor
+import re.melchior.saviomobile.ui.refonte.SavioTabletPlanningDetailContent
+import re.melchior.saviomobile.ui.utils.rememberIsSavioTablet
 import re.melchior.saviomobile.ui.viewmodel.PhotoViewModel
 import java.io.File
 import java.util.Locale
@@ -152,6 +154,7 @@ fun InterventionDetailScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val refonte = useSavioRefonteUi()
+    val isTablet = rememberIsSavioTablet()
 
     val energyBadges =
         remember(uiState.equipments) {
@@ -389,8 +392,11 @@ fun InterventionDetailScreen(
                         if (refonte && actionable && !embeddedInMasterDetail) 96.dp else 0.dp
                     val pagePadding = if (refonte) 14.dp else 16.dp
                     val pagerModifier =
-                        if (embeddedInMasterDetail && actionable) Modifier.weight(1f).fillMaxWidth()
-                        else Modifier.fillMaxSize()
+                        if (embeddedInMasterDetail) {
+                            Modifier.weight(1f).fillMaxWidth()
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
 
                     if (intervention.status == "pending_validation") {
                         Surface(
@@ -492,38 +498,73 @@ fun InterventionDetailScreen(
                             1 -> Column(
                                 modifier =
                                     Modifier
-                                        .fillMaxSize()
+                                        .fillMaxWidth()
                                         .verticalScroll(rememberScrollState())
                                         .padding(pagePadding)
                                         .padding(bottom = contentBottomPad),
                                 verticalArrangement = Arrangement.spacedBy(if (refonte) 14.dp else 12.dp),
                             ) {
                                 if (refonte) {
-                                    SavioInterventionDetailContent(
-                                        intervention = intervention,
-                                        energyBadges = energyBadges,
-                                        onClientClick = onClientClick,
-                                        onCallClick = { phone ->
-                                            context.startActivity(
-                                                Intent(Intent.ACTION_DIAL).apply {
-                                                    data = Uri.parse("tel:$phone")
-                                                },
-                                            )
-                                        },
-                                        onNavigateClick = {
-                                            val lat = intervention.unitLatitude
-                                            val lng = intervention.unitLongitude
-                                            val address =
-                                                "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
-                                            val uri =
-                                                if (lat != null && lng != null) {
-                                                    Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
-                                                } else {
-                                                    Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                    if (embeddedInMasterDetail && isTablet) {
+                                        SavioTabletPlanningDetailContent(
+                                            intervention = intervention,
+                                            energyBadges = energyBadges,
+                                            onClientClick = onClientClick,
+                                            onCallClick = { phone ->
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_DIAL).apply {
+                                                        data = Uri.parse("tel:$phone")
+                                                    },
+                                                )
+                                            },
+                                            onNavigateClick = {
+                                                val lat = intervention.unitLatitude
+                                                val lng = intervention.unitLongitude
+                                                val address =
+                                                    "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                                                val uri =
+                                                    if (lat != null && lng != null) {
+                                                        Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                                                    } else {
+                                                        Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                                    }
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                            },
+                                            showPrimaryAction = actionable,
+                                            onPrimaryClick = {
+                                                if (intervention.status == "scheduled") {
+                                                    viewModel.startIntervention()
                                                 }
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                                        },
-                                    )
+                                                onStartIntervention(intervention.id)
+                                            },
+                                        )
+                                    } else {
+                                        SavioInterventionDetailContent(
+                                            intervention = intervention,
+                                            energyBadges = energyBadges,
+                                            onClientClick = onClientClick,
+                                            onCallClick = { phone ->
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_DIAL).apply {
+                                                        data = Uri.parse("tel:$phone")
+                                                    },
+                                                )
+                                            },
+                                            onNavigateClick = {
+                                                val lat = intervention.unitLatitude
+                                                val lng = intervention.unitLongitude
+                                                val address =
+                                                    "${intervention.unitStreet}, ${intervention.unitPostalCode} ${intervention.unitCity}"
+                                                val uri =
+                                                    if (lat != null && lng != null) {
+                                                        Uri.parse("geo:$lat,$lng?q=$lat,$lng($address)")
+                                                    } else {
+                                                        Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                                                    }
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                            },
+                                        )
+                                    }
                                 } else {
                                     DetailPage(
                                         intervention = intervention,
@@ -580,7 +621,7 @@ fun InterventionDetailScreen(
                             2 -> Column(
                                 modifier =
                                     Modifier
-                                        .fillMaxSize()
+                                        .fillMaxWidth()
                                         .verticalScroll(rememberScrollState())
                                         .padding(pagePadding)
                                         .padding(bottom = contentBottomPad),
@@ -591,6 +632,7 @@ fun InterventionDetailScreen(
                                         interventionId = intervention.id,
                                         equipments = uiState.equipments,
                                         refonte = refonte,
+                                        isTablet = isTablet,
                                     )
                                 } else {
                                     Box(
@@ -614,7 +656,7 @@ fun InterventionDetailScreen(
                                     Column(
                                         modifier =
                                             Modifier
-                                                .fillMaxSize()
+                                                .fillMaxWidth()
                                                 .verticalScroll(rememberScrollState())
                                                 .padding(pagePadding)
                                                 .padding(bottom = contentBottomPad),
@@ -635,7 +677,7 @@ fun InterventionDetailScreen(
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
-                    if (embeddedInMasterDetail && actionable) {
+                    if (embeddedInMasterDetail && actionable && !(isTablet && refonte)) {
                         InterventionDetailEmbeddedFooter(
                             intervention = intervention,
                             onPause = onBack,
@@ -1335,15 +1377,27 @@ private fun PlanningEquipmentsSection(
     interventionId: String,
     equipments: List<EquipmentEntity>,
     refonte: Boolean = false,
+    isTablet: Boolean = false,
 ) {
     val newEquipmentIds = emptySet<String>()
     if (refonte) {
+        if (isTablet) {
+            PlanningEquipmentsSectionBody(
+                interventionId = interventionId,
+                equipments = equipments,
+                newEquipmentIds = newEquipmentIds,
+                refonte = true,
+                isTablet = true,
+            )
+            return
+        }
         SavioRefonteCard {
             PlanningEquipmentsSectionBody(
                 interventionId = interventionId,
                 equipments = equipments,
                 newEquipmentIds = newEquipmentIds,
                 refonte = true,
+                isTablet = false,
             )
         }
         return
@@ -1363,6 +1417,7 @@ private fun PlanningEquipmentsSection(
             equipments = equipments,
             newEquipmentIds = newEquipmentIds,
             refonte = false,
+            isTablet = false,
         )
     }
 }
@@ -1373,6 +1428,7 @@ private fun PlanningEquipmentsSectionBody(
     equipments: List<EquipmentEntity>,
     newEquipmentIds: Set<String>,
     refonte: Boolean,
+    isTablet: Boolean = false,
 ) {
     Column {
         Row(
@@ -1412,11 +1468,13 @@ private fun PlanningEquipmentsSectionBody(
             }
         }
 
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = if (refonte) 15.dp else 16.dp),
-            thickness = 1.dp,
-            color = if (refonte) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
-        )
+        if (!isTablet) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = if (refonte) 15.dp else 16.dp),
+                thickness = 1.dp,
+                color = if (refonte) SavioRefonte.Line else MaterialTheme.colorScheme.outline,
+            )
+        }
 
             val allActive = equipments.filter { it.typeCode != "replaced" }
             val allReplaced = equipments.filter { it.typeCode == "replaced" }
@@ -1452,12 +1510,63 @@ private fun PlanningEquipmentsSectionBody(
             val hybrideIds = hybrideEquipmentIds(hybrideGroups)
             val normalRootAndOrphans = (rootEquipments + orphans).filter { it.id !in hybrideIds }
 
+            val gridPadding = if (isTablet) 0.dp else 16.dp
+            val gridSpacing = if (isTablet) 14.dp else 8.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = gridPadding, vertical = if (isTablet) 0.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(gridSpacing),
             ) {
+                if (isTablet) {
+                    val gridItems = buildList {
+                        hybrideGroups.forEach { add(PlanningEquipGridItem.Hybride(it)) }
+                        normalRootAndOrphans.forEach { add(PlanningEquipGridItem.Root(it)) }
+                        rootReplaced.forEach { add(PlanningEquipGridItem.Replaced(it)) }
+                    }
+                    gridItems.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                        ) {
+                            rowItems.forEach { item ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    when (item) {
+                                        is PlanningEquipGridItem.Hybride ->
+                                            HybrideGroupCard(
+                                                group = item.group,
+                                                newEquipmentIds = newEquipmentIds,
+                                                interventionId = interventionId,
+                                                interactive = false,
+                                                onEquipementClick = { _, _ -> },
+                                            )
+                                        is PlanningEquipGridItem.Root ->
+                                            InterventionEquipmentGroupCard(
+                                                parent = item.parent,
+                                                children = childrenByParent[item.parent.id].orEmpty(),
+                                                newEquipmentIds = newEquipmentIds,
+                                                interventionId = interventionId,
+                                                interactive = false,
+                                                onEquipementClick = { _, _ -> },
+                                            )
+                                        is PlanningEquipGridItem.Replaced ->
+                                            InterventionEquipmentGroupCard(
+                                                parent = item.parent,
+                                                children = childrenByParent[item.parent.id].orEmpty(),
+                                                newEquipmentIds = newEquipmentIds,
+                                                interventionId = interventionId,
+                                                interactive = false,
+                                                onEquipementClick = { _, _ -> },
+                                            )
+                                    }
+                                }
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                } else {
                 hybrideGroups.forEach { group ->
                     HybrideGroupCard(
                         group = group,
@@ -1487,6 +1596,13 @@ private fun PlanningEquipmentsSectionBody(
                         onEquipementClick = { _, _ -> },
                     )
                 }
+                }
             }
     }
+}
+
+private sealed interface PlanningEquipGridItem {
+    data class Hybride(val group: HybrideGroup) : PlanningEquipGridItem
+    data class Root(val parent: EquipmentEntity) : PlanningEquipGridItem
+    data class Replaced(val parent: EquipmentEntity) : PlanningEquipGridItem
 }

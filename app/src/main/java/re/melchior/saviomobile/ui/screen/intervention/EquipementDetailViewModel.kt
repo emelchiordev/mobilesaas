@@ -84,6 +84,15 @@ class EquipementDetailViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val energies = catalogSyncRepository.getEnergies()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _pendingCatalogChange = MutableStateFlow<CatalogEquipmentSearchRow?>(null)
+    val pendingCatalogChange: StateFlow<CatalogEquipmentSearchRow?> = _pendingCatalogChange.asStateFlow()
+
+    private val _pendingCatalogEnergyId = MutableStateFlow<String?>(null)
+    val pendingCatalogEnergyId: StateFlow<String?> = _pendingCatalogEnergyId.asStateFlow()
+
     val interventionInProgress: StateFlow<Boolean> =
         syncRepository
             .getInterventionById(interventionId)
@@ -145,12 +154,44 @@ class EquipementDetailViewModel @Inject constructor(
     }
 
     fun applyNewCatalogEquipment(selected: CatalogEquipmentSearchRow) {
+        val typeCode = selected.typeCode?.trim()?.uppercase().orEmpty()
+        if (typeCode == "BRULEUR") {
+            confirmCatalogChange(selected, selected.equipment.energyId)
+            return
+        }
+        _pendingCatalogChange.value = selected
+        _pendingCatalogEnergyId.value = selected.equipment.energyId
+    }
+
+    fun dismissPendingCatalogChange() {
+        _pendingCatalogChange.value = null
+        _pendingCatalogEnergyId.value = null
+    }
+
+    fun updatePendingCatalogEnergyId(energyId: String) {
+        _pendingCatalogEnergyId.value = energyId
+    }
+
+    fun confirmPendingCatalogChange() {
+        val selected = _pendingCatalogChange.value ?: return
+        val energyId = _pendingCatalogEnergyId.value ?: selected.equipment.energyId
+        confirmCatalogChange(selected, energyId)
+    }
+
+    private fun confirmCatalogChange(selected: CatalogEquipmentSearchRow, installationEnergyId: String) {
         viewModelScope.launch {
             val eq = _uiState.value.equipment ?: return@launch
             val interventionId = eq.interventionId
             val brand = catalogSyncRepository.getNomenclatureById(selected.equipment.brandId)
             val type = catalogSyncRepository.getNomenclatureById(selected.equipment.equipmentTypeId)
-            val energy = catalogSyncRepository.getNomenclatureById(selected.equipment.energyId)
+            val typeCode = type?.code?.trim()?.uppercase().orEmpty()
+            val catalogEnergy = catalogSyncRepository.getNomenclatureById(selected.equipment.energyId)
+            val installationEnergy =
+                if (typeCode == "BRULEUR") {
+                    null
+                } else {
+                    catalogSyncRepository.getNomenclatureById(installationEnergyId) ?: catalogEnergy
+                }
 
             val now = java.time.Instant.now().toString()
             val payload = mapOf(
@@ -160,8 +201,8 @@ class EquipementDetailViewModel @Inject constructor(
                 "brandCode" to (brand?.code ?: ""),
                 "model" to selected.equipment.model,
                 "typeCode" to (type?.code ?: ""),
-                "energyLabel" to (energy?.label ?: ""),
-                "energyCode" to (energy?.code ?: ""),
+                "energyLabel" to (installationEnergy?.label ?: ""),
+                "energyCode" to (installationEnergy?.code ?: ""),
                 "catalogBrandId" to selected.equipment.brandId,
                 "catalogEquipmentTypeId" to selected.equipment.equipmentTypeId,
                 "catalogEnergyId" to selected.equipment.energyId,
@@ -182,7 +223,7 @@ class EquipementDetailViewModel @Inject constructor(
                 brand = brand?.label ?: eq.brand,
                 model = selected.equipment.model,
                 typeCode = type?.code ?: eq.typeCode,
-                energyCode = energy?.code ?: eq.energyCode,
+                energyCode = installationEnergy?.code ?: eq.energyCode,
                 equipmentCatalogId = selected.equipment.id,
                 catalogBrandId = selected.equipment.brandId,
             )
@@ -192,6 +233,8 @@ class EquipementDetailViewModel @Inject constructor(
 
             _changeMode.value = false
             _catalogQuery.value = ""
+            _pendingCatalogChange.value = null
+            _pendingCatalogEnergyId.value = null
             _uiState.update { it.copy(equipment = updated) }
         }
     }
@@ -263,6 +306,33 @@ class EquipementDetailViewModel @Inject constructor(
             pendingOperationDao.insert(op)
 
             val updated = eq.copy(installDate = value)
+            equipmentDao.insertAll(listOf(updated))
+            _uiState.update { it.copy(equipment = updated) }
+        }
+    }
+
+    fun saveEnergy(energyId: String) {
+        viewModelScope.launch {
+            val eq = _uiState.value.equipment ?: return@launch
+            val nom = catalogSyncRepository.getNomenclatureById(energyId) ?: return@launch
+            val op = PendingOperationEntity(
+                id = java.util.UUID.randomUUID().toString(),
+                type = "UPDATE_EQUIPMENT",
+                payload = Gson().toJson(
+                    mapOf(
+                        "equipmentId" to eq.id,
+                        "energyCode" to nom.code,
+                        "energyLabel" to nom.label,
+                    ),
+                ),
+                occurredAt = java.time.Instant.now().toString(),
+                interventionId = eq.interventionId,
+                status = "pending",
+                createdAt = java.time.Instant.now().toString(),
+            )
+            pendingOperationDao.insert(op)
+
+            val updated = eq.copy(energyCode = nom.code)
             equipmentDao.insertAll(listOf(updated))
             _uiState.update { it.copy(equipment = updated) }
         }

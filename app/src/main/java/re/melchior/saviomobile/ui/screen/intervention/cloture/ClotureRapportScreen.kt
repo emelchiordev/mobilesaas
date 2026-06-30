@@ -73,11 +73,24 @@ import re.melchior.saviomobile.ui.theme.useSavioRefonteUi
 fun ClotureRapportScreen(
     onBack: () -> Unit,
     onNext: (interventionId: String, preselectedActualTypeKeys: String) -> Unit,
+    onNavigateToInvoice: (interventionId: String) -> Unit = {},
     viewModel: ClotureRapportViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToInvoice.collect { interventionId ->
+            onNavigateToInvoice(interventionId)
+        }
+    }
+
+    LaunchedEffect(uiState.renewalError) {
+        val message = uiState.renewalError ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearRenewalError()
+    }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -206,6 +219,10 @@ fun ClotureRapportScreen(
                         lastVe = uiState.lastVe,
                         nextVe = uiState.nextVe,
                         coverage = uiState.coverage,
+                        showRenewCta = uiState.showRenewContractCta,
+                        renewPriceTtc = uiState.renewalEligibility?.priceTtc,
+                        renewLoading = uiState.renewalLoading,
+                        onRenewClick = viewModel::renewContractOnSite,
                     )
 
                     ClosureConsequencesCard(consequences = uiState.consequences)
@@ -430,6 +447,10 @@ private fun ClotureRapportScreenLegacy(
                     lastVe = uiState.lastVe,
                     nextVe = uiState.nextVe,
                     coverage = uiState.coverage,
+                    showRenewCta = uiState.showRenewContractCta,
+                    renewPriceTtc = uiState.renewalEligibility?.priceTtc,
+                    renewLoading = uiState.renewalLoading,
+                    onRenewClick = viewModel::renewContractOnSite,
                 )
 
                 ClosureConsequencesCard(consequences = uiState.consequences)

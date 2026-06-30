@@ -370,6 +370,58 @@ fun SavioEquipBrandCard(
     }
 }
 
+private val GroupTitleColor = Color(0xFF5A6573)
+private val CountWarnBg = Color(0xFFFBEFD7)
+private val CountWarnFg = Color(0xFFB06E08)
+
+@Composable
+fun SavioEquipGroupHeader(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier = Modifier,
+    count: Int? = null,
+    countIsWarning: Boolean = false,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = SavioRefonte.Navy,
+            modifier = Modifier.size(17.dp),
+        )
+        Text(
+            text = title.uppercase(),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = GroupTitleColor,
+            letterSpacing = 0.05.sp,
+            modifier = Modifier.weight(1f),
+        )
+        count?.takeIf { it > 0 }?.let { n ->
+            Text(
+                text = n.toString(),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (countIsWarning) CountWarnFg else SavioRefonte.Navy,
+                modifier =
+                    Modifier
+                        .background(
+                            if (countIsWarning) CountWarnBg else SavioRefonte.Tint,
+                            RoundedCornerShape(999.dp),
+                        )
+                        .padding(horizontal = 11.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
 @Composable
 fun SavioEquipSpecRow(
     icon: ImageVector,

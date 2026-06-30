@@ -385,6 +385,9 @@ fun AppNavigation(
                         Screen.ClotureSignature.createRoute(interventionId, preselectedActualTypeKeys),
                     )
                 },
+                onNavigateToInvoice = { interventionId ->
+                    navController.navigate(Screen.Invoice.createRoute(interventionId))
+                },
             )
         }
 

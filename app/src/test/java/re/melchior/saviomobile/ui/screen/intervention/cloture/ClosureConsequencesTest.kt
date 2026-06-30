@@ -2,6 +2,7 @@ package re.melchior.saviomobile.ui.screen.intervention.cloture
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import re.melchior.saviomobile.data.remote.dto.InterventionTypeDto
@@ -23,11 +24,18 @@ class ClosureConsequencesTest {
       isVeType = false,
   )
 
+  private val mesType = InterventionTypeDto(
+      code = "MES",
+      label = "Mise en service",
+      color = null,
+      triggerEquipmentSetup = true,
+  )
+
   @Test
   fun casA_veWithAttestation() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(veType),
-        plannedTypeCode = "VE",
+        plannedType = veType,
         hasLocalAttestationVe = true,
         updatesRequireValidation = false,
     )
@@ -39,7 +47,7 @@ class ClosureConsequencesTest {
   fun casB_veWithoutAttestation() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(veType),
-        plannedTypeCode = "VE",
+        plannedType = veType,
         hasLocalAttestationVe = false,
         updatesRequireValidation = false,
     )
@@ -50,7 +58,7 @@ class ClosureConsequencesTest {
   fun casD_plannedVeButNotSelected() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(maintType),
-        plannedTypeCode = "VE",
+        plannedType = veType,
         hasLocalAttestationVe = false,
         updatesRequireValidation = false,
     )
@@ -58,10 +66,35 @@ class ClosureConsequencesTest {
   }
 
   @Test
+  fun mes_missingCommissioningDateWarning() {
+    val list = computeClosureConsequences(
+        selectedTypes = listOf(mesType),
+        plannedType = mesType,
+        hasLocalAttestationVe = false,
+        updatesRequireValidation = false,
+        equipmentsMissingCommissioning = 2,
+    )
+    assertTrue(list.any { it.isWarning && it.text.contains("renseignez") })
+  }
+
+  @Test
+  fun mes_allCommissioningDatesOk() {
+    val list = computeClosureConsequences(
+        selectedTypes = listOf(mesType),
+        plannedType = mesType,
+        hasLocalAttestationVe = false,
+        updatesRequireValidation = false,
+        equipmentsMissingCommissioning = 0,
+    )
+    assertTrue(list.any { it.text.contains("dates de mise en service") })
+    assertFalse(list.any { it.isWarning && it.text.contains("manquante") })
+  }
+
+  @Test
   fun gasPipeExpiredWithoutAnomalyWarning() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(maintType),
-        plannedTypeCode = "MAINT",
+        plannedType = maintType,
         hasLocalAttestationVe = false,
         updatesRequireValidation = false,
         gasPipeExpiredWithoutAnomaly = true,
@@ -73,18 +106,23 @@ class ClosureConsequencesTest {
   fun validationBureau() {
     val list = computeClosureConsequences(
         selectedTypes = listOf(maintType),
-        plannedTypeCode = "MAINT",
+        plannedType = maintType,
         hasLocalAttestationVe = false,
         updatesRequireValidation = true,
     )
     assertTrue(list.any { it.text.contains("validation du bureau") })
   }
 
-  @Test
-  fun computeNextVe_fromLastVe() {
-    val last = LastVeSummary(LocalDate.of(2025, 3, 12), "Cindy")
-    assertEquals(LocalDate.of(2026, 3, 12), computeNextVeDate(last, null))
-  }
+    @Test
+    fun computeNextVe_fromLastVe() {
+        val last = LastVeSummary(LocalDate.of(2025, 3, 12), "Cindy")
+        assertEquals(LocalDate.of(2026, 3, 12), computeNextVeDate(last, null))
+    }
+
+    @Test
+    fun computeNextVe_withoutLastVe_returnsNull() {
+        assertNull(computeNextVeDate(null, LocalDate.of(2025, 5, 22)))
+    }
 
   @Test
   fun nextVe_overdue() {
