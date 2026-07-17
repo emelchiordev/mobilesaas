@@ -89,7 +89,7 @@ L’URL principale Retrofit est **`BuildConfig.BASE_URL`** (voir `NetworkModule`
 
 ## Architecture du code
 
-`app/src/main/java/re/melchior/saviomobile/`
+`app/src/main/java/re/savio/mobile/`
 
 | Dossier | Rôle |
 |--------|------|
@@ -200,7 +200,7 @@ Ouvrir la racine du repo dans **Android Studio**, synchroniser Gradle, lancer le
 
 ## Conventions utiles (contributeurs)
 
-- **Package** : `re.melchior.saviomobile`.
+- **Package** : `re.savio.mobile`.
 - **DTOs** : suffixe `Dto`, champs alignés JSON (`@SerializedName` si besoin).
 - **Entités Room** : suffixe `Entity` ; navigation : routes et `createRoute(...)` dans `Screen`.
 - **Clôture multi-types** : types réels stockés / transmis (voir `InterventionActualTypeEntity`, arguments de navigation clôture).

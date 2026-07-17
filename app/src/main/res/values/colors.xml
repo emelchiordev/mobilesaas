@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Alignés thème SAVIO dark (WelcomeScreen) — gardés pour vues XML / colorResource résiduels -->
-    <color name="savio_primary">#F5A623</color>
+    <!-- Alignés Violett × SAVIO — vues XML / colorResource résiduels -->
+    <color name="savio_primary">#1877D8</color>
     <color name="savio_primary_dark">#12151C</color>
-    <color name="savio_primary_light">#332A18</color>
+    <color name="savio_primary_light">#1A2A40</color>
 
     <color name="badge_done_bg">#1E3A24</color>
     <color name="badge_done_text">#81C784</color>
-    <color name="badge_inprog_bg">#3D3319</color>
-    <color name="badge_inprog_text">#F5A623</color>
+    <color name="badge_inprog_bg">#1A2A40</color>
+    <color name="badge_inprog_text">#1877D8</color>
     <color name="badge_neutral_bg">#252A38</color>
     <color name="badge_neutral_text">#8A8F9E</color>
 
     <color name="card_bg">#1C2030</color>
     <color name="screen_bg">#12151C</color>
     <color name="accent_done">#81C784</color>
-    <color name="accent_inprog">#F5A623</color>
+    <color name="accent_inprog">#1877D8</color>
     <color name="accent_todo">#6B7080</color>
 </resources>

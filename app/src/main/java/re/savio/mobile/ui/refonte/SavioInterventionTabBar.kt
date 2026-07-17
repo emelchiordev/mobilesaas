@@ -1,0 +1,136 @@
+package re.savio.mobile.ui.refonte
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import re.savio.mobile.ui.designsystem.BottomNavBar
+import re.savio.mobile.ui.designsystem.BottomNavItem
+import re.savio.mobile.ui.theme.SavioDimens
+import re.savio.mobile.ui.theme.SavioRefonte
+import re.savio.mobile.ui.theme.savioTabSelectedColor
+import re.savio.mobile.ui.theme.savioTabUnselectedColor
+import re.savio.mobile.ui.theme.useSavioRefonteUi
+
+data class SavioInterventionTabItem(
+    val label: String,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
+)
+
+@Composable
+fun SavioInterventionTabBar(
+    tabs: List<SavioInterventionTabItem>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val refonte = useSavioRefonteUi()
+    if (refonte) {
+        BottomNavBar(
+            items =
+                tabs.mapIndexed { index, tab ->
+                    BottomNavItem(
+                        icon = if (index == selectedIndex) tab.selectedIcon else tab.icon,
+                        label = tab.label,
+                    )
+                },
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val barColor = MaterialTheme.colorScheme.background
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(barColor),
+    ) {
+        HorizontalDivider(
+            thickness = SavioDimens.BorderThin,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(SavioDimens.BottomNavHeight),
+            color = barColor,
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEachIndexed { index, tab ->
+                    LegacyInterventionTab(
+                        modifier = Modifier.weight(1f),
+                        label = tab.label,
+                        icon = if (index == selectedIndex) tab.selectedIcon else tab.icon,
+                        selected = index == selectedIndex,
+                        onClick = { onSelect(index) },
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.navigationBarsPadding())
+    }
+}
+
+@Composable
+private fun LegacyInterventionTab(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            modifier
+                .clickable(onClick = onClick)
+                .padding(vertical = SavioDimens.SpaceXS),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) savioTabSelectedColor() else savioTabUnselectedColor(),
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) savioTabSelectedColor() else savioTabUnselectedColor(),
+        )
+    }
+}

@@ -92,10 +92,210 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "2:3853461895280137738",
+      "lastPropertyId": "11:6857447314882181018",
+      "name": "RefrigerantContainerBox",
+      "properties": [
+        {
+          "id": "1:676127743271179800",
+          "name": "boxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2396450060149214150",
+          "name": "id",
+          "indexId": "4:7332457949980804840",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:5564898940296439473",
+          "name": "containerIdentifier",
+          "indexId": "5:2870981986974894157",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:1662875287700315534",
+          "name": "containerKind",
+          "type": 9
+        },
+        {
+          "id": "5:1027360714731717061",
+          "name": "fluidType",
+          "indexId": "6:4460908945701383628",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:147974705958522692",
+          "name": "capacityKg",
+          "type": 9
+        },
+        {
+          "id": "7:6389004934043129621",
+          "name": "currentKg",
+          "type": 9
+        },
+        {
+          "id": "8:179387353898527223",
+          "name": "status",
+          "indexId": "7:8936074037741184832",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "9:7519394065026499443",
+          "name": "holderTechnicianId",
+          "indexId": "8:4119672967800037611",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "10:7249591232959965367",
+          "name": "bsffNumber",
+          "type": 9
+        },
+        {
+          "id": "11:6857447314882181018",
+          "name": "updatedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:5918472033847562910",
+      "lastPropertyId": "11:9182736451029384756",
+      "name": "RefrigerantWastePartnerBox",
+      "properties": [
+        {
+          "id": "1:2847561938475629103",
+          "name": "boxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3748592019384756102",
+          "name": "id",
+          "indexId": "9:6574839201847562910",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4657382910475629384",
+          "name": "kind",
+          "indexId": "10:7483920193847562011",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5566473829103847562",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "5:6475564738291048573",
+          "name": "siret",
+          "type": 9
+        },
+        {
+          "id": "6:7384655647382910464",
+          "name": "addressLine1",
+          "type": 9
+        },
+        {
+          "id": "7:8293746556473829155",
+          "name": "addressLine2",
+          "type": 9
+        },
+        {
+          "id": "8:9102837465564738266",
+          "name": "postalCode",
+          "type": 9
+        },
+        {
+          "id": "9:1019374857665547387",
+          "name": "city",
+          "type": 9
+        },
+        {
+          "id": "10:1128465768577465298",
+          "name": "isDefault",
+          "type": 1
+        },
+        {
+          "id": "11:9182736451029384756",
+          "name": "updatedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:6284910375648291056",
+      "lastPropertyId": "9:8392017465839201745",
+      "name": "MeasurementDeviceBox",
+      "properties": [
+        {
+          "id": "1:1928374650192837465",
+          "name": "boxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2039485761203948576",
+          "name": "id",
+          "indexId": "11:3141592653589793238",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:3141592653589793239",
+          "name": "brand",
+          "type": 9
+        },
+        {
+          "id": "4:2718281828459045235",
+          "name": "model",
+          "type": 9
+        },
+        {
+          "id": "5:1618033988749894848",
+          "name": "serialNumber",
+          "type": 9
+        },
+        {
+          "id": "6:1414213562373095048",
+          "name": "useCasesJson",
+          "type": 9
+        },
+        {
+          "id": "7:1732050807568877293",
+          "name": "lastControlDate",
+          "type": 9
+        },
+        {
+          "id": "8:2236067977499789696",
+          "name": "assignedTechnicianId",
+          "indexId": "12:2645751311064590791",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "9:8392017465839201745",
+          "name": "updatedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "1:3584493599816616465",
-  "lastIndexId": "3:5051988257340780946",
+  "lastEntityId": "4:6284910375648291056",
+  "lastIndexId": "12:2645751311064590791",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

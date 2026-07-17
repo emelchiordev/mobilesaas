@@ -68,10 +68,10 @@
 # Modèles API (data classes Kotlin + JSON) — packages réels du projet
 # =============================================================================
 # DTOs Retrofit / pull sync / auth / push / catalogue BAN…
--keep class re.melchior.saviomobile.data.remote.dto.** { *; }
+-keep class re.savio.mobile.data.remote.dto.** { *; }
 # Interfaces API (sécurité supplémentaire avec R8 full mode)
--keep interface re.melchior.saviomobile.data.remote.api.** { *; }
--keep class re.melchior.saviomobile.data.remote.api.** { *; }
+-keep interface re.savio.mobile.data.remote.api.** { *; }
+-keep class re.savio.mobile.data.remote.api.** { *; }
 
 # =============================================================================
 # Kotlin (data classes, coroutines utilisées par Retrofit)
@@ -94,7 +94,7 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
--keep enum re.melchior.saviomobile.data.remote.dto.** { *; }
+-keep enum re.savio.mobile.data.remote.dto.** { *; }
 
 # =============================================================================
 # Dépendances diverses

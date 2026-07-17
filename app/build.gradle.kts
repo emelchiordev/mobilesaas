@@ -47,11 +47,11 @@ val banApiKey =
         ?: banApiKeyPlaceholder
 
 android {
-    namespace = "re.melchior.saviomobile"
+    namespace = "re.savio.mobile"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "re.melchior.saviomobile"
+        applicationId = "re.savio.mobile"
         minSdk = 28
         targetSdk = 36
         versionCode = 1
@@ -211,6 +211,7 @@ dependencies {
     // Tests
     testImplementation(libs.junit)
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("io.mockk:mockk:1.13.13")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
